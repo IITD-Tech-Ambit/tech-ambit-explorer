@@ -4,8 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Search, ArrowRight, Microscope, Users, BookOpen, Leaf } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import heroImage from "@/assets/hero-research.jpg";
-import researchCollage from "@/assets/research-collage.jpg";
+import heroImage from "@/assets/iit-delhi-main.png";
+import researchCollage from "@/assets/iit-delhi-aerial.png";
 
 const Home = () => {
   const highlights = [
