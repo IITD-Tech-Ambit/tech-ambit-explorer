@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Directory from "./pages/Directory";
 import Magazines from "./pages/Magazines";
+import Mindmap from "./pages/Mindmap";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/explore" element={<Explore />} />
           <Route path="/directory" element={<Directory />} />
           <Route path="/magazines" element={<Magazines />} />
+          <Route path="/mindmap" element={<Mindmap />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
