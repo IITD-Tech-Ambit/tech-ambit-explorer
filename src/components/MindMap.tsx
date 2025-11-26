@@ -73,7 +73,22 @@ const MindMapContent = () => {
     return () => clearInterval(interval);
   }, [getZoom]);
 
-  // Calculate positions for tree layout
+  // Calculate subtree width for dynamic spacing
+  const calculateSubtreeWidth = useCallback((nodeId: string, childrenMap: Map<string, string[]>): number => {
+    const children = childrenMap.get(nodeId) || [];
+    
+    if (children.length === 0) {
+      return CONFIG.NODE_DIAMETER + CONFIG.HORIZONTAL_SPACING * 0.5;
+    }
+    
+    const childrenWidth = children.reduce((sum, childId) => {
+      return sum + calculateSubtreeWidth(childId, childrenMap);
+    }, 0);
+    
+    return Math.max(childrenWidth, CONFIG.NODE_DIAMETER + CONFIG.HORIZONTAL_SPACING * 0.5);
+  }, []);
+
+  // Calculate positions for tree layout with dynamic spacing
   const calculateTreeLayout = useCallback((allNodes: Node<CustomNodeData>[]) => {
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const childrenMap = new Map<string, string[]>();
@@ -89,8 +104,8 @@ const MindMapContent = () => {
       }
     });
 
-    // Position nodes using tree layout
-    const positionNode = (nodeId: string, x: number, y: number, width: number) => {
+    // Position nodes using tree layout with dynamic spacing
+    const positionNode = (nodeId: string, x: number, y: number) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
 
@@ -98,18 +113,28 @@ const MindMapContent = () => {
       
       const children = childrenMap.get(nodeId) || [];
       if (children.length > 0) {
-        const childWidth = width / children.length;
+        // Calculate width needed for each child's subtree
+        const childWidths = children.map(childId => 
+          calculateSubtreeWidth(childId, childrenMap)
+        );
+        
+        const totalWidth = childWidths.reduce((sum, w) => sum + w, 0);
+        
+        // Position children based on their subtree widths
+        let currentX = x - totalWidth / 2;
         children.forEach((childId, index) => {
-          const childX = x - width / 2 + childWidth * index + childWidth / 2;
+          const childWidth = childWidths[index];
+          const childX = currentX + childWidth / 2;
           const childY = y + CONFIG.VERTICAL_SPACING;
-          positionNode(childId, childX, childY, childWidth * 0.9);
+          positionNode(childId, childX, childY);
+          currentX += childWidth;
         });
       }
     };
 
-    positionNode('1', 0, 0, CONFIG.HORIZONTAL_SPACING * CONFIG.CHILDREN_PER_NODE);
+    positionNode('1', 0, 0);
     return allNodes;
-  }, []);
+  }, [calculateSubtreeWidth]);
 
   // Generate children for a node
   const generateChildren = useCallback((parentNode: Node<CustomNodeData>) => {

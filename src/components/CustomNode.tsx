@@ -44,7 +44,7 @@ const CustomNode = ({ data }: NodeProps) => {
       )}
       
       <div 
-        className="relative flex items-center justify-center w-[120px] h-[120px] rounded-full border-4 transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
+        className="relative flex items-center justify-center min-w-[140px] px-6 py-4 rounded-lg border-3 transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
         style={{ 
           borderColor: getNodeColor(),
           backgroundColor: 'hsl(var(--background))',
