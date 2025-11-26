@@ -19,9 +19,12 @@ import CustomNode, { CustomNodeData } from './CustomNode';
 // Configurable constants
 const CONFIG = {
   MAX_DEPTH: 8,
-  NODE_DIAMETER: 120,
+  NODE_WIDTH: 140,
+  NODE_HEIGHT: 60,
+  MIN_HORIZONTAL_GAP: 24,
   HORIZONTAL_SPACING: 250,
   VERTICAL_SPACING: 150,
+  LEVEL_VERTICAL_GAP: 150,
   ANIMATION_DURATION: 300,
   MIN_ZOOM: 0.25,
   MAX_ZOOM: 3.0,
@@ -78,14 +81,19 @@ const MindMapContent = () => {
     const children = childrenMap.get(nodeId) || [];
     
     if (children.length === 0) {
-      return CONFIG.NODE_DIAMETER + CONFIG.HORIZONTAL_SPACING * 0.5;
+      return CONFIG.NODE_WIDTH;
     }
     
-    const childrenWidth = children.reduce((sum, childId) => {
+    // Sort children to maintain order
+    const sortedChildren = [...children].sort();
+    
+    const childrenWidth = sortedChildren.reduce((sum, childId) => {
       return sum + calculateSubtreeWidth(childId, childrenMap);
     }, 0);
     
-    return Math.max(childrenWidth, CONFIG.NODE_DIAMETER + CONFIG.HORIZONTAL_SPACING * 0.5);
+    const totalGaps = Math.max(0, sortedChildren.length - 1) * CONFIG.MIN_HORIZONTAL_GAP;
+    
+    return Math.max(childrenWidth + totalGaps, CONFIG.NODE_WIDTH);
   }, []);
 
   // Calculate positions for tree layout with dynamic spacing
@@ -93,7 +101,7 @@ const MindMapContent = () => {
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const childrenMap = new Map<string, string[]>();
     
-    // Build parent-child relationships
+    // Build parent-child relationships and maintain order
     allNodes.forEach(node => {
       const parentId = node.id.split('-').slice(0, -1).join('-') || null;
       if (parentId) {
@@ -102,6 +110,11 @@ const MindMapContent = () => {
         }
         childrenMap.get(parentId)!.push(node.id);
       }
+    });
+
+    // Sort all children arrays to maintain consistent order
+    childrenMap.forEach((children, parentId) => {
+      childrenMap.set(parentId, children.sort());
     });
 
     // Position nodes using tree layout with dynamic spacing
@@ -113,21 +126,25 @@ const MindMapContent = () => {
       
       const children = childrenMap.get(nodeId) || [];
       if (children.length > 0) {
+        // Ensure children are in sorted order (preserving original order)
+        const sortedChildren = [...children].sort();
+        
         // Calculate width needed for each child's subtree
-        const childWidths = children.map(childId => 
+        const childWidths = sortedChildren.map(childId => 
           calculateSubtreeWidth(childId, childrenMap)
         );
         
-        const totalWidth = childWidths.reduce((sum, w) => sum + w, 0);
+        const totalGaps = Math.max(0, sortedChildren.length - 1) * CONFIG.MIN_HORIZONTAL_GAP;
+        const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + totalGaps;
         
-        // Position children based on their subtree widths
+        // Position children based on their subtree widths, maintaining order
         let currentX = x - totalWidth / 2;
-        children.forEach((childId, index) => {
+        sortedChildren.forEach((childId, index) => {
           const childWidth = childWidths[index];
           const childX = currentX + childWidth / 2;
-          const childY = y + CONFIG.VERTICAL_SPACING;
+          const childY = y + CONFIG.LEVEL_VERTICAL_GAP;
           positionNode(childId, childX, childY);
-          currentX += childWidth;
+          currentX += childWidth + CONFIG.MIN_HORIZONTAL_GAP;
         });
       }
     };
@@ -194,7 +211,7 @@ const MindMapContent = () => {
     return descendants;
   }, []);
 
-  // Handle node click
+  // Handle node click with debouncing
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node<CustomNodeData>) => {
     event.stopPropagation();
     
