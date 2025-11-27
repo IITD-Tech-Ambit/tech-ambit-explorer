@@ -19,8 +19,8 @@ import CustomNode, { CustomNodeData } from './CustomNode';
 // Top-level configurable constants
 const NODE_WIDTH = 140;
 const NODE_HEIGHT = 60;
-const MIN_HORIZONTAL_GAP = 24;
-const LEVEL_VERTICAL_GAP = 150;
+const MIN_VERTICAL_GAP = 24;  // Vertical spacing between siblings in a column
+const LEVEL_HORIZONTAL_GAP = 250;  // Horizontal spacing between columns (levels)
 const MAX_DEPTH = 8;
 const ANIMATION_DURATION = 300;
 const DEBOUNCE_DELAY = 100;
@@ -29,8 +29,8 @@ const CONFIG = {
   MAX_DEPTH,
   NODE_WIDTH,
   NODE_HEIGHT,
-  MIN_HORIZONTAL_GAP,
-  LEVEL_VERTICAL_GAP,
+  MIN_VERTICAL_GAP,
+  LEVEL_HORIZONTAL_GAP,
   ANIMATION_DURATION,
   MIN_ZOOM: 0.25,
   MAX_ZOOM: 3.0,
@@ -94,48 +94,48 @@ const MindMapContent = () => {
     return () => clearInterval(interval);
   }, [getZoom]);
 
-  // Calculate subtree width (horizontal bounding box for node + all visible descendants)
-  const calculateSubtreeWidth = useCallback((
+  // Calculate subtree HEIGHT (vertical bounding box for node + all visible descendants)
+  const calculateSubtreeHeight = useCallback((
     nodeId: string, 
     childrenMap: Map<string, string[]>,
-    subtreeWidthCache: Map<string, number>
+    subtreeHeightCache: Map<string, number>
   ): number => {
     // Check cache first
-    if (subtreeWidthCache.has(nodeId)) {
-      return subtreeWidthCache.get(nodeId)!;
+    if (subtreeHeightCache.has(nodeId)) {
+      return subtreeHeightCache.get(nodeId)!;
     }
 
     const children = childrenMap.get(nodeId) || [];
     
     if (children.length === 0) {
-      subtreeWidthCache.set(nodeId, NODE_WIDTH);
-      return NODE_WIDTH;
+      subtreeHeightCache.set(nodeId, NODE_HEIGHT);
+      return NODE_HEIGHT;
     }
     
-    // Sort children by numeric index to maintain fixed order
+    // Sort children by numeric index to maintain fixed vertical order
     const sortedChildren = sortNodeIds(children);
     
-    // Sum of all child subtree widths
-    const childrenWidth = sortedChildren.reduce((sum, childId) => {
-      return sum + calculateSubtreeWidth(childId, childrenMap, subtreeWidthCache);
+    // Sum of all child subtree heights
+    const childrenHeight = sortedChildren.reduce((sum, childId) => {
+      return sum + calculateSubtreeHeight(childId, childrenMap, subtreeHeightCache);
     }, 0);
     
-    // Gaps between children
-    const totalGaps = Math.max(0, sortedChildren.length - 1) * MIN_HORIZONTAL_GAP;
+    // Gaps between children (vertical)
+    const totalGaps = Math.max(0, sortedChildren.length - 1) * MIN_VERTICAL_GAP;
     
-    const width = Math.max(childrenWidth + totalGaps, NODE_WIDTH);
-    subtreeWidthCache.set(nodeId, width);
-    return width;
+    const height = Math.max(childrenHeight + totalGaps, NODE_HEIGHT);
+    subtreeHeightCache.set(nodeId, height);
+    return height;
   }, []);
 
-  // Calculate VERTICAL tree layout: root at top, children in horizontal rows below
-  // Each level forms a horizontal line at Y = (level - 1) * LEVEL_VERTICAL_GAP
+  // Calculate VERTICAL COLUMN layout: levels are columns, children stack vertically
+  // Level 1 leftmost, Level 2 to its right, etc.
   const calculateTreeLayout = useCallback((allNodes: Node<CustomNodeData>[]) => {
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const childrenMap = new Map<string, string[]>();
-    const subtreeWidthCache = new Map<string, number>();
+    const subtreeHeightCache = new Map<string, number>();
     
-    // Build parent-child relationships maintaining fixed left-to-right order
+    // Build parent-child relationships maintaining fixed top-to-bottom order
     allNodes.forEach(node => {
       const parentId = node.id.split('-').slice(0, -1).join('-') || null;
       if (parentId) {
@@ -146,17 +146,17 @@ const MindMapContent = () => {
       }
     });
 
-    // Sort all children arrays by numeric index to maintain consistent left-to-right order
+    // Sort all children arrays by numeric index to maintain consistent top-to-bottom order
     childrenMap.forEach((children, parentId) => {
       childrenMap.set(parentId, sortNodeIds(children));
     });
 
-    // Pre-calculate all subtree widths (horizontal space needed)
+    // Pre-calculate all subtree heights (vertical space needed)
     allNodes.forEach(node => {
-      calculateSubtreeWidth(node.id, childrenMap, subtreeWidthCache);
+      calculateSubtreeHeight(node.id, childrenMap, subtreeHeightCache);
     });
 
-    // Group nodes by level for uniform spacing calculations
+    // Group nodes by level (column) for uniform spacing calculations
     const nodesByLevel = new Map<number, Node<CustomNodeData>[]>();
     allNodes.forEach(node => {
       const level = node.data.level;
@@ -166,7 +166,7 @@ const MindMapContent = () => {
       nodesByLevel.get(level)!.push(node);
     });
 
-    // Calculate uniform horizontal gap for each level
+    // Calculate uniform vertical gap for each level (column)
     const levelGaps = new Map<number, number>();
     
     nodesByLevel.forEach((levelNodes, level) => {
@@ -175,64 +175,55 @@ const MindMapContent = () => {
         return;
       }
 
-      // Group siblings by parent
-      const siblingGroups = new Map<string, string[]>();
-      levelNodes.forEach(node => {
-        const parentId = node.id.split('-').slice(0, -1).join('-');
-        if (!siblingGroups.has(parentId)) {
-          siblingGroups.set(parentId, []);
-        }
-        siblingGroups.get(parentId)!.push(node.id);
-      });
-
-      // Use uniform gap across entire level
-      levelGaps.set(level, MIN_HORIZONTAL_GAP);
+      // Use uniform vertical gap across entire column
+      levelGaps.set(level, MIN_VERTICAL_GAP);
     });
 
-    // Position nodes in VERTICAL hierarchy: parent above, children below in horizontal row
-    const positionNode = (nodeId: string, parentCenterX: number, levelDepth: number) => {
+    // Position nodes in VERTICAL COLUMNS: Level N at X = (N-1) * LEVEL_HORIZONTAL_GAP
+    // Children stack vertically in next column to the right
+    const positionNode = (nodeId: string, parentCenterY: number, levelDepth: number) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
 
-      // Y coordinate determined by level depth (downward growth)
-      const nodeY = levelDepth * LEVEL_VERTICAL_GAP;
+      // X coordinate determined by level (column position, left-to-right growth)
+      const nodeX = levelDepth * LEVEL_HORIZONTAL_GAP;
       
-      // X coordinate: center position accounting for node width
+      // Y coordinate: center position accounting for node height
       node.position = { 
-        x: parentCenterX - NODE_WIDTH / 2, 
-        y: nodeY 
+        x: nodeX, 
+        y: parentCenterY - NODE_HEIGHT / 2
       };
       
       const children = childrenMap.get(nodeId) || [];
       if (children.length === 0) return;
       
-      // Sort children to maintain fixed left-to-right order
+      // Sort children to maintain fixed top-to-bottom order
       const sortedChildren = sortNodeIds(children);
       const childLevel = node.data.level + 1;
-      const uniformGap = levelGaps.get(childLevel) || MIN_HORIZONTAL_GAP;
+      const uniformGap = levelGaps.get(childLevel) || MIN_VERTICAL_GAP;
       
-      // Calculate horizontal space needed for each child's subtree
-      const childWidths = sortedChildren.map(childId => 
-        subtreeWidthCache.get(childId) || NODE_WIDTH
+      // Calculate vertical space needed for each child's subtree
+      const childHeights = sortedChildren.map(childId => 
+        subtreeHeightCache.get(childId) || NODE_HEIGHT
       );
       
       const totalGaps = Math.max(0, sortedChildren.length - 1) * uniformGap;
-      const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + totalGaps;
+      const totalHeight = childHeights.reduce((sum, h) => sum + h, 0) + totalGaps;
       
-      // Position children horizontally below parent, maintaining left-to-right order
-      let currentX = parentCenterX - totalWidth / 2;
+      // Position children vertically in next column to the right, maintaining top-to-bottom order
+      let currentY = parentCenterY - totalHeight / 2;
       sortedChildren.forEach((childId, index) => {
-        const childWidth = childWidths[index];
-        const childCenterX = currentX + childWidth / 2;
-        positionNode(childId, childCenterX, levelDepth + 1);
-        currentX += childWidth + uniformGap;
+        const childHeight = childHeights[index];
+        const childCenterY = currentY + childHeight / 2;
+        positionNode(childId, childCenterY, levelDepth + 1);
+        currentY += childHeight + uniformGap;
       });
     };
 
-    // Start from root at top center (level 0)
+    // Start from root at left center (level 0)
     positionNode('1', 0, 0);
     return allNodes;
-  }, [calculateSubtreeWidth]);
+  }, [calculateSubtreeHeight]);
 
   // Generate children for a node
   const generateChildren = useCallback((parentNode: Node<CustomNodeData>) => {
@@ -265,6 +256,7 @@ const MindMapContent = () => {
         source: parentNode.id,
         target: childId,
         animated: true,
+        type: 'smoothstep',
         style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
       });
     }

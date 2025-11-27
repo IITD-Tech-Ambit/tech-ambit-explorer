@@ -36,10 +36,11 @@ const CustomNode = ({ data }: NodeProps) => {
       tabIndex={0}
       aria-label={`${label}, ${expanded ? 'expanded' : 'collapsed'}${isMaxDepth ? ', max depth reached' : ''}`}
     >
+      {/* Target handle on LEFT for children (receives connection from parent) */}
       {level > 1 && (
         <Handle 
           type="target" 
-          position={Position.Top}
+          position={Position.Left}
           className="!w-2 !h-2 !bg-primary"
         />
       )}
@@ -49,6 +50,7 @@ const CustomNode = ({ data }: NodeProps) => {
         style={{ 
           borderColor: getNodeColor(),
           borderWidth: selected ? '4px' : '3px',
+          borderStyle: 'solid',
           backgroundColor: 'hsl(var(--background))',
           boxShadow: selected ? `0 0 20px ${getNodeColor()}40` : undefined,
         }}
@@ -82,10 +84,11 @@ const CustomNode = ({ data }: NodeProps) => {
         )}
       </div>
       
+      {/* Source handle on RIGHT for parents (connects to children) */}
       {!isMaxDepth && (
         <Handle 
           type="source" 
-          position={Position.Bottom}
+          position={Position.Right}
           className="!w-2 !h-2 !bg-primary"
         />
       )}
