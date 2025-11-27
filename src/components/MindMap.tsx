@@ -128,13 +128,14 @@ const MindMapContent = () => {
     return width;
   }, []);
 
-  // Calculate positions with uniform spacing per level
+  // Calculate VERTICAL tree layout: root at top, children in horizontal rows below
+  // Each level forms a horizontal line at Y = (level - 1) * LEVEL_VERTICAL_GAP
   const calculateTreeLayout = useCallback((allNodes: Node<CustomNodeData>[]) => {
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const childrenMap = new Map<string, string[]>();
     const subtreeWidthCache = new Map<string, number>();
     
-    // Build parent-child relationships maintaining fixed order
+    // Build parent-child relationships maintaining fixed left-to-right order
     allNodes.forEach(node => {
       const parentId = node.id.split('-').slice(0, -1).join('-') || null;
       if (parentId) {
@@ -145,17 +146,17 @@ const MindMapContent = () => {
       }
     });
 
-    // Sort all children arrays by numeric index to maintain consistent order
+    // Sort all children arrays by numeric index to maintain consistent left-to-right order
     childrenMap.forEach((children, parentId) => {
       childrenMap.set(parentId, sortNodeIds(children));
     });
 
-    // Pre-calculate all subtree widths
+    // Pre-calculate all subtree widths (horizontal space needed)
     allNodes.forEach(node => {
       calculateSubtreeWidth(node.id, childrenMap, subtreeWidthCache);
     });
 
-    // Group nodes by level
+    // Group nodes by level for uniform spacing calculations
     const nodesByLevel = new Map<number, Node<CustomNodeData>[]>();
     allNodes.forEach(node => {
       const level = node.data.level;
@@ -165,10 +166,9 @@ const MindMapContent = () => {
       nodesByLevel.get(level)!.push(node);
     });
 
-    // Calculate uniform gap for each level
+    // Calculate uniform horizontal gap for each level
     const levelGaps = new Map<number, number>();
     
-    // For each level, compute the minimum uniform gap needed
     nodesByLevel.forEach((levelNodes, level) => {
       if (level === 1) {
         levelGaps.set(level, 0); // Root has no siblings
@@ -185,40 +185,33 @@ const MindMapContent = () => {
         siblingGroups.get(parentId)!.push(node.id);
       });
 
-      // Find the maximum gap needed across all sibling groups at this level
-      let maxGapNeeded = MIN_HORIZONTAL_GAP;
-      siblingGroups.forEach((siblings) => {
-        if (siblings.length <= 1) return;
-        
-        const sortedSiblings = sortNodeIds(siblings);
-        const subtreeWidths = sortedSiblings.map(id => subtreeWidthCache.get(id) || NODE_WIDTH);
-        const totalSubtreeWidth = subtreeWidths.reduce((sum, w) => sum + w, 0);
-        const numGaps = sortedSiblings.length - 1;
-        
-        // The gap needed for this group is based on the total width available
-        // We want uniform spacing, so we use MIN_HORIZONTAL_GAP as baseline
-        maxGapNeeded = Math.max(maxGapNeeded, MIN_HORIZONTAL_GAP);
-      });
-
-      levelGaps.set(level, maxGapNeeded);
+      // Use uniform gap across entire level
+      levelGaps.set(level, MIN_HORIZONTAL_GAP);
     });
 
-    // Position nodes using calculated uniform gaps per level
-    const positionNode = (nodeId: string, x: number, y: number) => {
+    // Position nodes in VERTICAL hierarchy: parent above, children below in horizontal row
+    const positionNode = (nodeId: string, parentCenterX: number, levelDepth: number) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
 
-      node.position = { x: x - NODE_WIDTH / 2, y };
+      // Y coordinate determined by level depth (downward growth)
+      const nodeY = levelDepth * LEVEL_VERTICAL_GAP;
+      
+      // X coordinate: center position accounting for node width
+      node.position = { 
+        x: parentCenterX - NODE_WIDTH / 2, 
+        y: nodeY 
+      };
       
       const children = childrenMap.get(nodeId) || [];
       if (children.length === 0) return;
       
-      // Sort children to maintain fixed order
+      // Sort children to maintain fixed left-to-right order
       const sortedChildren = sortNodeIds(children);
       const childLevel = node.data.level + 1;
       const uniformGap = levelGaps.get(childLevel) || MIN_HORIZONTAL_GAP;
       
-      // Calculate child subtree widths
+      // Calculate horizontal space needed for each child's subtree
       const childWidths = sortedChildren.map(childId => 
         subtreeWidthCache.get(childId) || NODE_WIDTH
       );
@@ -226,18 +219,17 @@ const MindMapContent = () => {
       const totalGaps = Math.max(0, sortedChildren.length - 1) * uniformGap;
       const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + totalGaps;
       
-      // Position children left-to-right in fixed order
-      let currentX = x - totalWidth / 2;
+      // Position children horizontally below parent, maintaining left-to-right order
+      let currentX = parentCenterX - totalWidth / 2;
       sortedChildren.forEach((childId, index) => {
         const childWidth = childWidths[index];
         const childCenterX = currentX + childWidth / 2;
-        const childY = y + LEVEL_VERTICAL_GAP;
-        positionNode(childId, childCenterX, childY);
+        positionNode(childId, childCenterX, levelDepth + 1);
         currentX += childWidth + uniformGap;
       });
     };
 
-    // Start from root at origin
+    // Start from root at top center (level 0)
     positionNode('1', 0, 0);
     return allNodes;
   }, [calculateSubtreeWidth]);
