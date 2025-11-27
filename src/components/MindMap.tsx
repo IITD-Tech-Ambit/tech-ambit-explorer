@@ -36,6 +36,15 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
+// Sort node IDs by their numeric index (last segment) to maintain order
+const sortNodeIds = (ids: string[]) => {
+  return [...ids].sort((a, b) => {
+    const aIndex = parseInt(a.split('-').pop() || '0');
+    const bIndex = parseInt(b.split('-').pop() || '0');
+    return aIndex - bIndex;
+  });
+};
+
 const MindMapContent = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CustomNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -84,8 +93,8 @@ const MindMapContent = () => {
       return CONFIG.NODE_WIDTH;
     }
     
-    // Sort children to maintain order
-    const sortedChildren = [...children].sort();
+    // Sort children by numeric index to maintain order
+    const sortedChildren = sortNodeIds(children);
     
     const childrenWidth = sortedChildren.reduce((sum, childId) => {
       return sum + calculateSubtreeWidth(childId, childrenMap);
@@ -112,9 +121,9 @@ const MindMapContent = () => {
       }
     });
 
-    // Sort all children arrays to maintain consistent order
+    // Sort all children arrays by numeric index to maintain consistent order
     childrenMap.forEach((children, parentId) => {
-      childrenMap.set(parentId, children.sort());
+      childrenMap.set(parentId, sortNodeIds(children));
     });
 
     // Position nodes using tree layout with dynamic spacing
@@ -126,8 +135,8 @@ const MindMapContent = () => {
       
       const children = childrenMap.get(nodeId) || [];
       if (children.length > 0) {
-        // Ensure children are in sorted order (preserving original order)
-        const sortedChildren = [...children].sort();
+        // Ensure children are in numeric order (preserving original order)
+        const sortedChildren = sortNodeIds(children);
         
         // Calculate width needed for each child's subtree
         const childWidths = sortedChildren.map(childId => 
