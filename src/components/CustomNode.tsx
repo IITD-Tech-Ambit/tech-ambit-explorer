@@ -7,11 +7,12 @@ export interface CustomNodeData {
   level: number;
   expanded: boolean;
   isMaxDepth: boolean;
+  selected?: boolean;
   [key: string]: unknown;
 }
 
 const CustomNode = ({ data }: NodeProps) => {
-  const { label, level, expanded, isMaxDepth } = data as CustomNodeData;
+  const { label, level, expanded, isMaxDepth, selected } = data as CustomNodeData;
   
   // Color variations based on level
   const getNodeColor = () => {
@@ -44,10 +45,12 @@ const CustomNode = ({ data }: NodeProps) => {
       )}
       
       <div 
-        className="relative flex items-center justify-center min-w-[140px] px-6 py-4 rounded-lg border-3 transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
+        className="relative flex items-center justify-center min-w-[140px] px-6 py-4 rounded-lg transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
         style={{ 
           borderColor: getNodeColor(),
+          borderWidth: selected ? '4px' : '3px',
           backgroundColor: 'hsl(var(--background))',
+          boxShadow: selected ? `0 0 20px ${getNodeColor()}40` : undefined,
         }}
       >
         <div className="text-center px-4">

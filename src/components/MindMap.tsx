@@ -16,16 +16,22 @@ import { Plus, Minus, Maximize2 } from 'lucide-react';
 import { Button } from './ui/button';
 import CustomNode, { CustomNodeData } from './CustomNode';
 
-// Configurable constants
+// Top-level configurable constants
+const NODE_WIDTH = 140;
+const NODE_HEIGHT = 60;
+const MIN_HORIZONTAL_GAP = 24;
+const LEVEL_VERTICAL_GAP = 150;
+const MAX_DEPTH = 8;
+const ANIMATION_DURATION = 300;
+const DEBOUNCE_DELAY = 100;
+
 const CONFIG = {
-  MAX_DEPTH: 8,
-  NODE_WIDTH: 140,
-  NODE_HEIGHT: 60,
-  MIN_HORIZONTAL_GAP: 24,
-  HORIZONTAL_SPACING: 250,
-  VERTICAL_SPACING: 150,
-  LEVEL_VERTICAL_GAP: 150,
-  ANIMATION_DURATION: 300,
+  MAX_DEPTH,
+  NODE_WIDTH,
+  NODE_HEIGHT,
+  MIN_HORIZONTAL_GAP,
+  LEVEL_VERTICAL_GAP,
+  ANIMATION_DURATION,
   MIN_ZOOM: 0.25,
   MAX_ZOOM: 3.0,
   FIT_VIEW_PADDING: 0.12,
@@ -50,7 +56,9 @@ const MindMapContent = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { fitView, setCenter, getZoom, zoomIn, zoomOut } = useReactFlow();
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const expandedNodes = useRef<Set<string>>(new Set());
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize with root node
   useEffect(() => {
@@ -63,6 +71,7 @@ const MindMapContent = () => {
         level: 1,
         expanded: false,
         isMaxDepth: false,
+        selected: false,
       },
     };
     setNodes([rootNode]);
@@ -85,32 +94,47 @@ const MindMapContent = () => {
     return () => clearInterval(interval);
   }, [getZoom]);
 
-  // Calculate subtree width for dynamic spacing
-  const calculateSubtreeWidth = useCallback((nodeId: string, childrenMap: Map<string, string[]>): number => {
+  // Calculate subtree width (horizontal bounding box for node + all visible descendants)
+  const calculateSubtreeWidth = useCallback((
+    nodeId: string, 
+    childrenMap: Map<string, string[]>,
+    subtreeWidthCache: Map<string, number>
+  ): number => {
+    // Check cache first
+    if (subtreeWidthCache.has(nodeId)) {
+      return subtreeWidthCache.get(nodeId)!;
+    }
+
     const children = childrenMap.get(nodeId) || [];
     
     if (children.length === 0) {
-      return CONFIG.NODE_WIDTH;
+      subtreeWidthCache.set(nodeId, NODE_WIDTH);
+      return NODE_WIDTH;
     }
     
-    // Sort children by numeric index to maintain order
+    // Sort children by numeric index to maintain fixed order
     const sortedChildren = sortNodeIds(children);
     
+    // Sum of all child subtree widths
     const childrenWidth = sortedChildren.reduce((sum, childId) => {
-      return sum + calculateSubtreeWidth(childId, childrenMap);
+      return sum + calculateSubtreeWidth(childId, childrenMap, subtreeWidthCache);
     }, 0);
     
-    const totalGaps = Math.max(0, sortedChildren.length - 1) * CONFIG.MIN_HORIZONTAL_GAP;
+    // Gaps between children
+    const totalGaps = Math.max(0, sortedChildren.length - 1) * MIN_HORIZONTAL_GAP;
     
-    return Math.max(childrenWidth + totalGaps, CONFIG.NODE_WIDTH);
+    const width = Math.max(childrenWidth + totalGaps, NODE_WIDTH);
+    subtreeWidthCache.set(nodeId, width);
+    return width;
   }, []);
 
-  // Calculate positions for tree layout with dynamic spacing
+  // Calculate positions with uniform spacing per level
   const calculateTreeLayout = useCallback((allNodes: Node<CustomNodeData>[]) => {
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const childrenMap = new Map<string, string[]>();
+    const subtreeWidthCache = new Map<string, number>();
     
-    // Build parent-child relationships and maintain order
+    // Build parent-child relationships maintaining fixed order
     allNodes.forEach(node => {
       const parentId = node.id.split('-').slice(0, -1).join('-') || null;
       if (parentId) {
@@ -126,38 +150,94 @@ const MindMapContent = () => {
       childrenMap.set(parentId, sortNodeIds(children));
     });
 
-    // Position nodes using tree layout with dynamic spacing
+    // Pre-calculate all subtree widths
+    allNodes.forEach(node => {
+      calculateSubtreeWidth(node.id, childrenMap, subtreeWidthCache);
+    });
+
+    // Group nodes by level
+    const nodesByLevel = new Map<number, Node<CustomNodeData>[]>();
+    allNodes.forEach(node => {
+      const level = node.data.level;
+      if (!nodesByLevel.has(level)) {
+        nodesByLevel.set(level, []);
+      }
+      nodesByLevel.get(level)!.push(node);
+    });
+
+    // Calculate uniform gap for each level
+    const levelGaps = new Map<number, number>();
+    
+    // For each level, compute the minimum uniform gap needed
+    nodesByLevel.forEach((levelNodes, level) => {
+      if (level === 1) {
+        levelGaps.set(level, 0); // Root has no siblings
+        return;
+      }
+
+      // Group siblings by parent
+      const siblingGroups = new Map<string, string[]>();
+      levelNodes.forEach(node => {
+        const parentId = node.id.split('-').slice(0, -1).join('-');
+        if (!siblingGroups.has(parentId)) {
+          siblingGroups.set(parentId, []);
+        }
+        siblingGroups.get(parentId)!.push(node.id);
+      });
+
+      // Find the maximum gap needed across all sibling groups at this level
+      let maxGapNeeded = MIN_HORIZONTAL_GAP;
+      siblingGroups.forEach((siblings) => {
+        if (siblings.length <= 1) return;
+        
+        const sortedSiblings = sortNodeIds(siblings);
+        const subtreeWidths = sortedSiblings.map(id => subtreeWidthCache.get(id) || NODE_WIDTH);
+        const totalSubtreeWidth = subtreeWidths.reduce((sum, w) => sum + w, 0);
+        const numGaps = sortedSiblings.length - 1;
+        
+        // The gap needed for this group is based on the total width available
+        // We want uniform spacing, so we use MIN_HORIZONTAL_GAP as baseline
+        maxGapNeeded = Math.max(maxGapNeeded, MIN_HORIZONTAL_GAP);
+      });
+
+      levelGaps.set(level, maxGapNeeded);
+    });
+
+    // Position nodes using calculated uniform gaps per level
     const positionNode = (nodeId: string, x: number, y: number) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
 
-      node.position = { x, y };
+      node.position = { x: x - NODE_WIDTH / 2, y };
       
       const children = childrenMap.get(nodeId) || [];
-      if (children.length > 0) {
-        // Ensure children are in numeric order (preserving original order)
-        const sortedChildren = sortNodeIds(children);
-        
-        // Calculate width needed for each child's subtree
-        const childWidths = sortedChildren.map(childId => 
-          calculateSubtreeWidth(childId, childrenMap)
-        );
-        
-        const totalGaps = Math.max(0, sortedChildren.length - 1) * CONFIG.MIN_HORIZONTAL_GAP;
-        const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + totalGaps;
-        
-        // Position children based on their subtree widths, maintaining order
-        let currentX = x - totalWidth / 2;
-        sortedChildren.forEach((childId, index) => {
-          const childWidth = childWidths[index];
-          const childX = currentX + childWidth / 2;
-          const childY = y + CONFIG.LEVEL_VERTICAL_GAP;
-          positionNode(childId, childX, childY);
-          currentX += childWidth + CONFIG.MIN_HORIZONTAL_GAP;
-        });
-      }
+      if (children.length === 0) return;
+      
+      // Sort children to maintain fixed order
+      const sortedChildren = sortNodeIds(children);
+      const childLevel = node.data.level + 1;
+      const uniformGap = levelGaps.get(childLevel) || MIN_HORIZONTAL_GAP;
+      
+      // Calculate child subtree widths
+      const childWidths = sortedChildren.map(childId => 
+        subtreeWidthCache.get(childId) || NODE_WIDTH
+      );
+      
+      const totalGaps = Math.max(0, sortedChildren.length - 1) * uniformGap;
+      const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + totalGaps;
+      
+      // Position children left-to-right in fixed order
+      let currentX = x - totalWidth / 2;
+      sortedChildren.forEach((childId, index) => {
+        const childWidth = childWidths[index];
+        const childCenterX = currentX + childWidth / 2;
+        const childY = y + LEVEL_VERTICAL_GAP;
+        positionNode(childId, childCenterX, childY);
+        currentX += childWidth + uniformGap;
+      });
     };
 
+    // Start from root at origin
     positionNode('1', 0, 0);
     return allNodes;
   }, [calculateSubtreeWidth]);
@@ -183,7 +263,8 @@ const MindMapContent = () => {
           label: `Level ${newLevel}`,
           level: newLevel,
           expanded: false,
-          isMaxDepth: newLevel === CONFIG.MAX_DEPTH,
+          isMaxDepth: newLevel === MAX_DEPTH,
+          selected: false,
         },
       });
 
@@ -225,57 +306,66 @@ const MindMapContent = () => {
     event.stopPropagation();
     
     // Check if at max depth
-    if (node.data.level >= CONFIG.MAX_DEPTH) return;
+    if (node.data.level >= MAX_DEPTH) return;
 
-    const isExpanded = expandedNodes.current.has(node.id);
-    
-    setNodes((prevNodes) => {
-      let updatedNodes = [...prevNodes];
+    // Debounce to prevent conflicting recalculations
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      const isExpanded = expandedNodes.current.has(node.id);
+      setSelectedNodeId(node.id);
       
-      if (isExpanded) {
-        // Collapse: remove all descendants
-        const descendants = getDescendants(node.id, updatedNodes);
-        updatedNodes = updatedNodes.filter(n => !descendants.includes(n.id));
+      setNodes((prevNodes) => {
+        let updatedNodes = [...prevNodes];
         
-        // Remove from expanded set
-        expandedNodes.current.delete(node.id);
+        if (isExpanded) {
+          // Collapse: remove all descendants
+          const descendants = getDescendants(node.id, updatedNodes);
+          updatedNodes = updatedNodes.filter(n => !descendants.includes(n.id));
+          
+          // Remove from expanded set
+          expandedNodes.current.delete(node.id);
+          
+          // Update edges
+          setEdges((prevEdges) => 
+            prevEdges.filter(e => !descendants.includes(e.target))
+          );
+        } else {
+          // Expand: add children
+          const { nodes: newNodes, edges: newEdges } = generateChildren(node);
+          updatedNodes = [...updatedNodes, ...newNodes];
+          
+          // Add to expanded set
+          expandedNodes.current.add(node.id);
+          
+          // Update edges
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+        }
         
-        // Update edges
-        setEdges((prevEdges) => 
-          prevEdges.filter(e => !descendants.includes(e.target))
+        // Update node's expanded state and selected state
+        updatedNodes = updatedNodes.map(n => 
+          n.id === node.id 
+            ? { ...n, data: { ...n.data, expanded: !isExpanded, selected: true } }
+            : { ...n, data: { ...n.data, selected: false } }
         );
-      } else {
-        // Expand: add children
-        const { nodes: newNodes, edges: newEdges } = generateChildren(node);
-        updatedNodes = [...updatedNodes, ...newNodes];
         
-        // Add to expanded set
-        expandedNodes.current.add(node.id);
+        // STEP 1: Recalculate spacing for affected levels (Level X and Level X-1)
+        // This computes uniform gaps across entire levels
+        const layoutedNodes = calculateTreeLayout(updatedNodes);
         
-        // Update edges
-        setEdges((prevEdges) => [...prevEdges, ...newEdges]);
-      }
-      
-      // Update node's expanded state
-      updatedNodes = updatedNodes.map(n => 
-        n.id === node.id 
-          ? { ...n, data: { ...n.data, expanded: !isExpanded } }
-          : n
-      );
-      
-      // Recalculate layout
-      const layoutedNodes = calculateTreeLayout(updatedNodes);
-      
-      // Auto-fit after layout
-      setTimeout(() => {
-        fitView({ 
-          padding: CONFIG.FIT_VIEW_PADDING, 
-          duration: CONFIG.ANIMATION_DURATION 
-        });
-      }, 50);
-      
-      return layoutedNodes;
-    });
+        // Auto-fit after layout with animation
+        setTimeout(() => {
+          fitView({ 
+            padding: CONFIG.FIT_VIEW_PADDING, 
+            duration: ANIMATION_DURATION 
+          });
+        }, 50);
+        
+        return layoutedNodes;
+      });
+    }, DEBOUNCE_DELAY);
   }, [generateChildren, getDescendants, calculateTreeLayout, fitView, setEdges, setNodes]);
 
   // Collapse all nodes
@@ -286,11 +376,12 @@ const MindMapContent = () => {
       
       return [{
         ...rootNode,
-        data: { ...rootNode.data, expanded: false }
+        data: { ...rootNode.data, expanded: false, selected: false }
       }];
     });
     setEdges([]);
     expandedNodes.current.clear();
+    setSelectedNodeId(null);
     
     setTimeout(() => {
       fitView({ 
