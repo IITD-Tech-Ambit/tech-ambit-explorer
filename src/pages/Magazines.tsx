@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Download, Calendar } from "lucide-react";
@@ -62,19 +62,25 @@ const Magazines = () => {
     <div className="min-h-screen">
       <Navigation />
 
-      {/* Header */}
-      <section className="gradient-subtle pt-32 pb-16">
+      {/* Header / Hero */}
+      <section className="pt-28 pb-10">
         <div className="container mx-auto px-4">
-          <h1 className="text-5xl font-bold mb-4 animate-fade-in">
-            Tech Ambit Magazine
-          </h1>
-          <p className="text-xl text-muted-foreground mb-4 max-w-3xl animate-slide-up">
-            Our quarterly publication showcasing the latest research stories, 
-            breakthroughs, and innovations from across IIT Delhi's research ecosystem.
-          </p>
-          <Badge variant="secondary" className="text-base px-4 py-2">
-            Published Quarterly
-          </Badge>
+          <div className="magazine-hero">
+            <div className="magazine-cover">
+              <img src={magazineCover} alt="Tech Ambit" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-3">Tech Ambit Magazine</h1>
+              <p className="text-lg text-muted-foreground mb-4 max-w-2xl">
+                Our quarterly publication showcasing the latest research stories, breakthroughs, and innovations from across IIT Delhi's research ecosystem.
+              </p>
+              <div className="flex items-center gap-3">
+                <Badge variant="secondary" className="text-base px-4 py-2">Published Quarterly</Badge>
+                <Button className="mag-button-primary">Subscribe</Button>
+                <Button variant="ghost" className="mag-button-ghost">Contribute</Button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -82,44 +88,41 @@ const Magazines = () => {
       <section className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {magazines.map((magazine, index) => (
-            <Card
-              key={index}
-              className="overflow-hidden hover:shadow-elegant transition-smooth border-border group"
-            >
+            <Card key={index} className={`magazine-card group flex flex-col h-full`}> 
               <div className="relative overflow-hidden">
                 <img
                   src={magazine.cover}
                   alt={magazine.title}
-                  className="w-full h-80 object-cover group-hover:scale-105 transition-smooth"
+                  className={`w-full h-72 object-cover group-hover:scale-105 transition-smooth`}
                 />
                 <div className="absolute top-4 right-4">
                   <Badge className="bg-primary text-primary-foreground">
                     {magazine.pages} Pages
                   </Badge>
                 </div>
+                <div className="absolute left-4 bottom-4 bg-background/80 backdrop-blur-sm px-3 py-2 rounded-md">
+                  <div className="text-xs text-muted-foreground">{magazine.volume}</div>
+                  <div className="text-sm font-semibold text-primary">{magazine.title}</div>
+                </div>
               </div>
 
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-2">
+              <CardContent className="p-6 flex-1 flex flex-col justify-between">
+                <div className="magazine-meta mb-3">
                   <Calendar className="h-4 w-4" />
                   <span>{magazine.date}</span>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-6">{magazine.description}</p>
+                </div>
 
-                <h3 className="text-xl font-semibold mb-1">{magazine.volume}</h3>
-                <h4 className="text-lg text-primary font-medium mb-3">
-                  {magazine.title}
-                </h4>
-                <p className="text-sm text-muted-foreground mb-6">
-                  {magazine.description}
-                </p>
-
-                <div className="flex space-x-2">
-                  <Button className="flex-1">
-                    <Eye className="h-4 w-4 mr-2" />
+                <div className="flex items-center gap-3 mt-4">
+                  <Button className="mag-button-primary flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
                     View Online
                   </Button>
-                  <Button variant="outline">
+                  <Button className=" flex items-center gap-2">
                     <Download className="h-4 w-4" />
+                    Download
                   </Button>
                 </div>
               </CardContent>

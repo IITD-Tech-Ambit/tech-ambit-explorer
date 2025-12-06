@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +9,7 @@ const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -35,19 +37,28 @@ const Navigation = () => {
   return (
     <nav
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-smooth",
+        "fixed top-0 left-0 right-0 z-50 transition-smooth text-foreground",
         isScrolled
-          ? "bg-background/95 backdrop-blur-md shadow-card"
-          : "bg-transparent"
+          ? "bg-background/95 backdrop-blur-md shadow-card border-b border-border"
+          : "bg-background/60 backdrop-blur-md border-b border-border"
       )}
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-xl transition-smooth group-hover:scale-110">
-              TA
-            </div>
+            {!logoError ? (
+              <img
+                src={siteLogo}
+                alt="Tech Ambit"
+                className="logo-img"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="logo-fallback" aria-hidden>
+                TA
+              </div>
+            )}
             <div className="flex flex-col">
               <span className="font-bold text-lg leading-tight">Tech Ambit</span>
               <span className="text-xs text-muted-foreground">IIT Delhi</span>
@@ -61,11 +72,12 @@ const Navigation = () => {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "px-4 py-2 rounded-lg transition-smooth font-medium",
+                  "px-4 py-2 rounded-lg transition-smooth font-medium text-foreground",
                   isActive(item.path)
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-secondary"
+                    ? "bg-primary text-primary-foreground shadow-elegant"
+                    : "hover:bg-secondary/80"
                 )}
+                aria-current={isActive(item.path) ? "page" : undefined}
               >
                 {item.name}
               </Link>
@@ -97,17 +109,17 @@ const Navigation = () => {
 
         {/* Mobile Navigation */}
         {isOpen && (
-          <div className="md:hidden py-4 space-y-2 animate-fade-in">
+          <div className="md:hidden py-4 space-y-2 animate-fade-in bg-background/95 backdrop-blur-md rounded-b-lg border-t border-border">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 onClick={() => setIsOpen(false)}
                 className={cn(
-                  "block px-4 py-3 rounded-lg transition-smooth font-medium",
+                  "block px-4 py-3 rounded-lg transition-smooth font-medium text-foreground",
                   isActive(item.path)
                     ? "bg-primary text-primary-foreground"
-                    : "hover:bg-secondary"
+                    : "hover:bg-secondary/80"
                 )}
               >
                 {item.name}

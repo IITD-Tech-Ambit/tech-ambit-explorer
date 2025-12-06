@@ -30,23 +30,31 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen home-bg">
       <Navigation />
       
       {/* Hero Section */}
       <section className="relative h-[90vh] flex items-center justify-center overflow-hidden">
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${heroImage})` }}
+          style={{
+            backgroundImage: `url('${heroImage}')`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            filter: "brightness(0.66) contrast(1.05) saturate(1.05)",
+          }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/50" />
+          {/* soft gradient overlay + subtle vignette for better text contrast */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/18 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/6 to-black/30" />
         </div>
         
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl animate-fade-in">
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
               Exploring Innovation and Research at{" "}
-              <span className="gradient-primary bg-clip-text text-transparent">
+              <span className=" bg-clip-text ">
                 IIT Delhi
               </span>
             </h1>

@@ -93,11 +93,11 @@ const Directory = () => {
       : directoryEntries.filter((entry) => entry.type === activeFilter);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen page-bg">
       <Navigation />
 
       {/* Header */}
-      <section className="gradient-subtle pt-32 pb-16">
+      <section className="gradient-subtle pt-32 pb-16 section-bg">
         <div className="container mx-auto px-4">
           <h1 className="text-5xl font-bold mb-4 animate-fade-in">
             Who We Are
@@ -109,11 +109,11 @@ const Directory = () => {
 
           {/* Search Bar */}
           <div className="relative max-w-2xl animate-slide-up">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            
             <Input
               type="text"
               placeholder="Search by name, department, or research area..."
-              className="pl-12 h-12 text-base"
+              className="pl-12 h-12 text-base search-input"
             />
           </div>
         </div>
