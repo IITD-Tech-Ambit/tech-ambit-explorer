@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -252,10 +256,46 @@ const MagazineDetail = () => {
 
                             {/* Magazine Body Content */}
                             <article className="prose prose-lg dark:prose-invert max-w-none">
-                                <div
-                                    dangerouslySetInnerHTML={{ __html: magazine.body }}
-                                    className="magazine-content"
-                                />
+                                <div className="magazine-content markdown-body">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                                        components={{
+                                            // Custom styling for images to make them responsive
+                                            img: ({ node, ...props }) => (
+                                                <img
+                                                    {...props}
+                                                    className="max-w-full h-auto rounded-lg my-4"
+                                                    loading="lazy"
+                                                />
+                                            ),
+                                            // Custom styling for tables to make them responsive
+                                            table: ({ node, ...props }) => (
+                                                <div className="overflow-x-auto my-6">
+                                                    <table {...props} className="min-w-full divide-y divide-gray-300 dark:divide-gray-700" />
+                                                </div>
+                                            ),
+                                            // Custom styling for code blocks
+                                            code: ({ node, inline, className, children, ...props }: any) => (
+                                                inline ? (
+                                                    <code {...props} className="bg-muted px-1.5 py-0.5 rounded text-sm">
+                                                        {children}
+                                                    </code>
+                                                ) : (
+                                                    <code {...props} className="block bg-muted p-4 rounded-lg overflow-x-auto">
+                                                        {children}
+                                                    </code>
+                                                )
+                                            ),
+                                            // Custom styling for blockquotes
+                                            blockquote: ({ node, ...props }) => (
+                                                <blockquote {...props} className="border-l-4 border-primary pl-4 italic my-4" />
+                                            ),
+                                        }}
+                                    >
+                                        {magazine.body}
+                                    </ReactMarkdown>
+                                </div>
                             </article>
 
                             {/* Comments Section */}
