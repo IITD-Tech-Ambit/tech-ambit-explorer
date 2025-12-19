@@ -302,116 +302,264 @@ All colors MUST be HSL.
     box-shadow: 0 8px 30px -14px hsl(var(--primary) / 0.06);
   }
 
-  /* Magazine content markdown styling */
+  /* Magazine content markdown styling - Premium Editorial Design */
   .magazine-content {
     line-height: 1.75;
     color: hsl(var(--foreground));
+    font-size: 1rem;
   }
 
+  /* First paragraph emphasis */
+  .magazine-content > p:first-of-type {
+    font-size: 1.125rem;
+    line-height: 1.8;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Premium Typography */
   .magazine-content h1,
   .magazine-content h2,
   .magazine-content h3,
   .magazine-content h4,
   .magazine-content h5,
   .magazine-content h6 {
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+    margin-top: 2.5rem;
+    margin-bottom: 1.25rem;
     font-weight: 600;
     line-height: 1.3;
+    letter-spacing: -0.02em;
   }
 
-  .magazine-content h1 { font-size: 2.25rem; }
-  .magazine-content h2 { font-size: 1.875rem; }
-  .magazine-content h3 { font-size: 1.5rem; }
-  .magazine-content h4 { font-size: 1.25rem; }
-  .magazine-content h5 { font-size: 1.125rem; }
+  .magazine-content h1 { 
+    font-size: 2.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid hsl(var(--border));
+  }
+  
+  .magazine-content h2 { 
+    font-size: 2rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  
+  .magazine-content h3 { 
+    font-size: 1.625rem;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  
+  .magazine-content h4 { font-size: 1.375rem; }
+  
+  .magazine-content h5 { 
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+  }
+  
   .magazine-content h6 { font-size: 1rem; }
 
   .magazine-content p {
     margin-bottom: 1.25rem;
   }
 
+  /* Enhanced Lists */
   .magazine-content ul,
   .magazine-content ol {
-    margin-bottom: 1.25rem;
-    padding-left: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-left: 2rem;
   }
 
   .magazine-content li {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
   }
 
+  .magazine-content ul li::marker {
+    color: hsl(var(--primary));
+    font-size: 1.2em;
+  }
+
+  .magazine-content ol li::marker {
+    color: hsl(var(--primary));
+    font-weight: 600;
+  }
+
+  /* Premium Table Design with Zebra Stripes */
   .magazine-content table {
     width: 100%;
-    border-collapse: collapse;
-    margin: 1.5rem 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 2rem 0;
     font-size: 0.95rem;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
   }
 
   .magazine-content table th {
-    background: hsl(var(--muted));
-    padding: 0.75rem 1rem;
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.08), hsl(var(--primary) / 0.12));
+    padding: 1rem 1.25rem;
     text-align: left;
     font-weight: 600;
     border-bottom: 2px solid hsl(var(--border));
+    color: hsl(var(--primary));
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.875rem;
   }
 
   .magazine-content table td {
-    padding: 0.75rem 1rem;
+    padding: 0.875rem 1.25rem;
     border-bottom: 1px solid hsl(var(--border));
   }
 
-  .magazine-content table tr:hover {
+  /* Zebra striping for better readability */
+  .magazine-content table tbody tr:nth-child(even) {
     background: hsl(var(--muted) / 0.3);
   }
 
-  .magazine-content img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 0.5rem;
-    margin: 1.5rem auto;
-    display: block;
+  .magazine-content table tr {
+    transition: background-color 0.2s ease, transform 0.1s ease;
   }
 
+  .magazine-content table tbody tr:hover {
+    background: hsl(var(--primary) / 0.06);
+    transform: scale(1.005);
+  }
+
+  /* Beautiful Code Blocks with Decorative Header */
   .magazine-content pre {
-    background: hsl(var(--muted));
-    padding: 1rem;
-    border-radius: 0.5rem;
+    position: relative;
+    background: linear-gradient(135deg, hsl(var(--muted)), hsl(var(--muted) / 0.8));
+    padding: 1.5rem;
+    border-radius: 0.75rem;
     overflow-x: auto;
-    margin: 1.5rem 0;
+    margin: 2rem 0;
+    box-shadow: var(--shadow-md);
+    border: 1px solid hsl(var(--border));
+  }
+
+  .magazine-content pre::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.1), hsl(var(--accent) / 0.1));
+    border-radius: 0.75rem 0.75rem 0 0;
   }
 
   .magazine-content code {
-    font-family: 'Courier New', monospace;
+    font-family: 'Courier New', 'Monaco', monospace;
     font-size: 0.9em;
   }
 
-  .magazine-content blockquote {
-    border-left: 4px solid hsl(var(--primary));
-    padding-left: 1rem;
-    margin: 1.5rem 0;
-    font-style: italic;
-    color: hsl(var(--muted-foreground));
+  /* Inline code as pill badges */
+  .magazine-content p code,
+  .magazine-content li code {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--accent) / 0.08));
+    color: hsl(var(--primary));
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    font-size: 0.9em;
+    box-shadow: 0 1px 3px hsl(var(--primary) / 0.1);
   }
 
+  /* Elegant Blockquotes with Quote Mark */
+  .magazine-content blockquote {
+    position: relative;
+    border-left: 4px solid hsl(var(--primary));
+    padding: 1.5rem 1.5rem 1.5rem 3rem;
+    margin: 2rem 0;
+    font-style: italic;
+    color: hsl(var(--muted-foreground));
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.05), transparent);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .magazine-content blockquote::before {
+    content: '"';
+    position: absolute;
+    left: 0.5rem;
+    top: 0.25rem;
+    font-size: 4rem;
+    line-height: 1;
+    color: hsl(var(--primary) / 0.2);
+    font-family: Georgia, serif;
+  }
+
+  /* Enhanced Images with Hover Effect */
+  .magazine-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 1rem;
+    margin: 2rem auto;
+    display: block;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid hsl(var(--border));
+  }
+
+  .magazine-content img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 20px 40px -15px hsl(var(--primary) / 0.25);
+  }
+
+  /* Animated Links */
   .magazine-content a {
     color: hsl(var(--primary));
     text-decoration: underline;
+    text-decoration-color: hsl(var(--primary) / 0.3);
+    text-underline-offset: 3px;
+    font-weight: 500;
+    transition: all 0.2s ease;
   }
 
   .magazine-content a:hover {
     color: hsl(var(--primary-hover));
+    text-decoration-color: hsl(var(--primary));
+    text-underline-offset: 5px;
   }
 
-  /* Responsive tables */
+  /* Horizontal Rules */
+  .magazine-content hr {
+    border: none;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, hsl(var(--border)), transparent);
+    margin: 2.5rem 0;
+  }
+
+  /* Responsive tables with horizontal scroll */
   @media (max-width: 768px) {
     .magazine-content table {
       font-size: 0.875rem;
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
     }
 
     .magazine-content table th,
     .magazine-content table td {
-      padding: 0.5rem;
+      padding: 0.625rem 0.75rem;
+    }
+
+    .magazine-content pre {
+      padding: 1rem;
+      font-size: 0.8125rem;
+    }
+
+    .magazine-content blockquote {
+      padding: 1rem 1rem 1rem 2.5rem;
+    }
+
+    .magazine-content blockquote::before {
+      font-size: 3rem;
+      left: 0.25rem;
     }
   }
 
@@ -421,9 +569,38 @@ All colors MUST be HSL.
     word-wrap: break-word;
   }
 
+  /* Responsive Typography */
   @media (max-width: 640px) {
-    .magazine-content h1 { font-size: 1.875rem; }
+    .magazine-content {
+      font-size: 0.9375rem;
+    }
+
+    .magazine-content h1 { font-size: 1.75rem; }
     .magazine-content h2 { font-size: 1.5rem; }
     .magazine-content h3 { font-size: 1.25rem; }
+    .magazine-content h4 { font-size: 1.125rem; }
+    
+    .magazine-content > p:first-of-type {
+      font-size: 1rem;
+    }
+  }
+
+  /* Print Styles for Magazine Content */
+  @media print {
+    .magazine-content {
+      font-size: 11pt;
+      line-height: 1.6;
+    }
+
+    .magazine-content pre,
+    .magazine-content table,
+    .magazine-content img {
+      page-break-inside: avoid;
+    }
+
+    .magazine-content a {
+      text-decoration: underline;
+      color: black;
+    }
   }
 }
