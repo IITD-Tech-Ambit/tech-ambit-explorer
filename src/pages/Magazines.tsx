@@ -1,62 +1,55 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Download, Calendar } from "lucide-react";
+import { Eye, Calendar, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import magazineCover from "@/assets/magazine-cover-1.jpg";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { fetchPaginatedMagazines, type Magazine } from "@/lib/api";
+
+// API base URL for images
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://iitd-dev.vercel.app';
+
+// Pagination settings - 9 magazines per page
+const MAGAZINES_PER_PAGE = 9;
 
 const Magazines = () => {
-  const magazines = [
-    {
-      volume: "Vol. 12, Issue 1",
-      title: "Artificial Intelligence Revolution",
-      date: "March 2024",
-      description: "Exploring the latest advances in AI research and applications at IIT Delhi.",
-      cover: magazineCover,
-      pages: 48,
-    },
-    {
-      volume: "Vol. 11, Issue 4",
-      title: "Sustainable Future",
-      date: "December 2023",
-      description: "Highlighting groundbreaking sustainability research and green technology innovations.",
-      cover: magazineCover,
-      pages: 52,
-    },
-    {
-      volume: "Vol. 11, Issue 3",
-      title: "Quantum Computing Era",
-      date: "September 2023",
-      description: "Deep dive into quantum research and its potential to transform computing.",
-      cover: magazineCover,
-      pages: 44,
-    },
-    {
-      volume: "Vol. 11, Issue 2",
-      title: "Biotechnology Breakthroughs",
-      date: "June 2023",
-      description: "Latest developments in biomedical engineering and molecular research.",
-      cover: magazineCover,
-      pages: 50,
-    },
-    {
-      volume: "Vol. 11, Issue 1",
-      title: "Smart Cities & IoT",
-      date: "March 2023",
-      description: "Research on urban innovation and Internet of Things applications.",
-      cover: magazineCover,
-      pages: 46,
-    },
-    {
-      volume: "Vol. 10, Issue 4",
-      title: "Energy Systems",
-      date: "December 2022",
-      description: "Exploring renewable energy solutions and power system innovations.",
-      cover: magazineCover,
-      pages: 48,
-    },
-  ];
+  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Fetch paginated online magazines from server (only loads 9 at a time)
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['magazines', 'online', currentPage],
+    queryFn: () => fetchPaginatedMagazines(currentPage, MAGAZINES_PER_PAGE, 'online'),
+  });
+
+  // Extract data from server response
+  const magazines = data?.magazines || [];
+  const pagination = data?.pagination;
+  const totalPages = pagination?.totalPages || 1;
+  const totalCount = pagination?.totalCount || 0;
+
+  // Helper to get the full image URL
+  const getImageUrl = (imageUrl: string) => {
+    if (!imageUrl) return magazineCover;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return `${API_BASE_URL}${imageUrl}`;
+  };
+
+  // Format date from ISO string
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  // Page navigation
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen">
@@ -86,49 +79,126 @@ const Magazines = () => {
 
       {/* Magazines Grid */}
       <section className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {magazines.map((magazine, index) => (
-            <Card key={index} className={`magazine-card group flex flex-col h-full`}> 
-              <div className="relative overflow-hidden">
-                <img
-                  src={magazine.cover}
-                  alt={magazine.title}
-                  className={`w-full h-72 object-cover group-hover:scale-105 transition-smooth`}
-                />
-                <div className="absolute top-4 right-4">
-                  <Badge className="bg-primary text-primary-foreground">
-                    {magazine.pages} Pages
-                  </Badge>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex justify-center items-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-3 text-lg">Loading magazines...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-20">
+            <p className="text-destructive text-lg mb-4">Failed to load magazines</p>
+            <p className="text-muted-foreground">Please check your connection and try again.</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && magazines.length === 0 && (
+          <div className="text-center py-20">
+            <p className="text-lg text-muted-foreground">No magazines available at the moment.</p>
+            <p className="text-muted-foreground">Check back soon for new publications!</p>
+          </div>
+        )}
+
+        {/* Magazines Grid */}
+        {!isLoading && !error && magazines.length > 0 && (
+          <>
+            {/* Results info */}
+            <div className="mb-6 text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * MAGAZINES_PER_PAGE + 1}-{Math.min(currentPage * MAGAZINES_PER_PAGE, totalCount)} of {totalCount} magazines
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {magazines.map((magazine: Magazine) => (
+                <Card key={magazine._id} className="magazine-card group flex flex-col h-full">
+                  <div className="relative overflow-hidden">
+                    <img
+                      src={getImageUrl(magazine.image_url)}
+                      alt={magazine.title}
+                      className="w-full h-72 object-cover group-hover:scale-105 transition-smooth"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = magazineCover;
+                      }}
+                    />
+                    <div className="absolute top-4 right-4">
+                      <Badge className="bg-primary text-primary-foreground">
+                        {magazine.est_read_time} min read
+                      </Badge>
+                    </div>
+                    <div className="absolute left-4 bottom-4 bg-background/80 backdrop-blur-sm px-3 py-2 rounded-md">
+                      <div className="text-xs text-muted-foreground">Latest Issue</div>
+                      <div className="text-sm font-semibold text-primary">{magazine.title}</div>
+                    </div>
+                  </div>
+
+                  <CardContent className="p-6 flex-1 flex flex-col justify-between">
+                    <div className="magazine-meta mb-3">
+                      <Calendar className="h-4 w-4" />
+                      <span>{formatDate(magazine.createdAt)}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-4">{magazine.subtitle}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-auto">
+                      <Button
+                        className="mag-button-primary flex items-center gap-2"
+                        onClick={() => navigate(`/magazines/${magazine._id}`)}
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Online
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-12">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => goToPage(page)}
+                      className="min-w-[40px]"
+                    >
+                      {page}
+                    </Button>
+                  ))}
                 </div>
-                <div className="absolute left-4 bottom-4 bg-background/80 backdrop-blur-sm px-3 py-2 rounded-md">
-                  <div className="text-xs text-muted-foreground">{magazine.volume}</div>
-                  <div className="text-sm font-semibold text-primary">{magazine.title}</div>
-                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
-
-              <CardContent className="p-6 flex-1 flex flex-col justify-between">
-                <div className="magazine-meta mb-3">
-                  <Calendar className="h-4 w-4" />
-                  <span>{magazine.date}</span>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-6">{magazine.description}</p>
-                </div>
-
-                <div className="flex items-center gap-3 mt-4">
-                  <Button className="mag-button-primary flex items-center gap-2">
-                    <Eye className="h-4 w-4" />
-                    View Online
-                  </Button>
-                  <Button className=" flex items-center gap-2">
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* About Magazine Section */}
@@ -137,12 +207,12 @@ const Magazines = () => {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-6">About Tech Ambit Magazine</h2>
             <p className="text-lg text-muted-foreground mb-6">
-              Tech Ambit Magazine is the official research publication of IIT Delhi, 
-              featuring in-depth articles, interviews with leading researchers, and 
+              Tech Ambit Magazine is the official research publication of IIT Delhi,
+              featuring in-depth articles, interviews with leading researchers, and
               comprehensive coverage of breakthrough discoveries across all disciplines.
             </p>
             <p className="text-lg text-muted-foreground">
-              Each issue is carefully curated to bring you the most impactful research 
+              Each issue is carefully curated to bring you the most impactful research
               stories, making complex scientific concepts accessible to a broader audience.
             </p>
           </div>
