@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
@@ -11,7 +12,21 @@ import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// Configure React Query with production-ready defaults
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes - data is fresh for 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes - cache garbage collection time (formerly cacheTime)
+      retry: 2, // Retry failed requests twice
+      refetchOnWindowFocus: false, // Don't refetch on window focus
+      refetchOnReconnect: true, // Refetch when reconnecting to the internet
+    },
+    mutations: {
+      retry: 1, // Retry failed mutations once
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -31,6 +46,8 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    {/* React Query DevTools - only visible in development */}
+    <ReactQueryDevtools initialIsOpen={false} />
   </QueryClientProvider>
 );
 

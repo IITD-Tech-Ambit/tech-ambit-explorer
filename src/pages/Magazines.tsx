@@ -6,12 +6,12 @@ import { Eye, Calendar, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import magazineCover from "@/assets/magazine-cover-1.jpg";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { fetchPaginatedMagazines, type Magazine } from "@/lib/api";
+import { usePaginatedMagazines, BASE_URL, type Magazine } from "@/lib/api";
 
-// API base URL for images
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://iitd-dev.vercel.app';
+
+// API base URL for images (use centralized config)
+const API_BASE_URL = BASE_URL.replace('/api', ''); // Remove /api suffix for image URLs
 
 // Pagination settings - 9 magazines per page
 const MAGAZINES_PER_PAGE = 9;
@@ -21,10 +21,11 @@ const Magazines = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch paginated online magazines from server (only loads 9 at a time)
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['magazines', 'online', currentPage],
-    queryFn: () => fetchPaginatedMagazines(currentPage, MAGAZINES_PER_PAGE, 'online'),
-  });
+  const { data, isLoading, error } = usePaginatedMagazines(
+    currentPage,
+    MAGAZINES_PER_PAGE,
+    'online'
+  );
 
   // Extract data from server response
   const magazines = data?.magazines || [];

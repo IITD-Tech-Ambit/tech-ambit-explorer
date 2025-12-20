@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -13,16 +12,22 @@ import { ArrowLeft, Calendar, Clock, User, Loader2, ThumbsUp, MessageCircle, Sen
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import magazineCover from "@/assets/magazine-cover-1.jpg";
-import { fetchMagazineById, likeMagazine, dislikeMagazine, addComment, type Comment } from "@/lib/api";
+import { 
+    useMagazine, 
+    useLikeMagazine, 
+    useDislikeMagazine, 
+    useAddComment,
+    BASE_URL,
+    type Comment,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// API base URL for images
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://iitd-dev.vercel.app';
+// API base URL for images (use centralized config)
+const API_BASE_URL = BASE_URL.replace('/api', ''); // Remove /api suffix for image URLs
 
 const MagazineDetail = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
     const { toast } = useToast();
 
     const [commentText, setCommentText] = useState("");
@@ -30,15 +35,21 @@ const MagazineDetail = () => {
     const [likeCount, setLikeCount] = useState(0);
     const [comments, setComments] = useState<Comment[]>([]);
 
-    const { data: magazine, isLoading, error } = useQuery({
-        queryKey: ['magazine', id],
-        queryFn: () => fetchMagazineById(id!),
-        enabled: !!id,
-    });
+    // Fetch magazine using custom hook
+    const { data: magazine, isLoading, error } = useMagazine(id!);
 
-    // Like mutation
-    const likeMutation = useMutation({
-        mutationFn: () => likeMagazine(id!),
+    // Initialize likes and comments from fetched magazine data
+    useEffect(() => {
+        if (magazine) {
+            setLikeCount(magazine.likesCount || 0);
+            setComments(magazine.comments || []);
+            // You can also check if user has liked (requires user tracking implementation)
+            // For now, we'll keep isLiked as false initially
+        }
+    }, [magazine]);
+
+    // Like mutation using custom hook
+    const likeMutation = useLikeMagazine({
         onSuccess: (data) => {
             setIsLiked(true);
             setLikeCount(data.likes.length);
@@ -57,9 +68,8 @@ const MagazineDetail = () => {
         },
     });
 
-    // Dislike (remove like) mutation
-    const dislikeMutation = useMutation({
-        mutationFn: () => dislikeMagazine(id!),
+    // Dislike mutation using custom hook
+    const dislikeMutation = useDislikeMagazine({
         onSuccess: (data) => {
             setIsLiked(false);
             setLikeCount(data.likes.length);
@@ -78,9 +88,8 @@ const MagazineDetail = () => {
         },
     });
 
-    // Comment mutation
-    const commentMutation = useMutation({
-        mutationFn: (body: string) => addComment(id!, body),
+    // Comment mutation using custom hook
+    const commentMutation = useAddComment({
         onSuccess: (newComment) => {
             setComments((prev) => [...prev, newComment]);
             setCommentText("");
@@ -117,15 +126,18 @@ const MagazineDetail = () => {
 
     const handleLike = () => {
         if (isLiked) {
-            dislikeMutation.mutate();
+            dislikeMutation.mutate(id!);
         } else {
-            likeMutation.mutate();
+            likeMutation.mutate(id!);
         }
     };
 
     const handleSubmitComment = () => {
         if (commentText.trim()) {
-            commentMutation.mutate(commentText.trim());
+            commentMutation.mutate({
+                contentId: id!,
+                body: commentText.trim(),
+            });
         }
     };
 
@@ -250,7 +262,7 @@ const MagazineDetail = () => {
                                 </div>
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                     <User className="h-4 w-4" />
-                                    <span>Tech Ambit Editorial Team</span>
+                                    <span>{magazine.created_by?.name}</span>
                                 </div>
                             </div>
 
