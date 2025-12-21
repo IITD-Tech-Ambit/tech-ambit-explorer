@@ -56,51 +56,53 @@ const Magazines = () => {
     <div className="min-h-screen">
       <Navigation />
 
-      {/* Header / Hero */}
-      <section className="pt-28 pb-10">
-        <div className="container mx-auto px-4">
-          <div className="magazine-hero">
-            <div className="magazine-cover">
+      {/* Header / Hero - Responsive layout */}
+      <section className="pt-24 sm:pt-28 pb-8 sm:pb-10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Custom responsive hero - stacks on mobile */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-center sm:items-start p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/5 via-accent/5 to-transparent shadow-card border border-border">
+            {/* Magazine Cover - smaller on mobile */}
+            <div className="w-28 h-40 sm:w-36 sm:h-52 md:w-40 md:h-56 lg:w-44 lg:h-60 rounded-lg sm:rounded-xl overflow-hidden shadow-elegant flex-shrink-0 border border-border bg-background">
               <img src={magazineCover} alt="Tech Ambit" className="w-full h-full object-cover" />
             </div>
-            <div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-3">Tech Ambit Magazine</h1>
-              <p className="text-lg text-muted-foreground mb-4 max-w-2xl">
+            {/* Content */}
+            <div className="text-center sm:text-left flex-1">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3">Tech Ambit Magazine</h1>
+              <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-3 sm:mb-4 max-w-2xl">
                 Our quarterly publication showcasing the latest research stories, breakthroughs, and innovations from across IIT Delhi's research ecosystem.
               </p>
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="text-base px-4 py-2">Published Quarterly</Badge>
-                <Button className="mag-button-primary">Subscribe</Button>
-                <Button variant="ghost" className="mag-button-ghost">Contribute</Button>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
+                <Badge variant="secondary" className="text-xs sm:text-sm md:text-base px-2.5 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2">Published Quarterly</Badge>
+                <a href="https://cms-iitd.vercel.app/" target="_blank" rel="noopener noreferrer" className="mag-button-primary text-xs sm:text-sm">Contribute</a>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Magazines Grid */}
-      <section className="container mx-auto px-4 py-12">
+      {/* Magazines Grid - Responsive */}
+      <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
         {/* Loading State */}
         {isLoading && (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-3 text-lg">Loading magazines...</span>
+          <div className="flex flex-col sm:flex-row justify-center items-center py-16 sm:py-20 gap-2 sm:gap-3">
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
+            <span className="text-base sm:text-lg">Loading magazines...</span>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="text-center py-20">
-            <p className="text-destructive text-lg mb-4">Failed to load magazines</p>
-            <p className="text-muted-foreground">Please check your connection and try again.</p>
+          <div className="text-center py-16 sm:py-20 px-4">
+            <p className="text-destructive text-base sm:text-lg mb-3 sm:mb-4">Failed to load magazines</p>
+            <p className="text-muted-foreground text-sm sm:text-base">Please check your connection and try again.</p>
           </div>
         )}
 
         {/* Empty State */}
         {!isLoading && !error && magazines.length === 0 && (
-          <div className="text-center py-20">
-            <p className="text-lg text-muted-foreground">No magazines available at the moment.</p>
-            <p className="text-muted-foreground">Check back soon for new publications!</p>
+          <div className="text-center py-16 sm:py-20 px-4">
+            <p className="text-base sm:text-lg text-muted-foreground">No magazines available at the moment.</p>
+            <p className="text-muted-foreground text-sm sm:text-base mt-2">Check back soon for new publications!</p>
           </div>
         )}
 
@@ -108,48 +110,49 @@ const Magazines = () => {
         {!isLoading && !error && magazines.length > 0 && (
           <>
             {/* Results info */}
-            <div className="mb-6 text-sm text-muted-foreground">
+            <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
               Showing {(currentPage - 1) * MAGAZINES_PER_PAGE + 1}-{Math.min(currentPage * MAGAZINES_PER_PAGE, totalCount)} of {totalCount} magazines
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
               {magazines.map((magazine: Magazine) => (
                 <Card key={magazine._id} className="magazine-card group flex flex-col h-full">
                   <div className="relative overflow-hidden">
                     <img
                       src={getImageUrl(magazine.image_url)}
                       alt={magazine.title}
-                      className="w-full h-72 object-cover group-hover:scale-105 transition-smooth"
+                      className="w-full h-48 sm:h-56 md:h-64 lg:h-72 object-cover group-hover:scale-105 transition-smooth"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = magazineCover;
                       }}
                     />
-                    <div className="absolute top-4 right-4">
-                      <Badge className="bg-primary text-primary-foreground">
+                    <div className="absolute top-2 right-2 sm:top-4 sm:right-4">
+                      <Badge className="bg-primary text-primary-foreground text-xs sm:text-sm px-2 sm:px-3 py-0.5 sm:py-1">
                         {magazine.est_read_time} min read
                       </Badge>
                     </div>
-                    <div className="absolute left-4 bottom-4 bg-background/80 backdrop-blur-sm px-3 py-2 rounded-md">
-                      <div className="text-xs text-muted-foreground">Latest Issue</div>
-                      <div className="text-sm font-semibold text-primary">{magazine.title}</div>
+                    <div className="absolute left-2 bottom-2 sm:left-4 sm:bottom-4 bg-background/80 backdrop-blur-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-md max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)]">
+                      <div className="text-[10px] sm:text-xs text-muted-foreground">Latest Issue</div>
+                      <div className="text-xs sm:text-sm font-semibold text-primary truncate">{magazine.title}</div>
                     </div>
                   </div>
 
-                  <CardContent className="p-6 flex-1 flex flex-col justify-between">
-                    <div className="magazine-meta mb-3">
-                      <Calendar className="h-4 w-4" />
+                  <CardContent className="p-4 sm:p-5 md:p-6 flex-1 flex flex-col justify-between">
+                    <div className="magazine-meta mb-2 sm:mb-3 text-xs sm:text-sm">
+                      <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       <span>{formatDate(magazine.createdAt)}</span>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-4">{magazine.subtitle}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 line-clamp-2">{magazine.subtitle}</p>
                     </div>
 
-                    <div className="flex items-center gap-3 mt-auto">
+                    <div className="flex items-center gap-2 sm:gap-3 mt-auto">
                       <Button
-                        className="mag-button-primary flex items-center gap-2"
+                        className="mag-button-primary flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center"
                         onClick={() => navigate(`/magazines/${magazine._id}`)}
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         View Online
                       </Button>
                     </div>
@@ -158,61 +161,75 @@ const Magazines = () => {
               ))}
             </div>
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls - Mobile optimized */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-12">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="flex items-center gap-1"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-2 mt-8 sm:mt-12">
+                {/* Previous/Next for mobile, full pagination for larger screens */}
+                <div className="flex items-center gap-2 sm:gap-1 w-full sm:w-auto justify-between sm:justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-3"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline sm:inline">Previous</span>
+                    <span className="xs:hidden sm:hidden">Prev</span>
+                  </Button>
 
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => goToPage(page)}
-                      className="min-w-[40px]"
-                    >
-                      {page}
-                    </Button>
-                  ))}
+                  {/* Page numbers - hidden on very small screens, show current/total instead */}
+                  <div className="flex items-center gap-1">
+                    {/* Mobile: show current page / total */}
+                    <span className="sm:hidden text-sm text-muted-foreground px-3">
+                      {currentPage} / {totalPages}
+                    </span>
+
+                    {/* Desktop: show all page numbers */}
+                    <div className="hidden sm:flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(page)}
+                          className="min-w-[32px] sm:min-w-[40px] text-xs sm:text-sm"
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-3"
+                  >
+                    <span className="hidden xs:inline sm:inline">Next</span>
+                    <span className="xs:hidden sm:hidden">Next</span>
+                    <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  </Button>
                 </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center gap-1"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
               </div>
             )}
           </>
         )}
       </section>
 
-      {/* About Magazine Section */}
-      <section className="gradient-subtle py-16">
-        <div className="container mx-auto px-4">
+      {/* About Magazine Section - Responsive */}
+      <section className="gradient-subtle py-10 sm:py-12 md:py-16">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-6">About Tech Ambit Magazine</h2>
-            <p className="text-lg text-muted-foreground mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">About Tech Ambit Magazine</h2>
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-4 sm:mb-6">
               Tech Ambit Magazine is the official research publication of IIT Delhi,
               featuring in-depth articles, interviews with leading researchers, and
               comprehensive coverage of breakthrough discoveries across all disciplines.
             </p>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground">
               Each issue is carefully curated to bring you the most impactful research
               stories, making complex scientific concepts accessible to a broader audience.
             </p>
