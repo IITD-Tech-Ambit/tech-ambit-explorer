@@ -103,3 +103,66 @@ export interface ThesisData {
     dc_publisher?: string;
     dc_language_iso?: string;
 }
+
+// Search API Types
+export interface SearchAuthor {
+    author_name?: string;
+    name?: string;
+    author_affiliation?: string;
+    affiliation?: string;
+    author_email?: string;
+    author_id?: string;
+}
+
+export interface SearchDocument {
+    _id: string;
+    title: string;
+    abstract?: string;
+    authors: SearchAuthor[];
+    publication_year: number;
+    document_type: string;
+    field_associated?: string;
+    citation_count?: number;
+    subject_area?: string[];
+}
+
+export interface SearchFacets {
+    years?: Array<{ value: number; count: number }>;
+    document_types?: Array<{ value: string; count: number }>;
+    fields?: Array<{ value: string; count: number }>;
+}
+
+export interface SearchPagination {
+    page: number;
+    per_page: number;
+    total: number;
+    total_pages: number;
+}
+
+export interface SearchResponse {
+    results: SearchDocument[];
+    facets: SearchFacets;
+    pagination: SearchPagination;
+    cacheHit?: boolean;
+}
+
+export interface SearchFilters {
+    year_from?: number;
+    year_to?: number;
+    field_associated?: string;
+    document_type?: string;
+    subject_area?: string[];
+    author_id?: string;
+    affiliation?: string;
+    first_author_only?: boolean;
+    interdisciplinary?: boolean;
+}
+
+export interface SearchRequest {
+    query: string;
+    page?: number;
+    per_page?: number;
+    sort?: 'relevance' | 'date' | 'citations' | 'impact' | 'normalized';
+    filters?: SearchFilters;
+    search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
+}

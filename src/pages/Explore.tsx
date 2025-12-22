@@ -1,92 +1,126 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { searchResearch, type SearchRequest, type SearchDocument, type SearchResponse } from "@/lib/api";
 
 const Explore = () => {
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<SearchDocument[]>([]);
+  const [pagination, setPagination] = useState<SearchResponse['pagination'] | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
+
+  // Filter state
   const [activeFilter, setActiveFilter] = useState("All");
+  const [showFilters, setShowFilters] = useState(false);
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
+  const [sortBy, setSortBy] = useState<"relevance" | "date" | "citations">("relevance");
+  const [perPage, setPerPage] = useState(20);
+  const [searchIn, setSearchIn] = useState<Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>>([]);
 
   const filters = [
     "All",
-    "Departments",
-    "Centers",
-    "Schools",
-    "Interdisciplinary",
-    "IRD",
-    "Industrial MoUs",
+    "Article",
+    "Review",
+    "Conference Paper",
+    "Book Chapter",
   ];
 
-  const researchItems = [
-    {
-      title: "Artificial Intelligence & Machine Learning Lab",
-      category: "Departments",
-      department: "Computer Science & Engineering",
-      type: "Industrial Research",
-      description: "Advanced research in deep learning, neural networks, and AI applications for real-world problems.",
-      projects: 45,
-      faculty: 12,
-      students: 120,
-    },
-    {
-      title: "Sustainable Energy Research Initiative",
-      category: "Interdisciplinary",
-      department: "Energy Studies",
-      type: "IRD Funded",
-      description: "Developing next-generation solar cells and renewable energy solutions for sustainable future.",
-      projects: 28,
-      faculty: 8,
-      students: 85,
-    },
-    {
-      title: "Quantum Computing Research Group",
-      category: "Centers",
-      department: "Physics",
-      type: "PostDoc Research",
-      description: "Exploring quantum algorithms, quantum cryptography, and quantum information theory.",
-      projects: 15,
-      faculty: 6,
-      students: 40,
-    },
-    {
-      title: "Biotechnology & Biomedical Engineering",
-      category: "Schools",
-      department: "Biological Sciences",
-      type: "PG Thesis",
-      description: "Innovative research in drug delivery systems, tissue engineering, and molecular diagnostics.",
-      projects: 52,
-      faculty: 15,
-      students: 150,
-    },
-    {
-      title: "Smart City Technologies Lab",
-      category: "Industrial MoUs",
-      department: "Civil Engineering",
-      type: "Student Research",
-      description: "Developing IoT solutions and sustainable infrastructure for future urban environments.",
-      projects: 33,
-      faculty: 10,
-      students: 95,
-    },
-    {
-      title: "Advanced Materials Research Center",
-      category: "Centers",
-      department: "Materials Science",
-      type: "FORS Program",
-      description: "Research on nanomaterials, composites, and smart materials for industrial applications.",
-      projects: 40,
-      faculty: 11,
-      students: 110,
-    },
-  ];
+  // Perform search
+  const performSearch = async (page: number = 1) => {
+    if (!searchQuery.trim()) return;
 
-  const filteredItems =
-    activeFilter === "All"
-      ? researchItems
-      : researchItems.filter((item) => item.category === activeFilter);
+    setIsLoading(true);
+    setHasSearched(true);
+
+    try {
+      const request: SearchRequest = {
+        query: searchQuery,
+        page,
+        per_page: perPage,
+        sort: sortBy,
+        filters: {},
+        search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
+      };
+
+      // Add year filters
+      if (yearFrom) request.filters!.year_from = parseInt(yearFrom);
+      if (yearTo) request.filters!.year_to = parseInt(yearTo);
+
+      // Add document type filter
+      if (activeFilter !== "All") {
+        request.filters!.document_type = activeFilter;
+      }
+
+      const response = await searchResearch(request);
+      setResults(response.results);
+      setPagination(response.pagination);
+      setCurrentPage(page);
+    } catch (error) {
+      console.error("Search error:", error);
+      setResults([]);
+      setPagination(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle search on Enter key
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      performSearch(1);
+    }
+  };
+
+  // Handle filter change
+  const handleFilterChange = (filter: string) => {
+    setActiveFilter(filter);
+  };
+
+  // Apply filters
+  const applyFilters = () => {
+    if (searchQuery.trim()) {
+      performSearch(1);
+    }
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setYearFrom("");
+    setYearTo("");
+    setSortBy("relevance");
+    setPerPage(20);
+    setSearchIn([]);
+    setActiveFilter("All");
+    if (searchQuery.trim()) {
+      performSearch(1);
+    }
+  };
+
+  // Toggle search field chips
+  const toggleSearchIn = (field: 'title' | 'abstract' | 'author' | 'subject_area' | 'field') => {
+    setSearchIn(prev => {
+      if (prev.includes(field)) {
+        return prev.filter(f => f !== field);
+      } else {
+        return [...prev, field];
+      }
+    });
+  };
+
+  // Filter results based on activeFilter (for display purposes)
+  const filteredResults = activeFilter === "All"
+    ? results
+    : results.filter((item) => item.document_type === activeFilter);
 
   return (
     <div className="min-h-screen page-bg">
@@ -105,12 +139,22 @@ const Explore = () => {
 
           {/* Search Bar */}
           <div className="relative max-w-2xl animate-slide-up">
-            
             <Input
               type="text"
               placeholder="Search by department, project, faculty, or keywords..."
-              className="pl-12 h-12 text-base search-input"
+              className="h-12 text-base search-input pr-16"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
             />
+            <Button
+              onClick={() => performSearch(1)}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+              disabled={isLoading}
+              size="icon"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
       </section>
@@ -119,65 +163,370 @@ const Explore = () => {
       <section className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-muted-foreground" />
-            <span className="font-medium">Filter by:</span>
+            <Button
+              variant={showFilters ? "default" : "outline"}
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-2"
+            >
+              <Filter className="h-5 w-5" />
+              <span className="font-medium">Filter by</span>
+            </Button>
           </div>
         </div>
-        
-        <div className="flex flex-wrap gap-2">
-          {filters.map((filter) => (
-            <Button
-              key={filter}
-              variant={activeFilter === filter ? "default" : "outline"}
-              onClick={() => setActiveFilter(filter)}
-              className="rounded-full"
-            >
-              {filter}
-            </Button>
-          ))}
-        </div>
+
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+          <div className="bg-card border border-border rounded-lg p-4 space-y-4 animate-slide-up">
+            {/* Year and Sort Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Year From</label>
+                <Input
+                  type="number"
+                  placeholder="2020"
+                  value={yearFrom}
+                  onChange={(e) => setYearFrom(e.target.value)}
+                  min="1900"
+                  max="2025"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Year To</label>
+                <Input
+                  type="number"
+                  placeholder="2024"
+                  value={yearTo}
+                  onChange={(e) => setYearTo(e.target.value)}
+                  min="1900"
+                  max="2025"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Sort By</label>
+                <select
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                >
+                  <option value="relevance">Relevance</option>
+                  <option value="date">Date</option>
+                  <option value="citations">Citations</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Per Page</label>
+                <select
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  value={perPage}
+                  onChange={(e) => setPerPage(parseInt(e.target.value))}
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Search In Fields */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Search In</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { field: 'title' as const, label: '📝 Title' },
+                  { field: 'abstract' as const, label: '📄 Abstract' },
+                  { field: 'author' as const, label: '👤 Author' },
+                  { field: 'subject_area' as const, label: '🏷️ Subject Area' },
+                  { field: 'field' as const, label: '🔬 Field' },
+                ].map(({ field, label }) => (
+                  <Button
+                    key={field}
+                    variant={searchIn.includes(field) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleSearchIn(field)}
+                    className="rounded-full"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button onClick={applyFilters}>Apply Filters</Button>
+              <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Research Items Grid */}
       <section className="container mx-auto px-4 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredItems.map((item, index) => (
-            <Card
-              key={index}
-              className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between mb-2">
-                  <Badge variant="secondary">{item.category}</Badge>
-                  <Badge variant="outline">{item.type}</Badge>
-                </div>
-                <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                <p className="text-sm text-muted-foreground">{item.department}</p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-4">{item.description}</p>
-                
-                <div className="flex items-center justify-between pt-4 border-t border-border">
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-1">
-                      <FileText className="h-4 w-4" />
-                      <span>{item.projects} Projects</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Users className="h-4 w-4" />
-                      <span>{item.faculty} Faculty</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Building className="h-4 w-4" />
-                      <span>{item.students} Students</span>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Searching research papers...</p>
+          </div>
+        )}
+
+        {/* No Search Yet */}
+        {!hasSearched && !isLoading && (
+          <div className="text-center py-20">
+            <Search className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Start Your Search</h3>
+            <p className="text-muted-foreground">Enter a query above to find research papers</p>
+          </div>
+        )}
+
+        {/* No Results */}
+        {hasSearched && !isLoading && filteredResults.length === 0 && (
+          <div className="text-center py-20">
+            <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No Results Found</h3>
+            <p className="text-muted-foreground">Try different keywords or adjust your filters</p>
+          </div>
+        )}
+
+        {/* Results Header */}
+        {hasSearched && !isLoading && filteredResults.length > 0 && pagination && (
+          <div className="mb-6">
+            <p className="text-muted-foreground">
+              Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
+            </p>
+          </div>
+        )}
+
+        {/* Results Grid */}
+        {!isLoading && filteredResults.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredResults.map((item, index) => (
+              <Card
+                key={item._id || index}
+                className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
+                onClick={() => setSelectedDocument(item)}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between mb-2">
+                    <Badge variant="secondary">{item.document_type}</Badge>
+                    {item.field_associated && (
+                      <Badge variant="outline">{item.field_associated}</Badge>
+                    )}
+                  </div>
+                  <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                  {item.authors && item.authors.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                      {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {item.abstract && (
+                    <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                  )}
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-border">
+                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                      <div className="flex items-center space-x-1">
+                        <FileText className="h-4 w-4" />
+                        <span>{item.publication_year || "N/A"}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-4 w-4" />
+                        <span>{item.citation_count || 0} citations</span>
+                      </div>
+                      {item.subject_area && item.subject_area.length > 0 && (
+                        <div className="flex items-center space-x-1">
+                          <Building className="h-4 w-4" />
+                          <span className="line-clamp-1">{item.subject_area[0]}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+
+                  {/* Subject Area Tags */}
+                  {item.subject_area && item.subject_area.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {item.subject_area.slice(0, 3).map((area, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {area}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {pagination && pagination.total_pages > 1 && !isLoading && (
+          <div className="flex justify-center items-center gap-2 mt-8">
+            <Button
+              variant="outline"
+              onClick={() => performSearch(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => performSearch(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              ‹ Prev
+            </Button>
+            
+            {/* Page numbers */}
+            {Array.from(
+              { length: Math.min(5, pagination.total_pages) },
+              (_, i) => {
+                const startPage = Math.max(1, currentPage - 2);
+                const pageNum = startPage + i;
+                if (pageNum <= pagination.total_pages) {
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? "default" : "outline"}
+                      onClick={() => performSearch(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                }
+                return null;
+              }
+            )}
+
+            <Button
+              variant="outline"
+              onClick={() => performSearch(currentPage + 1)}
+              disabled={currentPage === pagination.total_pages}
+            >
+              Next ›
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => performSearch(pagination.total_pages)}
+              disabled={currentPage === pagination.total_pages}
+            >
+              Last
+            </Button>
+            
+            <span className="text-sm text-muted-foreground ml-4">
+              Page {currentPage} of {pagination.total_pages}
+            </span>
+          </div>
+        )}
       </section>
+
+      {/* Document Detail Modal */}
+      {selectedDocument && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedDocument(null)}
+        >
+          <div 
+            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between p-6 border-b border-border">
+              <div className="flex-1 pr-4">
+                <h2 className="text-2xl font-bold mb-2">{selectedDocument.title}</h2>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">{selectedDocument.document_type}</Badge>
+                  {selectedDocument.field_associated && (
+                    <Badge variant="outline">{selectedDocument.field_associated}</Badge>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSelectedDocument(null)}
+                className="shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="overflow-y-auto max-h-[calc(90vh-180px)] p-6 space-y-6">
+              {/* Authors */}
+              {selectedDocument.authors && selectedDocument.authors.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Authors</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDocument.authors.map((author, idx) => (
+                      <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
+                        <div className="font-medium text-sm">{author.author_name || author.name}</div>
+                        {(author.author_affiliation || author.affiliation) && (
+                          <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Abstract */}
+              {selectedDocument.abstract && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Abstract</h3>
+                  <p className="text-sm leading-relaxed">{selectedDocument.abstract}</p>
+                </div>
+              )}
+
+              {/* Metadata */}
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Publication Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Publication Year</div>
+                    <div className="font-medium">{selectedDocument.publication_year || "N/A"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Citations</div>
+                    <div className="font-medium">{selectedDocument.citation_count || 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Document Type</div>
+                    <div className="font-medium">{selectedDocument.document_type}</div>
+                  </div>
+                  {selectedDocument.field_associated && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Field</div>
+                      <div className="font-medium">{selectedDocument.field_associated}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Subject Areas */}
+              {selectedDocument.subject_area && selectedDocument.subject_area.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Subject Areas</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDocument.subject_area.map((area, idx) => (
+                      <Badge key={idx} variant="outline">{area}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-2 p-6 border-t border-border">
+              <Button variant="outline" onClick={() => setSelectedDocument(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

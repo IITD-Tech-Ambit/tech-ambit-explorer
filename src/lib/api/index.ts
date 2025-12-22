@@ -14,6 +14,7 @@ export { ENDPOINTS, BASE_URL, buildUrl } from './endpoints';
 export * from './services/magazineService';
 export * from './services/analyticsService';
 export * from './services/thesisService';
+export * from './services/searchService';
 
 // Query Keys
 export { queryKeys } from './hooks/queryKeys';
