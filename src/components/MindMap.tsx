@@ -12,16 +12,28 @@ import {
   useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, Minus, Maximize2 } from 'lucide-react';
+import { Plus, Minus, Maximize2, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
-import CustomNode, { CustomNodeData } from './CustomNode';
+import CustomNode, { CustomNodeData, NodeType } from './CustomNode';
+import ThesisCard from './ThesisCard';
+import {
+  fetchCategories,
+  fetchDepartments,
+  fetchSchools,
+  fetchCentres,
+  fetchProfessors,
+  fetchStudents,
+  fetchTheses,
+  fetchThesisById,
+  ThesisData,
+} from '@/lib/api';
 
 // Top-level configurable constants
-const NODE_WIDTH = 140;
-const NODE_HEIGHT = 60;
+const NODE_WIDTH = 180;  // Must match NODE_WIDTH in CustomNode.tsx
+const NODE_HEIGHT = 70;  // Must match NODE_HEIGHT in CustomNode.tsx
 const MIN_VERTICAL_GAP = 24;  // Vertical spacing between siblings in a column
 const LEVEL_HORIZONTAL_GAP = 250;  // Horizontal spacing between columns (levels)
-const MAX_DEPTH = 8;
+const MAX_DEPTH = 6;  // Updated: Root(1) -> Categories(2) -> Collections(3) -> Professors(4) -> Students(5) -> Theses(6)
 const ANIMATION_DURATION = 300;
 const DEBOUNCE_DELAY = 100;
 
@@ -35,7 +47,6 @@ const CONFIG = {
   MIN_ZOOM: 0.25,
   MAX_ZOOM: 3.0,
   FIT_VIEW_PADDING: 0.12,
-  CHILDREN_PER_NODE: 5,
 };
 
 const nodeTypes = {
@@ -57,8 +68,18 @@ const MindMapContent = () => {
   const { fitView, setCenter, getZoom, zoomIn, zoomOut } = useReactFlow();
   const [zoomLevel, setZoomLevel] = useState(100);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedThesis, setSelectedThesis] = useState<ThesisData | null>(null);
   const expandedNodes = useRef<Set<string>>(new Set());
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Pagination state
+  const [pendingChildren, setPendingChildren] = useState<{
+    parentId: string;
+    children: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>;
+    currentIndex: number;
+  } | null>(null);
+  const BATCH_SIZE = 5;
 
   // Initialize with root node
   useEffect(() => {
@@ -67,11 +88,12 @@ const MindMapContent = () => {
       type: 'custom',
       position: { x: 0, y: 0 },
       data: {
-        label: 'Level 1',
+        label: 'Thesis',
         level: 1,
         expanded: false,
         isMaxDepth: false,
         selected: false,
+        nodeType: 'root',
       },
     };
     setNodes([rootNode]);
@@ -131,7 +153,7 @@ const MindMapContent = () => {
   // Calculate VERTICAL COLUMN layout: levels are columns, children stack vertically
   // Level 1 leftmost, Level 2 to its right, etc.
   const calculateTreeLayout = useCallback((allNodes: Node<CustomNodeData>[]) => {
-    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+    const nodeMap = new Map(allNodes.map(n => [n.id, { ...n }])); // Create shallow copies
     const childrenMap = new Map<string, string[]>();
     const subtreeHeightCache = new Map<string, number>();
     
@@ -222,32 +244,111 @@ const MindMapContent = () => {
 
     // Start from root at left center (level 0)
     positionNode('1', 0, 0);
-    return allNodes;
+    
+    // Return array of nodes from the map (with updated positions)
+    return Array.from(nodeMap.values());
   }, [calculateSubtreeHeight]);
 
-  // Generate children for a node
-  const generateChildren = useCallback((parentNode: Node<CustomNodeData>) => {
-    const parentLevel = parentNode.data.level;
-    const newLevel = parentLevel + 1;
-    
-    if (newLevel > CONFIG.MAX_DEPTH) return { nodes: [], edges: [] };
+  // Fetch children data from API (without creating nodes)
+  const fetchChildrenData = useCallback(async (parentNode: Node<CustomNodeData>): Promise<Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>> => {
+    const parentNodeType = parentNode.data.nodeType;
+    let childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }> = [];
 
+    try {
+      // Level 1 (Root) -> Level 2 (Categories)
+      if (parentNodeType === 'root') {
+        const categories = await fetchCategories();
+        childrenData = categories.map(cat => ({
+          label: cat,
+          nodeType: 'category' as NodeType,
+          categoryName: cat,
+        }));
+      }
+      // Level 2 (Category) -> Level 3 (Collections - Departments/Schools/Centres)
+      else if (parentNodeType === 'category') {
+        const categoryName = parentNode.data.categoryName?.toLowerCase();
+        let collections;
+        
+        if (categoryName === 'departments') {
+          collections = await fetchDepartments();
+        } else if (categoryName === 'schools') {
+          collections = await fetchSchools();
+        } else if (categoryName === 'centres') {
+          collections = await fetchCentres();
+        } else {
+          collections = [];
+        }
+        
+        childrenData = collections.map(col => ({
+          label: col.department_name,
+          nodeType: 'collection' as NodeType,
+          handle: col.handle,
+        }));
+      }
+      // Level 3 (Collection) -> Level 4 (Professors)
+      else if (parentNodeType === 'collection' && parentNode.data.handle) {
+        const professors = await fetchProfessors(parentNode.data.handle);
+        childrenData = professors.map(prof => ({
+          label: prof,
+          nodeType: 'professor' as NodeType,
+          professorName: prof,
+        }));
+      }
+      // Level 4 (Professor) -> Level 5 (Students)
+      else if (parentNodeType === 'professor' && parentNode.data.professorName) {
+        const students = await fetchStudents(parentNode.data.professorName);
+        childrenData = students.map(student => ({
+          label: student,
+          nodeType: 'student' as NodeType,
+          studentName: student,
+        }));
+      }
+      // Level 5 (Student) -> Level 6 (Theses)
+      else if (parentNodeType === 'student' && parentNode.data.studentName) {
+        const theses = await fetchTheses(parentNode.data.studentName);
+        childrenData = theses.map(thesis => ({
+          label: thesis.dc_title || 'Untitled Thesis',
+          nodeType: 'thesis' as NodeType,
+          thesisData: thesis,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching children:', error);
+    }
+
+    return childrenData;
+  }, []);
+
+  // Create nodes and edges from children data
+  const createNodesFromChildren = useCallback((
+    parentNode: Node<CustomNodeData>,
+    childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>,
+    startIndex: number
+  ): { nodes: Node<CustomNodeData>[]; edges: Edge[] } => {
+    const newLevel = parentNode.data.level + 1;
     const newNodes: Node<CustomNodeData>[] = [];
     const newEdges: Edge[] = [];
 
-    for (let i = 0; i < CONFIG.CHILDREN_PER_NODE; i++) {
-      const childId = `${parentNode.id}-${i + 1}`;
+    childrenData.forEach((child, i) => {
+      const childId = `${parentNode.id}-${startIndex + i + 1}`;
+      const isThesis = child.nodeType === 'thesis';
       
       newNodes.push({
         id: childId,
         type: 'custom',
         position: { x: 0, y: 0 },
         data: {
-          label: `Level ${newLevel}`,
+          label: child.label,
           level: newLevel,
           expanded: false,
-          isMaxDepth: newLevel === MAX_DEPTH,
+          isMaxDepth: isThesis,
           selected: false,
+          nodeType: child.nodeType,
+          categoryName: child.categoryName,
+          handle: child.handle,
+          professorName: child.professorName,
+          studentName: child.studentName,
+          thesisData: child.thesisData,
         },
       });
 
@@ -259,7 +360,7 @@ const MindMapContent = () => {
         type: 'smoothstep',
         style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
       });
-    }
+    });
 
     return { nodes: newNodes, edges: newEdges };
   }, []);
@@ -286,94 +387,206 @@ const MindMapContent = () => {
   }, []);
 
   // Handle node click with debouncing
-  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node<CustomNodeData>) => {
+  const handleNodeClick = useCallback(async (event: React.MouseEvent, node: Node<CustomNodeData>) => {
     event.stopPropagation();
     
-    // Check if at max depth
-    if (node.data.level >= MAX_DEPTH) return;
+    // If it's a thesis node, show the thesis card
+    if (node.data.nodeType === 'thesis' && node.data.thesisData) {
+      setIsLoading(true);
+      try {
+        // Fetch full thesis details
+        const thesisDetails = await fetchThesisById(node.data.thesisData.id);
+        setSelectedThesis(thesisDetails);
+      } catch (error) {
+        console.error('Error fetching thesis details:', error);
+        // Fallback to the data we already have
+        setSelectedThesis(node.data.thesisData);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    
+    // Check if at max depth (thesis nodes)
+    if (node.data.isMaxDepth) return;
 
     // Debounce to prevent conflicting recalculations
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
 
-    debounceTimerRef.current = setTimeout(() => {
-      const isExpanded = expandedNodes.current.has(node.id);
-      setSelectedNodeId(node.id);
-      
-      setNodes((prevNodes) => {
-        let updatedNodes = [...prevNodes];
+    const isExpanded = expandedNodes.current.has(node.id);
+    setSelectedNodeId(node.id);
+
+    if (isExpanded) {
+      // Collapse: remove all descendants (synchronous)
+      debounceTimerRef.current = setTimeout(() => {
+        // Clear pending children if collapsing the parent that has pending children
+        if (pendingChildren && pendingChildren.parentId === node.id) {
+          setPendingChildren(null);
+        }
         
-        if (isExpanded) {
-          // Collapse: remove all descendants
+        setNodes((prevNodes) => {
+          let updatedNodes = [...prevNodes];
           const descendants = getDescendants(node.id, updatedNodes);
           updatedNodes = updatedNodes.filter(n => !descendants.includes(n.id));
           
-          // Remove from expanded set
           expandedNodes.current.delete(node.id);
           
-          // Update edges
+          // Also clear pending children if the parent of pending children is being collapsed
+          if (pendingChildren && descendants.includes(pendingChildren.parentId)) {
+            setPendingChildren(null);
+          }
+          
           setEdges((prevEdges) => 
             prevEdges.filter(e => !descendants.includes(e.target))
           );
-        } else {
-          // Expand: add children
-          const { nodes: newNodes, edges: newEdges } = generateChildren(node);
-          updatedNodes = [...updatedNodes, ...newNodes];
           
-          // Add to expanded set
-          expandedNodes.current.add(node.id);
+          updatedNodes = updatedNodes.map(n => 
+            n.id === node.id 
+              ? { ...n, data: { ...n.data, expanded: false, selected: true } }
+              : { ...n, data: { ...n.data, selected: false } }
+          );
           
-          // Update edges
-          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          const layoutedNodes = calculateTreeLayout(updatedNodes);
+          
+          return layoutedNodes;
+        });
+      }, DEBOUNCE_DELAY);
+    } else {
+      // Expand: fetch children from API (asynchronous)
+      setIsLoading(true);
+      
+      try {
+        const childrenData = await fetchChildrenData(node);
+        
+        if (childrenData.length === 0) {
+          setIsLoading(false);
+          return;
         }
         
-        // Update node's expanded state and selected state
-        updatedNodes = updatedNodes.map(n => 
-          n.id === node.id 
-            ? { ...n, data: { ...n.data, expanded: !isExpanded, selected: true } }
-            : { ...n, data: { ...n.data, selected: false } }
-        );
+        // Determine how many to show initially
+        const initialBatch = childrenData.slice(0, BATCH_SIZE);
+        const remaining = childrenData.slice(BATCH_SIZE);
         
-        // STEP 1: Recalculate spacing for affected levels (Level X and Level X-1)
-        // This computes uniform gaps across entire levels
-        const layoutedNodes = calculateTreeLayout(updatedNodes);
-        
-        // Auto-fit after layout with animation
-        setTimeout(() => {
-          fitView({ 
-            padding: CONFIG.FIT_VIEW_PADDING, 
-            duration: ANIMATION_DURATION 
+        // Store remaining children for pagination
+        if (remaining.length > 0) {
+          setPendingChildren({
+            parentId: node.id,
+            children: remaining,
+            currentIndex: BATCH_SIZE
           });
-        }, 50);
+        } else {
+          setPendingChildren(null);
+        }
         
-        return layoutedNodes;
+        const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(node, initialBatch, 0);
+        
+        setNodes((prevNodes) => {
+          let updatedNodes = [...prevNodes, ...newNodes];
+          
+          expandedNodes.current.add(node.id);
+          
+          updatedNodes = updatedNodes.map(n => 
+            n.id === node.id 
+              ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+              : { ...n, data: { ...n.data, selected: false } }
+          );
+          
+          const layoutedNodes = calculateTreeLayout(updatedNodes);
+          
+          return layoutedNodes;
+        });
+        
+        setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+        
+      } catch (error) {
+        console.error('Error expanding node:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [fetchChildrenData, createNodesFromChildren, getDescendants, calculateTreeLayout, setEdges, setNodes]);
+
+  // Load next batch of children (Next 5)
+  const loadNextBatch = useCallback(() => {
+    if (!pendingChildren) return;
+    
+    const parentNode = nodes.find(n => n.id === pendingChildren.parentId);
+    if (!parentNode) return;
+    
+    const nextBatch = pendingChildren.children.slice(0, BATCH_SIZE);
+    const remaining = pendingChildren.children.slice(BATCH_SIZE);
+    const startIndex = pendingChildren.currentIndex;
+    
+    const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+      parentNode as Node<CustomNodeData>,
+      nextBatch,
+      startIndex
+    );
+    
+    // Update pending children state
+    if (remaining.length > 0) {
+      setPendingChildren({
+        parentId: pendingChildren.parentId,
+        children: remaining,
+        currentIndex: startIndex + BATCH_SIZE
       });
-    }, DEBOUNCE_DELAY);
-  }, [generateChildren, getDescendants, calculateTreeLayout, fitView, setEdges, setNodes]);
+    } else {
+      setPendingChildren(null);
+    }
+    
+    setNodes((prevNodes) => {
+      const updatedNodes = [...prevNodes, ...newNodes];
+      const layoutedNodes = calculateTreeLayout(updatedNodes);
+      
+      return layoutedNodes;
+    });
+    
+    setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+  }, [pendingChildren, nodes, createNodesFromChildren, calculateTreeLayout, setNodes, setEdges]);
+
+  // Load all remaining children (Show All)
+  const loadAllRemaining = useCallback(() => {
+    if (!pendingChildren) return;
+    
+    const parentNode = nodes.find(n => n.id === pendingChildren.parentId);
+    if (!parentNode) return;
+    
+    const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+      parentNode as Node<CustomNodeData>,
+      pendingChildren.children,
+      pendingChildren.currentIndex
+    );
+    
+    setPendingChildren(null);
+    
+    setNodes((prevNodes) => {
+      const updatedNodes = [...prevNodes, ...newNodes];
+      const layoutedNodes = calculateTreeLayout(updatedNodes);
+      
+      return layoutedNodes;
+    });
+    
+    setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+  }, [pendingChildren, nodes, createNodesFromChildren, calculateTreeLayout, setNodes, setEdges]);
 
   // Collapse all nodes
   const collapseAll = useCallback(() => {
+    setPendingChildren(null);  // Clear any pending children
     setNodes((prevNodes) => {
       const rootNode = prevNodes.find(n => n.id === '1');
       if (!rootNode) return prevNodes;
       
       return [{
         ...rootNode,
-        data: { ...rootNode.data, expanded: false, selected: false }
+        data: { ...rootNode.data, expanded: false, selected: false, nodeType: 'root' as NodeType }
       }];
     });
     setEdges([]);
     expandedNodes.current.clear();
     setSelectedNodeId(null);
-    
-    setTimeout(() => {
-      fitView({ 
-        padding: CONFIG.FIT_VIEW_PADDING, 
-        duration: CONFIG.ANIMATION_DURATION 
-      });
-    }, 50);
-  }, [setNodes, setEdges, fitView]);
+  }, [setNodes, setEdges]);
 
   // Keyboard handlers
   useEffect(() => {
@@ -404,6 +617,14 @@ const MindMapContent = () => {
 
   return (
     <div className="w-full h-[calc(100vh-5rem)] relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex items-center gap-2 bg-background p-4 rounded-lg shadow-lg border">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm font-medium">Loading...</span>
+          </div>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -421,35 +642,62 @@ const MindMapContent = () => {
         <Background />
         <Controls showInteractive={false} />
         
-        <Panel position="top-right" className="flex gap-2 bg-background/95 backdrop-blur p-3 rounded-lg border border-border shadow-lg">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleZoomOut}
-              aria-label="Zoom out"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium min-w-[3rem] text-center">
-              {zoomLevel}%
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleZoomIn}
-              aria-label="Zoom in"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleFitView}
-              aria-label="Fit view"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
+        <Panel position="top-right" className="bg-background/95 backdrop-blur p-3 rounded-lg border border-border shadow-lg">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleZoomOut}
+                aria-label="Zoom out"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[3rem] text-center">
+                {zoomLevel}%
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleZoomIn}
+                aria-label="Zoom in"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleFitView}
+                aria-label="Fit view"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Pagination Controls - show when there are pending children */}
+            {pendingChildren && (
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                <span className="text-xs text-muted-foreground">
+                  {pendingChildren.children.length} more
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={loadNextBatch}
+                  >
+                    Next 5
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={loadAllRemaining}
+                  >
+                    Show All
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Panel>
 
@@ -461,7 +709,16 @@ const MindMapContent = () => {
             <p><kbd className="px-1.5 py-0.5 bg-muted rounded">Esc</kbd> to collapse all</p>
           </div>
         </Panel>
+
       </ReactFlow>
+
+      {/* Thesis Details Card */}
+      {selectedThesis && (
+        <ThesisCard 
+          thesis={selectedThesis} 
+          onClose={() => setSelectedThesis(null)} 
+        />
+      )}
     </div>
   );
 };

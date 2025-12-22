@@ -82,3 +82,24 @@ export interface DeleteCommentRequest {
     contentId: string;
     commentId: string;
 }
+
+// Thesis/Mind Map Types
+export interface DepartmentCollection {
+    collection_id: string;
+    department_name: string;
+    handle: string;
+}
+
+export interface ThesisData {
+    id: number;
+    collection: string;
+    dc_contributor_advisor: string;
+    dc_contributor_author: string;
+    dc_title: string;
+    dc_date_issued: string;
+    dc_subject: string;
+    dc_type: string;
+    dc_identifier_uri?: string;
+    dc_publisher?: string;
+    dc_language_iso?: string;
+}

@@ -1,6 +1,9 @@
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
+import type { ThesisData } from '@/lib/api';
+
+export type NodeType = 'root' | 'category' | 'collection' | 'professor' | 'student' | 'thesis';
 
 export interface CustomNodeData {
   label: string;
@@ -8,11 +11,39 @@ export interface CustomNodeData {
   expanded: boolean;
   isMaxDepth: boolean;
   selected?: boolean;
+  nodeType: NodeType;
+  categoryName?: string;      // For category nodes (Departments/Schools/Centres)
+  handle?: string;            // For collection nodes (department/school/centre handle)
+  professorName?: string;     // For professor nodes
+  studentName?: string;       // For student nodes
+  thesisData?: ThesisData;    // For thesis nodes
   [key: string]: unknown;
 }
 
+// Fixed node dimensions - change these values to adjust all nodes
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 70;
+
+// Calculate font size based on label length to fit all text
+const getFontSize = (label: string): number => {
+  const length = label.length;
+  if (length <= 12) return 14;
+  if (length <= 20) return 12;
+  if (length <= 35) return 10;
+  if (length <= 50) return 9;
+  return 8;
+};
+
+// Calculate line height based on font size
+const getLineHeight = (fontSize: number): number => {
+  return fontSize <= 10 ? 1.3 : 1.2;
+};
+
 const CustomNode = ({ data }: NodeProps) => {
   const { label, level, expanded, isMaxDepth, selected } = data as CustomNodeData;
+  
+  const fontSize = getFontSize(label);
+  const lineHeight = getLineHeight(fontSize);
   
   // Color variations based on level
   const getNodeColor = () => {
@@ -46,8 +77,10 @@ const CustomNode = ({ data }: NodeProps) => {
       )}
       
       <div 
-        className="relative flex items-center justify-center min-w-[140px] px-6 py-4 rounded-lg transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
+        className="relative flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer hover:scale-105 hover:shadow-xl"
         style={{ 
+          width: `${NODE_WIDTH}px`,
+          height: `${NODE_HEIGHT}px`,
           borderColor: getNodeColor(),
           borderWidth: selected ? '4px' : '3px',
           borderStyle: 'solid',
@@ -55,21 +88,34 @@ const CustomNode = ({ data }: NodeProps) => {
           boxShadow: selected ? `0 0 20px ${getNodeColor()}40` : undefined,
         }}
       >
-        <div className="text-center px-4">
-          <p className="font-bold text-base" style={{ color: getNodeColor() }}>
+        <div className="text-center px-2 w-full overflow-hidden flex items-center justify-center" style={{ height: `${NODE_HEIGHT - 16}px` }}>
+          <p 
+            className="font-bold leading-tight break-words"
+            style={{ 
+              color: getNodeColor(),
+              fontSize: `${fontSize}px`,
+              lineHeight: lineHeight,
+              wordBreak: 'break-word',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+            title={label}
+          >
             {label}
           </p>
-          
-          {isMaxDepth && (
-            <div className="mt-1 flex justify-center">
-              <Lock className="h-3 w-3 text-muted-foreground" />
-            </div>
-          )}
         </div>
+        
+        {isMaxDepth && (
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
+            <Lock className="h-3 w-3 text-muted-foreground" />
+          </div>
+        )}
         
         {!isMaxDepth && (
           <div 
-            className="absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-transform"
+            className="absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-transform"
             style={{ 
               backgroundColor: getNodeColor(),
               color: 'white',
