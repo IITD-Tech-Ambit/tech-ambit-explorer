@@ -67,7 +67,7 @@ const Magazines = () => {
             </div>
             {/* Content */}
             <div className="text-center sm:text-left flex-1">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3">Tech Ambit Magazine</h1>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3">Research Ambit Magazine</h1>
               <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-3 sm:mb-4 max-w-2xl">
                 Our quarterly publication showcasing the latest research stories, breakthroughs, and innovations from across IIT Delhi's research ecosystem.
               </p>
@@ -223,9 +223,9 @@ const Magazines = () => {
       <section className="gradient-subtle py-10 sm:py-12 md:py-16">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">About Tech Ambit Magazine</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">About Research Ambit Magazine</h2>
             <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-4 sm:mb-6">
-              Tech Ambit Magazine is the official research publication of IIT Delhi,
+              Research Ambit Magazine is the official research publication of IIT Delhi,
               featuring in-depth articles, interviews with leading researchers, and
               comprehensive coverage of breakthrough discoveries across all disciplines.
             </p>

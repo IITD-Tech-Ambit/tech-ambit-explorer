@@ -60,7 +60,7 @@ const Navigation = () => {
               </div>
             )}
             <div className="flex flex-col">
-              <span className="font-bold text-lg leading-tight">Tech Ambit</span>
+              <span className="font-bold text-lg leading-tight">Research Ambit</span>
               <span className="text-xs text-muted-foreground">IIT Delhi</span>
             </div>
           </Link>

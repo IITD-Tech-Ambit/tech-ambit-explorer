@@ -11,7 +11,7 @@ export const ENDPOINTS = {
         getPaginated: '/content/paginated',
         getById: (id: string) => `/content/${id}`,
     },
-    
+
     // Analytics endpoints
     analytics: {
         like: '/content/like',
@@ -24,13 +24,13 @@ export const ENDPOINTS = {
 // Helper to build full URLs with query params
 export const buildUrl = (endpoint: string, params?: Record<string, string | number>): string => {
     if (!params) return endpoint;
-    
+
     const queryString = new URLSearchParams(
         Object.entries(params).reduce((acc, [key, value]) => {
             acc[key] = String(value);
             return acc;
         }, {} as Record<string, string>)
     ).toString();
-    
+
     return `${endpoint}?${queryString}`;
 };
