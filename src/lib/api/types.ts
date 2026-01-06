@@ -124,6 +124,7 @@ export interface SearchDocument {
     field_associated?: string;
     citation_count?: number;
     subject_area?: string[];
+    link?: string;
 }
 
 export interface SearchFacets {

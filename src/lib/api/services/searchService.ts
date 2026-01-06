@@ -1,6 +1,7 @@
 import type { SearchRequest, SearchResponse, SearchDocument } from '../types';
 
 const SEARCH_API_BASE_URL = 'http://localhost:3000/api/v1';
+// const SEARCH_API_BASE_URL = 'https://api.tufesports.me/api/v1';
 
 /**
  * Perform a hybrid search using BM25 + SPECTER2 semantic embeddings

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { searchResearch, type SearchRequest, type SearchDocument, type SearchResponse } from "@/lib/api";
@@ -201,7 +201,7 @@ const Explore = () => {
                   max="2025"
                 />
               </div>
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Sort By</label>
                 <select
                   className="w-full px-3 py-2 border border-input rounded-md bg-background"
@@ -212,7 +212,7 @@ const Explore = () => {
                   <option value="date">Date</option>
                   <option value="citations">Citations</option>
                 </select>
-              </div>
+              </div>/ */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Per Page</label>
                 <select
@@ -520,6 +520,15 @@ const Explore = () => {
 
             {/* Modal Footer */}
             <div className="flex justify-end gap-2 p-6 border-t border-border">
+              {selectedDocument.link && (
+                <Button
+                  onClick={() => window.open(selectedDocument.link, '_blank', 'noopener,noreferrer')}
+                  className="gap-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View Original Paper
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setSelectedDocument(null)}>
                 Close
               </Button>

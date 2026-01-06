@@ -1,6 +1,6 @@
 import type { DepartmentCollection, ThesisData } from '../types';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5123/api';
 
 export const fetchCategories = async (): Promise<string[]> => {
   const response = await fetch(`${API_BASE_URL}/categories`);
