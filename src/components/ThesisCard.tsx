@@ -47,7 +47,7 @@ const ThesisCard = ({ thesis, onClose }: ThesisCardProps) => {
                 <BookOpen className="h-5 w-5 flex-shrink-0" />
                 <span className="text-sm font-medium opacity-90">Thesis Details</span>
               </div>
-              <h2 className="text-xl font-bold leading-tight">
+              <h2 className="text-xl font-bold leading-tight bg-gradient-to-r from-yellow-200 via-amber-100 to-yellow-300 bg-clip-text text-transparent">
                 {thesis.dc_title || 'Untitled Thesis'}
               </h2>
             </div>
