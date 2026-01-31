@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { searchResearch, type SearchRequest, type SearchDocument, type SearchResponse } from "@/lib/api";
+import { searchResearch, type SearchRequest, type SearchDocument, type SearchResponse, type RelatedFaculty } from "@/lib/api";
 
 const Explore = () => {
   // Search state
@@ -17,6 +17,10 @@ const Explore = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
+  const [relatedFaculty, setRelatedFaculty] = useState<RelatedFaculty[]>([]);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'websites' | 'people'>('websites');
 
   // Filter state
   const [activeFilter, setActiveFilter] = useState("All");
@@ -62,7 +66,15 @@ const Explore = () => {
       }
 
       const response = await searchResearch(request);
+      console.log('Search response:', response);
+      console.log('Related faculty:', response.related_faculty);
+      // DEBUG: Log faculty department data
+      if (response.related_faculty?.length > 0) {
+        console.log('First faculty department:', response.related_faculty[0].department);
+        console.log('Faculty with departments:', response.related_faculty.filter(f => f.department).length);
+      }
       setResults(response.results);
+      setRelatedFaculty(response.related_faculty || []);
       setPagination(response.pagination);
       setCurrentPage(page);
     } catch (error) {
@@ -133,7 +145,7 @@ const Explore = () => {
             Explore Research
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl animate-slide-up">
-            Browse through our comprehensive repository of research projects, departments, 
+            Browse through our comprehensive repository of research projects, departments,
             centers, and interdisciplinary initiatives at IIT Delhi.
           </p>
 
@@ -260,6 +272,32 @@ const Explore = () => {
         )}
       </section>
 
+      {/* Tabs - Only show after search */}
+      {hasSearched && !isLoading && (
+        <section className="container mx-auto px-4">
+          <div className="flex items-center gap-1 mb-6">
+            <button
+              onClick={() => setActiveTab('websites')}
+              className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'websites'
+                ? 'bg-[#1e3a5f] text-white'
+                : 'bg-[#1e3a5f]/80 text-white/80 hover:bg-[#1e3a5f]/90'
+                }`}
+            >
+              Research Papers
+            </button>
+            <button
+              onClick={() => setActiveTab('people')}
+              className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'people'
+                ? 'bg-[#1e3a5f] text-white'
+                : 'bg-[#1e3a5f]/80 text-white/80 hover:bg-[#1e3a5f]/90'
+                }`}
+            >
+              People
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Research Items Grid */}
       <section className="container mx-auto px-4 pb-20">
         {/* Loading State */}
@@ -288,8 +326,8 @@ const Explore = () => {
           </div>
         )}
 
-        {/* Results Header */}
-        {hasSearched && !isLoading && filteredResults.length > 0 && pagination && (
+        {/* Results Header - Websites Tab */}
+        {hasSearched && !isLoading && activeTab === 'websites' && filteredResults.length > 0 && pagination && (
           <div className="mb-6">
             <p className="text-muted-foreground">
               Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
@@ -297,72 +335,104 @@ const Explore = () => {
           </div>
         )}
 
-        {/* Results Grid */}
-        {!isLoading && filteredResults.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredResults.map((item, index) => (
-              <Card
-                key={item._id || index}
-                className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
-                onClick={() => setSelectedDocument(item)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <Badge variant="secondary">{item.document_type}</Badge>
-                    {item.field_associated && (
-                      <Badge variant="outline">{item.field_associated}</Badge>
-                    )}
-                  </div>
-                  <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                  {item.authors && item.authors.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                      {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                    </p>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {item.abstract && (
-                    <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
-                  )}
-                  
-                  <div className="flex items-center justify-between pt-4 border-t border-border">
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                      <div className="flex items-center space-x-1">
-                        <FileText className="h-4 w-4" />
-                        <span>{item.publication_year || "N/A"}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-4 w-4" />
-                        <span>{item.citation_count || 0} citations</span>
-                      </div>
-                      {item.subject_area && item.subject_area.length > 0 && (
-                        <div className="flex items-center space-x-1">
-                          <Building className="h-4 w-4" />
-                          <span className="line-clamp-1">{item.subject_area[0]}</span>
-                        </div>
-                      )}
-                    </div>
+        {/* Results Grid - Websites Tab - Grouped by Department */}
+        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && (() => {
+          // Group results by department (field_associated)
+          const groupedByDepartment = filteredResults.reduce((groups, item) => {
+            const dept = item.field_associated || 'Other';
+            if (!groups[dept]) {
+              groups[dept] = [];
+            }
+            groups[dept].push(item);
+            return groups;
+          }, {} as Record<string, typeof filteredResults>);
+
+          // Sort departments alphabetically
+          const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
+            if (a === 'Other') return 1;
+            if (b === 'Other') return -1;
+            return a.localeCompare(b);
+          });
+
+          return (
+            <div className="space-y-8">
+              {sortedDepartments.map((department) => (
+                <div key={department} className="space-y-4">
+                  {/* Department Header */}
+                  <div className="flex items-center gap-3 pb-2 border-b-2 border-primary/20">
+                    <Building className="h-6 w-6 text-primary" />
+                    <h2 className="text-xl font-bold text-primary">{department}</h2>
+                    <Badge variant="secondary" className="ml-auto">
+                      {groupedByDepartment[department].length} papers
+                    </Badge>
                   </div>
 
-                  {/* Subject Area Tags */}
-                  {item.subject_area && item.subject_area.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {item.subject_area.slice(0, 3).map((area, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs">
-                          {area}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                  {/* Papers Grid for this Department */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {groupedByDepartment[department].map((item, index) => (
+                      <Card
+                        key={item._id || index}
+                        className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
+                        onClick={() => setSelectedDocument(item)}
+                      >
+                        <CardHeader>
+                          <div className="flex items-start justify-between mb-2">
+                            <Badge variant="secondary">{item.document_type}</Badge>
+                          </div>
+                          <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                          {item.authors && item.authors.length > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                              {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
+                            </p>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          {item.abstract && (
+                            <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                          )}
 
-        {/* Pagination */}
-        {pagination && pagination.total_pages > 1 && !isLoading && (
+                          <div className="flex items-center justify-between pt-4 border-t border-border">
+                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                              <div className="flex items-center space-x-1">
+                                <FileText className="h-4 w-4" />
+                                <span>{item.publication_year || "N/A"}</span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <Users className="h-4 w-4" />
+                                <span>{item.citation_count || 0} citations</span>
+                              </div>
+                              {item.subject_area && item.subject_area.length > 0 && (
+                                <div className="flex items-center space-x-1">
+                                  <Building className="h-4 w-4" />
+                                  <span className="line-clamp-1">{item.subject_area[0]}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Subject Area Tags */}
+                          {item.subject_area && item.subject_area.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {item.subject_area.slice(0, 3).map((area, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs">
+                                  {area}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Pagination - Websites Tab */}
+        {pagination && pagination.total_pages > 1 && !isLoading && activeTab === 'websites' && (
           <div className="flex justify-center items-center gap-2 mt-8">
             <Button
               variant="outline"
@@ -378,7 +448,7 @@ const Explore = () => {
             >
               ‹ Prev
             </Button>
-            
+
             {/* Page numbers */}
             {Array.from(
               { length: Math.min(5, pagination.total_pages) },
@@ -414,26 +484,101 @@ const Explore = () => {
             >
               Last
             </Button>
-            
+
             <span className="text-sm text-muted-foreground ml-4">
               Page {currentPage} of {pagination.total_pages}
             </span>
           </div>
         )}
+
+        {/* People Tab - Faculty Cards - Grouped by Department */}
+        {hasSearched && !isLoading && activeTab === 'people' && (
+          <>
+            {relatedFaculty.length > 0 ? (() => {
+              // Group faculty by department
+              const groupedByDepartment = relatedFaculty.reduce((groups, faculty) => {
+                const dept = faculty.department?.name || 'Other';
+                if (!groups[dept]) {
+                  groups[dept] = [];
+                }
+                groups[dept].push(faculty);
+                return groups;
+              }, {} as Record<string, typeof relatedFaculty>);
+
+              // Sort departments alphabetically
+              const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
+                if (a === 'Other') return 1;
+                if (b === 'Other') return -1;
+                return a.localeCompare(b);
+              });
+
+              return (
+                <>
+                  <div className="mb-6">
+                    <p className="text-muted-foreground">
+                      Found <span className="font-semibold text-primary">{relatedFaculty.length}</span> related faculty members
+                    </p>
+                  </div>
+                  <div className="space-y-8">
+                    {sortedDepartments.map((department) => (
+                      <div key={department} className="space-y-4">
+                        {/* Department Header */}
+                        <div className="flex items-center gap-3 pb-2 border-b-2 border-primary/20">
+                          <Building className="h-6 w-6 text-primary" />
+                          <h2 className="text-xl font-bold text-primary">{department}</h2>
+                          <Badge variant="secondary" className="ml-auto">
+                            {groupedByDepartment[department].length} faculty
+                          </Badge>
+                        </div>
+
+                        {/* Faculty Grid for this Department */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {groupedByDepartment[department].map((faculty) => (
+                            <Card key={faculty._id} className="hover:shadow-elegant transition-smooth border-border">
+                              <CardContent className="p-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-primary" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-semibold">{faculty.name}</h3>
+                                    <a href={`mailto:${faculty.email}`} className="text-sm text-primary hover:underline">
+                                      {faculty.email}
+                                    </a>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })() : (
+              <div className="text-center py-20">
+                <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No Faculty Found</h3>
+                <p className="text-muted-foreground">No matched faculty profiles for the current search results</p>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* Document Detail Modal */}
       {selectedDocument && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedDocument(null)}
         >
-          <div 
-            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          <div
+            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between p-6 border-b border-border">
+            {/* Modal Header - Fixed */}
+            <div className="flex items-start justify-between p-6 border-b border-border shrink-0">
               <div className="flex-1 pr-4">
                 <h2 className="text-2xl font-bold mb-2">{selectedDocument.title}</h2>
                 <div className="flex flex-wrap gap-2">
@@ -453,8 +598,8 @@ const Explore = () => {
               </Button>
             </div>
 
-            {/* Modal Content */}
-            <div className="overflow-y-auto max-h-[calc(90vh-180px)] p-6 space-y-6">
+            {/* Modal Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
               {/* Authors */}
               {selectedDocument.authors && selectedDocument.authors.length > 0 && (
                 <div>
@@ -518,8 +663,8 @@ const Explore = () => {
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="flex justify-end gap-2 p-6 border-t border-border">
+            {/* Modal Footer - Fixed at bottom */}
+            <div className="flex justify-end gap-2 p-6 border-t border-border bg-background shrink-0">
               {selectedDocument.link && (
                 <Button
                   onClick={() => window.open(selectedDocument.link, '_blank', 'noopener,noreferrer')}
