@@ -25,6 +25,20 @@ const Explore = () => {
   // Filter state
   const [activeFilter, setActiveFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Disable body scroll when modal is open
+  useEffect(() => {
+    if (selectedDocument) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedDocument]);
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
   const [sortBy, setSortBy] = useState<"relevance" | "date" | "citations">("relevance");
@@ -574,11 +588,11 @@ const Explore = () => {
           onClick={() => setSelectedDocument(null)}
         >
           <div
-            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header - Fixed */}
-            <div className="flex items-start justify-between p-6 border-b border-border shrink-0">
+            <div className="flex items-start justify-between p-6 border-b border-border flex-shrink-0 shrink-0">
               <div className="flex-1 pr-4">
                 <h2 className="text-2xl font-bold mb-2">{selectedDocument.title}</h2>
                 <div className="flex flex-wrap gap-2">
@@ -598,8 +612,8 @@ const Explore = () => {
               </Button>
             </div>
 
-            {/* Modal Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
+            {/* Modal Content */}
+            <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
               {/* Authors */}
               {selectedDocument.authors && selectedDocument.authors.length > 0 && (
                 <div>
@@ -664,7 +678,7 @@ const Explore = () => {
             </div>
 
             {/* Modal Footer - Fixed at bottom */}
-            <div className="flex justify-end gap-2 p-6 border-t border-border bg-background shrink-0">
+            <div className="flex justify-end gap-2 p-6 border-t border-border flex-shrink-0 bg-background shrink-0">
               {selectedDocument.link && (
                 <Button
                   onClick={() => window.open(selectedDocument.link, '_blank', 'noopener,noreferrer')}
