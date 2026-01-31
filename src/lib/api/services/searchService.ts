@@ -19,7 +19,12 @@ export async function searchResearch(request: SearchRequest): Promise<SearchResp
     throw new Error(`Search failed: ${response.statusText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // DEBUG: Log raw API response to check department data
+  console.log('Raw API response related_faculty:', JSON.stringify(data.related_faculty?.slice(0, 2), null, 2));
+
+  return data;
 }
 
 /**

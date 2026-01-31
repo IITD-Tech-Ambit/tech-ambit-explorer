@@ -140,8 +140,20 @@ export interface SearchPagination {
     total_pages: number;
 }
 
+export interface RelatedFaculty {
+    _id: string;
+    name: string;
+    email: string;
+    department: {
+        _id: string;
+        name: string;
+    } | null;
+    paperCount: number;
+}
+
 export interface SearchResponse {
     results: SearchDocument[];
+    related_faculty?: RelatedFaculty[];
     facets: SearchFacets;
     pagination: SearchPagination;
     cacheHit?: boolean;

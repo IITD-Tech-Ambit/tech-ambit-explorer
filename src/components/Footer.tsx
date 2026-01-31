@@ -9,10 +9,8 @@ const Footer = () => {
           {/* About */}
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">
-                TA
-              </div>
-              <span className="font-bold">Tech Ambit</span>
+
+              <span className="font-bold">Research Ambit</span>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
               Central research repository connecting departments, labs, and innovative projects at IIT Delhi.
