@@ -1,179 +1,126 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, Mail, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import FacultyCard from "@/components/directory/FacultyCard";
+import FacultyModal from "@/components/directory/FacultyModal";
+import { useFaculties } from "@/lib/api/hooks/useDirectory";
+import type { DirectoryFaculty } from "@/lib/api/types";
 
 const Directory = () => {
-  const [activeFilter, setActiveFilter] = useState("All");
+    const [page, setPage] = useState(1);
+    const [selectedFaculty, setSelectedFaculty] = useState<DirectoryFaculty | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
 
-  const filters = ["All", "Faculty", "Research Labs", "Research Groups", "Centers"];
+    const { data, isLoading, isError } = useFaculties(page, 9);
 
-  const directoryEntries = [
-    {
-      name: "Dr. Anika Sharma",
-      role: "Professor",
-      department: "Computer Science & Engineering",
-      specialization: "Artificial Intelligence, Machine Learning",
-      email: "anika.sharma@iitd.ac.in",
-      type: "Faculty",
-      image: "👩‍🔬",
-    },
-    {
-      name: "Dr. Rajesh Kumar",
-      role: "Associate Professor",
-      department: "Electrical Engineering",
-      specialization: "Power Systems, Renewable Energy",
-      email: "rajesh.kumar@iitd.ac.in",
-      type: "Faculty",
-      image: "👨‍🔬",
-    },
-    {
-      name: "AI & Robotics Lab",
-      role: "Research Laboratory",
-      department: "Computer Science & Engineering",
-      specialization: "Autonomous Systems, Computer Vision",
-      email: "ai-lab@iitd.ac.in",
-      type: "Research Labs",
-      image: "🤖",
-    },
-    {
-      name: "Dr. Priya Malhotra",
-      role: "Assistant Professor",
-      department: "Biotechnology",
-      specialization: "Molecular Biology, Genetic Engineering",
-      email: "priya.malhotra@iitd.ac.in",
-      type: "Faculty",
-      image: "👩‍🔬",
-    },
-    {
-      name: "Quantum Research Group",
-      role: "Research Group",
-      department: "Physics",
-      specialization: "Quantum Computing, Quantum Information",
-      email: "quantum@iitd.ac.in",
-      type: "Research Groups",
-      image: "⚛️",
-    },
-    {
-      name: "Dr. Vikram Singh",
-      role: "Professor",
-      department: "Mechanical Engineering",
-      specialization: "Thermodynamics, Energy Systems",
-      email: "vikram.singh@iitd.ac.in",
-      type: "Faculty",
-      image: "👨‍🔬",
-    },
-    {
-      name: "Sustainable Energy Center",
-      role: "Research Center",
-      department: "Energy Studies",
-      specialization: "Solar Energy, Wind Power, Energy Storage",
-      email: "sec@iitd.ac.in",
-      type: "Centers",
-      image: "🌞",
-    },
-    {
-      name: "Dr. Meera Desai",
-      role: "Associate Professor",
-      department: "Civil Engineering",
-      specialization: "Structural Engineering, Smart Cities",
-      email: "meera.desai@iitd.ac.in",
-      type: "Faculty",
-      image: "👩‍🔬",
-    },
-  ];
+    const handleCardClick = (faculty: DirectoryFaculty) => {
+        setSelectedFaculty(faculty);
+        setModalOpen(true);
+    };
 
-  const filteredEntries =
-    activeFilter === "All"
-      ? directoryEntries
-      : directoryEntries.filter((entry) => entry.type === activeFilter);
+    const handleCloseModal = () => {
+        setModalOpen(false);
+        setSelectedFaculty(null);
+    };
 
-  return (
-    <div className="min-h-screen page-bg">
-      <Navigation />
+    return (
+        <div className="min-h-screen page-bg">
+            <Navigation />
 
-      {/* Header */}
-      <section className="gradient-subtle pt-32 pb-16 section-bg">
-        <div className="container mx-auto px-4">
-          <h1 className="text-5xl font-bold mb-4 animate-fade-in">
-            Who We Are
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl animate-slide-up">
-            Connect with our distinguished faculty, research labs, and innovative 
-            research groups driving cutting-edge discoveries at IIT Delhi.
-          </p>
+            <section className="gradient-subtle pt-32 pb-16 section-bg">
+                <div className="container mx-auto px-4">
+                    <h1 className="text-5xl font-bold mb-4 animate-fade-in">
+                        Who We Are
+                    </h1>
+                    <p className="text-xl text-muted-foreground mb-8 max-w-3xl animate-slide-up">
+                        Connect with our distinguished faculty driving cutting-edge 
+                        discoveries at IIT Delhi.
+                    </p>
 
-          {/* Search Bar */}
-          <div className="relative max-w-2xl animate-slide-up">
-            
-            <Input
-              type="text"
-              placeholder="Search by name, department, or research area..."
-              className="pl-12 h-12 text-base search-input"
+                    <div className="relative max-w-2xl animate-slide-up">
+                        <Input
+                            type="text"
+                            placeholder="Search by name, department, or research area..."
+                            className="pl-4 h-12 text-base search-input"
+                        />
+                    </div>
+                </div>
+            </section>
+
+            <section className="container mx-auto px-4 py-8">
+                {data?.pagination && (
+                    <div className="flex items-center justify-between mb-6">
+                        <p className="text-sm text-muted-foreground">
+                            Showing <strong>{data.data.length}</strong> of <strong>{data.pagination.total}</strong> faculty members
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={!data.pagination.hasPrev}
+                            >
+                                <ChevronLeft className="w-4 h-4 mr-1" />
+                                Previous
+                            </Button>
+                            <span className="text-sm px-3 py-1 bg-muted rounded">
+                                Page {data.pagination.page} of {data.pagination.totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => p + 1)}
+                                disabled={!data.pagination.hasNext}
+                            >
+                                Next
+                                <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            <section className="container mx-auto px-4 pb-20">
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                ) : isError ? (
+                    <div className="text-center py-20">
+                        <p className="text-muted-foreground">Failed to load faculty data. Please try again.</p>
+                        <Button
+                            variant="outline"
+                            className="mt-4"
+                            onClick={() => window.location.reload()}
+                        >
+                            Retry
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {data?.data.map((faculty) => (
+                            <FacultyCard
+                                key={faculty._id}
+                                faculty={faculty}
+                                onClick={() => handleCardClick(faculty)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            <FacultyModal
+                faculty={selectedFaculty}
+                open={modalOpen}
+                onClose={handleCloseModal}
             />
-          </div>
+
+            <Footer />
         </div>
-      </section>
-
-      {/* Filters */}
-      <section className="container mx-auto px-4 py-8">
-        <div className="flex flex-wrap gap-2">
-          {filters.map((filter) => (
-            <Button
-              key={filter}
-              variant={activeFilter === filter ? "default" : "outline"}
-              onClick={() => setActiveFilter(filter)}
-              className="rounded-full"
-            >
-              {filter}
-            </Button>
-          ))}
-        </div>
-      </section>
-
-      {/* Directory Grid */}
-      <section className="container mx-auto px-4 pb-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEntries.map((entry, index) => (
-            <Card
-              key={index}
-              className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center text-4xl">
-                    {entry.image}
-                  </div>
-                  <Badge variant="secondary">{entry.type}</Badge>
-                </div>
-
-                <h3 className="text-xl font-semibold mb-1">{entry.name}</h3>
-                <p className="text-sm text-primary font-medium mb-2">{entry.role}</p>
-                <p className="text-sm text-muted-foreground mb-3">{entry.department}</p>
-                <p className="text-sm mb-4 line-clamp-2">{entry.specialization}</p>
-
-                <div className="flex items-center space-x-2 pt-4 border-t border-border">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Contact
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <Footer />
-    </div>
-  );
+    );
 };
 
 export default Directory;

@@ -37,7 +37,7 @@ const Magazines = () => {
   const getImageUrl = (imageUrl: string) => {
     if (!imageUrl) return magazineCover;
     if (imageUrl.startsWith('http')) return imageUrl;
-    return `${API_BASE_URL}${imageUrl}`;
+    return imageUrl;
   };
 
   // Format date from ISO string
@@ -120,7 +120,7 @@ const Magazines = () => {
                 <Card key={magazine._id} className="magazine-card group flex flex-col h-full">
                   <div className="relative overflow-hidden">
                     <img
-                      src={getImageUrl(magazine.image_url)}
+                      src={magazine.image_url }
                       alt={magazine.title}
                       className="w-full h-48 sm:h-56 md:h-64 lg:h-72 object-cover group-hover:scale-105 transition-smooth"
                       onError={(e) => {

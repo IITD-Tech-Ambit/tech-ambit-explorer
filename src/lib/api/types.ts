@@ -240,3 +240,73 @@ export interface SearchRequest {
     filters?: SearchFilters;
     search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
 }
+
+// Directory/Faculty Types
+export interface DirectoryDepartment {
+    _id: string;
+    name: string;
+    code: string;
+}
+
+export interface DirectoryFaculty {
+    _id: string;
+    name: string;
+    email: string;
+    citationCount: number;
+    hIndex: number;
+    research_areas: string[];
+    orcId?: string;
+    scopusId?: string;
+    department: DirectoryDepartment;
+}
+
+export interface DirectoryPagination {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+}
+
+export interface DirectoryResponse {
+    data: DirectoryFaculty[];
+    pagination: DirectoryPagination;
+}
+
+export interface Coworker {
+    title: string;
+    publication_year: number;
+    document_type: string;
+    subject_area: string[];
+    name: string;
+    affiliation: string;
+    author_id: string;
+    matched_profile: string | null;
+}
+
+export interface SupervisedStudent {
+    name: string;
+    affiliation: string;
+    thesis_title: string;
+    year: number;
+}
+
+export interface FacultyCoworkingStats {
+    totalPapers: number;
+    uniqueCoauthors: number;
+    totalStudentsSupervised: number;
+}
+
+export interface FacultyCoworkingResponse {
+    faculty: {
+        name: string;
+        _id: string;
+    };
+    hIndex: number;
+    citationCount: number;
+    scopusId?: string;
+    coworkersFromPapers: Coworker[];
+    studentsSupervised: SupervisedStudent[];
+    stats: FacultyCoworkingStats;
+}

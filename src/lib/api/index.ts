@@ -35,3 +35,4 @@ export { queryKeys } from './hooks/queryKeys';
 // Hooks
 export * from './hooks/useMagazines';
 export * from './hooks/useMagazineAnalytics';
+export * from './hooks/useSearch';

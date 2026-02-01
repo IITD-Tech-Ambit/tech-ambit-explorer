@@ -20,4 +20,22 @@ export const queryKeys = {
         all: ['analytics'] as const,
         byContent: (contentId: string) => [...queryKeys.analytics.all, contentId] as const,
     },
+
+    // Directory query keys
+    directory: {
+        all: ['directory'] as const,
+        lists: () => [...queryKeys.directory.all, 'list'] as const,
+        list: (filters?: { page?: number; limit?: number; sortBy?: string; order?: string }) =>
+            [...queryKeys.directory.lists(), filters || {}] as const,
+        details: () => [...queryKeys.directory.all, 'detail'] as const,
+        detail: (id: string) => [...queryKeys.directory.details(), id] as const,
+        coworking: (id: string) => [...queryKeys.directory.all, 'coworking', id] as const,
+    },
+
+    // Search query keys
+    search: {
+        all: ['search'] as const,
+        results: (request: Record<string, unknown>) => [...queryKeys.search.all, 'results', request] as const,
+        document: (id: string) => [...queryKeys.search.all, 'document', id] as const,
+    },
 } as const;

@@ -1,27 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { searchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type SearchResponse, type RelatedFaculty } from "@/lib/api";
+import FacultyModal from "@/components/directory/FacultyModal";
+import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
+import type { DirectoryFaculty } from "@/lib/api/types";
 
 const Explore = () => {
   const navigate = useNavigate();
   
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [isNavigating, setIsNavigating] = useState(false);
-  const [results, setResults] = useState<SearchDocument[]>([]);
-  const [pagination, setPagination] = useState<SearchResponse['pagination'] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasSearched, setHasSearched] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
-  const [relatedFaculty, setRelatedFaculty] = useState<RelatedFaculty[]>([]);
+
+  // Faculty modal state for People tab
+  const [selectedPeopleFaculty, setSelectedPeopleFaculty] = useState<DirectoryFaculty | null>(null);
+  const [facultyModalOpen, setFacultyModalOpen] = useState(false);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'websites' | 'people'>('websites');
@@ -29,6 +31,20 @@ const Explore = () => {
   // Filter state
   const [activeFilter, setActiveFilter] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Group by department toggle - persisted in localStorage
+  const [groupByDepartment, setGroupByDepartment] = useState<boolean>(() => {
+    const saved = localStorage.getItem('explore-group-by-dept');
+    return saved === 'true'; // Default is false (API order)
+  });
+
+  // Save groupByDepartment preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('explore-group-by-dept', String(groupByDepartment));
+  }, [groupByDepartment]);
+
+  // Collapsible department sections state (by default all expanded)
+  const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
 
   // Disable body scroll when modal is open
   useEffect(() => {
@@ -57,51 +73,55 @@ const Explore = () => {
     "Book Chapter",
   ];
 
-  // Perform search
-  const performSearch = async (page: number = 1) => {
-    if (!searchQuery.trim()) return;
+  // Build search request - only when submittedQuery is set
+  const searchRequest = useMemo<SearchRequest | null>(() => {
+    if (!submittedQuery.trim()) return null;
+    
+    const request: SearchRequest = {
+      query: submittedQuery,
+      page: currentPage,
+      per_page: perPage,
+      sort: sortBy,
+      filters: {},
+      search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
+    };
 
-    setIsLoading(true);
-    setHasSearched(true);
+    // Add year filters
+    if (yearFrom) request.filters!.year_from = parseInt(yearFrom);
+    if (yearTo) request.filters!.year_to = parseInt(yearTo);
 
-    try {
-      const request: SearchRequest = {
-        query: searchQuery,
-        page,
-        per_page: perPage,
-        sort: sortBy,
-        filters: {},
-        search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
-      };
-
-      // Add year filters
-      if (yearFrom) request.filters!.year_from = parseInt(yearFrom);
-      if (yearTo) request.filters!.year_to = parseInt(yearTo);
-
-      // Add document type filter
-      if (activeFilter !== "All") {
-        request.filters!.document_type = activeFilter;
-      }
-
-      const response = await searchResearch(request);
-      console.log('Search response:', response);
-      console.log('Related faculty:', response.related_faculty);
-      // DEBUG: Log faculty department data
-      if (response.related_faculty?.length > 0) {
-        console.log('First faculty department:', response.related_faculty[0].department);
-        console.log('Faculty with departments:', response.related_faculty.filter(f => f.department).length);
-      }
-      setResults(response.results);
-      setRelatedFaculty(response.related_faculty || []);
-      setPagination(response.pagination);
-      setCurrentPage(page);
-    } catch (error) {
-      console.error("Search error:", error);
-      setResults([]);
-      setPagination(null);
-    } finally {
-      setIsLoading(false);
+    // Add document type filter
+    if (activeFilter !== "All") {
+      request.filters!.document_type = activeFilter;
     }
+
+    console.log('Built searchRequest:', request);
+    return request;
+  }, [submittedQuery, currentPage, perPage, sortBy, yearFrom, yearTo, activeFilter, searchIn]);
+
+  // Use React Query for search
+  const { data: searchData, isLoading, isFetching, refetch } = useSearchResearch(searchRequest);
+
+  // Refetch when searchRequest changes and is not null
+  useEffect(() => {
+    if (searchRequest) {
+      console.log('Triggering refetch for:', searchRequest.query);
+      refetch();
+    }
+  }, [searchRequest, refetch]);
+
+  // Derived state from query
+  const results = searchData?.results || [];
+  const pagination = searchData?.pagination || null;
+  const relatedFaculty = searchData?.related_faculty || [];
+  const hasSearched = !!submittedQuery.trim();
+
+  // Perform search - update query and reset page
+  const performSearch = (page: number = 1) => {
+    if (!searchQuery.trim()) return;
+    console.log('performSearch called:', { searchQuery, page });
+    setSubmittedQuery(searchQuery);
+    setCurrentPage(page);
   };
 
   // Handle search on Enter key
@@ -145,6 +165,36 @@ const Explore = () => {
         return [...prev, field];
       }
     });
+  };
+
+  // Toggle department expansion (default is expanded)
+  const toggleDepartment = (dept: string) => {
+    setExpandedDepts(prev => ({
+      ...prev,
+      [dept]: prev[dept] === undefined ? false : !prev[dept]
+    }));
+  };
+
+  // Check if department is expanded (default true)
+  const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
+
+  // Handle faculty click in People tab - convert to DirectoryFaculty format
+  const handleFacultyClick = (faculty: RelatedFaculty) => {
+    const directoryFaculty: DirectoryFaculty = {
+      _id: faculty._id,
+      name: faculty.name,
+      email: faculty.email,
+      citationCount: 0, // Will be fetched by modal
+      hIndex: 0,        // Will be fetched by modal
+      research_areas: [],
+      department: {
+        _id: faculty.department?._id || '',
+        name: faculty.department?.name || 'Unknown',
+        code: ''
+      }
+    };
+    setSelectedPeopleFaculty(directoryFaculty);
+    setFacultyModalOpen(true);
   };
 
   // Handle navigate to mind map
@@ -366,17 +416,86 @@ const Explore = () => {
 
         {/* Results Header - Websites Tab */}
         {hasSearched && !isLoading && activeTab === 'websites' && filteredResults.length > 0 && pagination && (
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <p className="text-muted-foreground">
               Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
             </p>
+            <Button
+              variant={groupByDepartment ? "default" : "outline"}
+              size="sm"
+              onClick={() => setGroupByDepartment(!groupByDepartment)}
+              className="gap-2"
+            >
+              <Building className="h-4 w-4" />
+              {groupByDepartment ? "Grouped by Department" : "Group by Department"}
+            </Button>
+          </div>
+        )}
+
+        {/* Results Grid - Websites Tab - Flat List (API Order - Default) */}
+        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && !groupByDepartment && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {filteredResults.map((item, index) => (
+              <Card
+                key={item._id || index}
+                className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
+                onClick={() => setSelectedDocument(item)}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between mb-2">
+                    <Badge variant="secondary">{item.document_type}</Badge>
+                    {item.field_associated && (
+                      <Badge variant="outline" className="text-xs">
+                        {item.field_associated}
+                      </Badge>
+                    )}
+                  </div>
+                  <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                  {item.authors && item.authors.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                      {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {item.abstract && (
+                    <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-4 border-t border-border">
+                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                      <div className="flex items-center space-x-1">
+                        <FileText className="h-4 w-4" />
+                        <span>{item.publication_year || "N/A"}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-4 w-4" />
+                        <span>{item.citation_count || 0} citations</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subject Area Tags */}
+                  {item.subject_area && item.subject_area.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {item.subject_area.slice(0, 3).map((area, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {area}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
 
         {/* Results Grid - Websites Tab - Grouped by Department */}
-        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && (() => {
+        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && groupByDepartment && (() => {
           // Group results by department (field_associated)
-          const groupedByDepartment = filteredResults.reduce((groups, item) => {
+          const groupedByDept = filteredResults.reduce((groups, item) => {
             const dept = item.field_associated || 'Other';
             if (!groups[dept]) {
               groups[dept] = [];
@@ -386,82 +505,101 @@ const Explore = () => {
           }, {} as Record<string, typeof filteredResults>);
 
           // Sort departments alphabetically
-          const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
+          const sortedDepartments = Object.keys(groupedByDept).sort((a, b) => {
             if (a === 'Other') return 1;
             if (b === 'Other') return -1;
             return a.localeCompare(b);
           });
 
           return (
-            <div className="space-y-8">
+            <div className="space-y-6">
               {sortedDepartments.map((department) => (
-                <div key={department} className="space-y-4">
-                  {/* Department Header */}
-                  <div className="flex items-center gap-3 pb-2 border-b-2 border-primary/20">
-                    <Building className="h-6 w-6 text-primary" />
-                    <h2 className="text-xl font-bold text-primary">{department}</h2>
-                    <Badge variant="secondary" className="ml-auto">
-                      {groupedByDepartment[department].length} papers
+                <div key={department} className="rounded-xl border border-border/50 bg-card/50 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  {/* Department Header - Clickable */}
+                  <button
+                    onClick={() => toggleDepartment(department)}
+                    className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Building className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h2 className="text-lg font-bold text-foreground">{department}</h2>
+                      <p className="text-xs text-muted-foreground">{groupedByDept[department].length} research papers</p>
+                    </div>
+                    <Badge variant="secondary" className="mr-2">
+                      {groupedByDept[department].length}
                     </Badge>
-                  </div>
+                    <ChevronDown 
+                      className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${
+                        isDeptExpanded(department) ? 'rotate-180' : ''
+                      }`} 
+                    />
+                  </button>
 
-                  {/* Papers Grid for this Department */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {groupedByDepartment[department].map((item, index) => (
-                      <Card
-                        key={item._id || index}
-                        className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
-                        onClick={() => setSelectedDocument(item)}
-                      >
-                        <CardHeader>
-                          <div className="flex items-start justify-between mb-2">
-                            <Badge variant="secondary">{item.document_type}</Badge>
-                          </div>
-                          <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                          {item.authors && item.authors.length > 0 && (
-                            <p className="text-sm text-muted-foreground">
-                              {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                              {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                            </p>
-                          )}
-                        </CardHeader>
-                        <CardContent>
-                          {item.abstract && (
-                            <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
-                          )}
+                  {/* Papers Grid for this Department - Collapsible */}
+                  <div
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                      isDeptExpanded(department) ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
+                    }`}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 pt-0">
+                      {groupedByDept[department].map((item, index) => (
+                        <Card
+                          key={item._id || index}
+                          className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
+                          onClick={() => setSelectedDocument(item)}
+                        >
+                          <CardHeader>
+                            <div className="flex items-start justify-between mb-2">
+                              <Badge variant="secondary">{item.document_type}</Badge>
+                            </div>
+                            <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                            {item.authors && item.authors.length > 0 && (
+                              <p className="text-sm text-muted-foreground">
+                                {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                                {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
+                              </p>
+                            )}
+                          </CardHeader>
+                          <CardContent>
+                            {item.abstract && (
+                              <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                            )}
 
-                          <div className="flex items-center justify-between pt-4 border-t border-border">
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                              <div className="flex items-center space-x-1">
-                                <FileText className="h-4 w-4" />
-                                <span>{item.publication_year || "N/A"}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <Users className="h-4 w-4" />
-                                <span>{item.citation_count || 0} citations</span>
-                              </div>
-                              {item.subject_area && item.subject_area.length > 0 && (
+                            <div className="flex items-center justify-between pt-4 border-t border-border">
+                              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                                 <div className="flex items-center space-x-1">
-                                  <Building className="h-4 w-4" />
-                                  <span className="line-clamp-1">{item.subject_area[0]}</span>
+                                  <FileText className="h-4 w-4" />
+                                  <span>{item.publication_year || "N/A"}</span>
                                 </div>
-                              )}
+                                <div className="flex items-center space-x-1">
+                                  <Users className="h-4 w-4" />
+                                  <span>{item.citation_count || 0} citations</span>
+                                </div>
+                                {item.subject_area && item.subject_area.length > 0 && (
+                                  <div className="flex items-center space-x-1">
+                                    <Building className="h-4 w-4" />
+                                    <span className="line-clamp-1">{item.subject_area[0]}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Subject Area Tags */}
-                          {item.subject_area && item.subject_area.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {item.subject_area.slice(0, 3).map((area, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {area}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                            {/* Subject Area Tags */}
+                            {item.subject_area && item.subject_area.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {item.subject_area.slice(0, 3).map((area, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs">
+                                    {area}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -557,37 +695,60 @@ const Explore = () => {
                       Found <span className="font-semibold text-primary">{relatedFaculty.length}</span> related faculty members
                     </p>
                   </div>
-                  <div className="space-y-8">
+                  <div className="space-y-6">
                     {sortedDepartments.map((department) => (
-                      <div key={department} className="space-y-4">
-                        {/* Department Header */}
-                        <div className="flex items-center gap-3 pb-2 border-b-2 border-primary/20">
-                          <Building className="h-6 w-6 text-primary" />
-                          <h2 className="text-xl font-bold text-primary">{department}</h2>
-                          <Badge variant="secondary" className="ml-auto">
-                            {groupedByDepartment[department].length} faculty
+                      <div key={department} className="rounded-xl border border-border/50 bg-card/50 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        {/* Department Header - Clickable */}
+                        <button
+                          onClick={() => toggleDepartment(`people-${department}`)}
+                          className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Building className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <h2 className="text-lg font-bold text-foreground">{department}</h2>
+                            <p className="text-xs text-muted-foreground">{groupedByDepartment[department].length} faculty members</p>
+                          </div>
+                          <Badge variant="secondary" className="mr-2">
+                            {groupedByDepartment[department].length}
                           </Badge>
-                        </div>
+                          <ChevronDown 
+                            className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${
+                              isDeptExpanded(`people-${department}`) ? 'rotate-180' : ''
+                            }`} 
+                          />
+                        </button>
 
-                        {/* Faculty Grid for this Department */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {groupedByDepartment[department].map((faculty) => (
-                            <Card key={faculty._id} className="hover:shadow-elegant transition-smooth border-border">
-                              <CardContent className="p-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <Users className="h-5 w-5 text-primary" />
+                        {/* Faculty Grid for this Department - Collapsible */}
+                        <div
+                          className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                            isDeptExpanded(`people-${department}`) ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'
+                          }`}
+                        >
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 pt-0">
+                            {groupedByDepartment[department].map((faculty) => (
+                              <Card 
+                                key={faculty._id} 
+                                className="hover:shadow-elegant transition-smooth border-border cursor-pointer"
+                                onClick={() => handleFacultyClick(faculty)}
+                              >
+                                <CardContent className="p-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                      <Users className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div>
+                                      <h3 className="font-semibold">{faculty.name}</h3>
+                                      <p className="text-sm text-muted-foreground">
+                                        {faculty.email}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <h3 className="font-semibold">{faculty.name}</h3>
-                                    <a href={`mailto:${faculty.email}`} className="text-sm text-primary hover:underline">
-                                      {faculty.email}
-                                    </a>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -738,6 +899,16 @@ const Explore = () => {
           </div>
         </div>
       )}
+
+      {/* Faculty Detail Modal for People Tab */}
+      <FacultyModal
+        faculty={selectedPeopleFaculty}
+        open={facultyModalOpen}
+        onClose={() => {
+          setFacultyModalOpen(false);
+          setSelectedPeopleFaculty(null);
+        }}
+      />
 
       <Footer />
     </div>
