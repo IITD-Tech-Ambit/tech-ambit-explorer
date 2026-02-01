@@ -85,9 +85,70 @@ export interface DeleteCommentRequest {
 
 // Thesis/Mind Map Types
 export interface DepartmentCollection {
-    collection_id: string;
+    _id: string;
+    name: string;
+}
+
+export interface Faculty {
+    _id: string;
+    name: string;
+}
+
+export interface PhdThesisData {
+    _id: string;
+    title: string;
+    contributor: {
+        advisor: {
+            matched_profile: string | null;
+            name: string;
+        };
+        author: string;
+    };
+    department_code: string;
     department_name: string;
-    handle: string;
+    document_id: string;
+    document_type: string;
+    field_associated: string;
+    link: string;
+    open_search_id: string;
+    publication_year: number | null;
+    subject_area: string[];
+}
+
+export interface ResearchData {
+    _id: string;
+    title: string;
+    abstract: string;
+    authors: Array<{
+        _id: string;
+        author_affiliation: string;
+        author_avaialable_names: string[];
+        author_eid: string;
+        author_email: string;
+        author_id: string;
+        author_name: string;
+        author_orcid: string;
+        author_position: string;
+        matched_profile?: string;
+    }>;
+    citation_count: number;
+    document_eid: string;
+    document_scopus_id: string;
+    document_type: string;
+    field_associated: string;
+    link: string;
+    open_search_id: string;
+    publication_year: number;
+    reference_count: number;
+    subject_area: string[];
+}
+
+export interface OpenPathResponse {
+    project_type: 'PHD Thesis' | 'Research';
+    faculty_id: string;
+    department_id: string;
+    category: 'Departments' | 'Schools' | 'Centres';
+    doc_id: string | null;
 }
 
 export interface ThesisData {

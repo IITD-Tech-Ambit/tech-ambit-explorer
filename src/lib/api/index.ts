@@ -16,6 +16,16 @@ export * from './services/analyticsService';
 export * from './services/thesisService';
 export * from './services/searchService';
 
+// Re-export specific types for convenience
+export type { 
+  DepartmentCollection, 
+  ThesisData, 
+  Faculty, 
+  PhdThesisData, 
+  ResearchData, 
+  OpenPathResponse 
+} from './types';
+
 // Query Keys
 export { queryKeys } from './hooks/queryKeys';
 

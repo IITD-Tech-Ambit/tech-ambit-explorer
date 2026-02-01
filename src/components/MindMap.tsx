@@ -16,16 +16,26 @@ import { Plus, Minus, Maximize2, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import CustomNode, { CustomNodeData, NodeType } from './CustomNode';
 import ThesisCard from './ThesisCard';
+import PhdThesisCard from './PhdThesisCard';
+import ResearchCard from './ResearchCard';
 import {
   fetchCategories,
   fetchDepartments,
   fetchSchools,
   fetchCentres,
-  fetchProfessors,
-  fetchStudents,
-  fetchTheses,
+  fetchFaculties,
+  fetchProjectTypes,
+  fetchPhdTheses,
+  fetchPhdThesisById,
+  fetchResearch,
+  fetchResearchById,
   fetchThesisById,
   ThesisData,
+  PhdThesisData,
+  ResearchData,
+  DepartmentCollection,
+  Faculty,
+  OpenPathResponse,
 } from '@/lib/api';
 
 // Top-level configurable constants
@@ -62,21 +72,28 @@ const sortNodeIds = (ids: string[]) => {
   });
 };
 
-const MindMapContent = () => {
+interface MindMapContentProps {
+  navigationPath: OpenPathResponse | null;
+  onNavigationComplete: () => void;
+}
+
+const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContentProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CustomNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { fitView, setCenter, getZoom, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, getZoom, zoomIn, zoomOut } = useReactFlow();
   const [zoomLevel, setZoomLevel] = useState(100);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedThesis, setSelectedThesis] = useState<ThesisData | null>(null);
+  const [selectedPhdThesis, setSelectedPhdThesis] = useState<PhdThesisData | null>(null);
+  const [selectedResearch, setSelectedResearch] = useState<ResearchData | null>(null);
   const expandedNodes = useRef<Set<string>>(new Set());
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Pagination state
   const [pendingChildren, setPendingChildren] = useState<{
     parentId: string;
-    children: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>;
+    children: Array<{ label: string; nodeType: NodeType; categoryName?: string; departmentName?: string; departmentId?: string; facultyId?: string; thesisId?: string; phdThesisId?: string; researchId?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>;
     currentIndex: number;
   } | null>(null);
   const BATCH_SIZE = 5;
@@ -88,7 +105,7 @@ const MindMapContent = () => {
       type: 'custom',
       position: { x: 0, y: 0 },
       data: {
-        label: 'Thesis',
+        label: 'IITD Research',
         level: 1,
         expanded: false,
         isMaxDepth: false,
@@ -250,9 +267,9 @@ const MindMapContent = () => {
   }, [calculateSubtreeHeight]);
 
   // Fetch children data from API (without creating nodes)
-  const fetchChildrenData = useCallback(async (parentNode: Node<CustomNodeData>): Promise<Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>> => {
+  const fetchChildrenData = useCallback(async (parentNode: Node<CustomNodeData>): Promise<Array<{ label: string; nodeType: NodeType; categoryName?: string; departmentName?: string; departmentId?: string; facultyId?: string; thesisId?: string; phdThesisId?: string; researchId?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>> => {
     const parentNodeType = parentNode.data.nodeType;
-    let childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }> = [];
+    let childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; departmentName?: string; departmentId?: string; facultyId?: string; thesisId?: string; phdThesisId?: string; researchId?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }> = [];
 
     try {
       // Level 1 (Root) -> Level 2 (Categories)
@@ -267,7 +284,7 @@ const MindMapContent = () => {
       // Level 2 (Category) -> Level 3 (Collections - Departments/Schools/Centres)
       else if (parentNodeType === 'category') {
         const categoryName = parentNode.data.categoryName?.toLowerCase();
-        let collections;
+        let collections: DepartmentCollection[];
         
         if (categoryName === 'departments') {
           collections = await fetchDepartments();
@@ -279,38 +296,52 @@ const MindMapContent = () => {
           collections = [];
         }
         
-        childrenData = collections.map(col => ({
-          label: col.department_name,
+        childrenData = collections.map(dept => ({
+          label: dept.name,
           nodeType: 'collection' as NodeType,
-          handle: col.handle,
+          departmentName: dept.name,
+          departmentId: dept._id,
         }));
       }
-      // Level 3 (Collection) -> Level 4 (Professors)
-      else if (parentNodeType === 'collection' && parentNode.data.handle) {
-        const professors = await fetchProfessors(parentNode.data.handle);
-        childrenData = professors.map(prof => ({
-          label: prof,
+      // Level 3 (Collection) -> Level 4 (Faculties)
+      else if (parentNodeType === 'collection' && parentNode.data.departmentId) {
+        const faculties = await fetchFaculties(parentNode.data.departmentId);
+        childrenData = faculties.map((faculty: Faculty) => ({
+          label: faculty.name,
           nodeType: 'professor' as NodeType,
-          professorName: prof,
+          professorName: faculty.name,
+          facultyId: faculty._id,
         }));
       }
-      // Level 4 (Professor) -> Level 5 (Students)
-      else if (parentNodeType === 'professor' && parentNode.data.professorName) {
-        const students = await fetchStudents(parentNode.data.professorName);
-        childrenData = students.map(student => ({
-          label: student,
+      // Level 4 (Professor) -> Level 5 (Project Types)
+      else if (parentNodeType === 'professor' && parentNode.data.facultyId) {
+        const projectTypes = await fetchProjectTypes();
+        childrenData = projectTypes.map(type => ({
+          label: type,
           nodeType: 'student' as NodeType,
-          studentName: student,
+          studentName: type,
+          facultyId: parentNode.data.facultyId,
         }));
       }
-      // Level 5 (Student) -> Level 6 (Theses)
-      else if (parentNodeType === 'student' && parentNode.data.studentName) {
-        const theses = await fetchTheses(parentNode.data.studentName);
-        childrenData = theses.map(thesis => ({
-          label: thesis.dc_title || 'Untitled Thesis',
-          nodeType: 'thesis' as NodeType,
-          thesisData: thesis,
-        }));
+      // Level 5 (Student/Project Type) -> Level 6 (Theses)
+      else if (parentNodeType === 'student' && parentNode.data.studentName && parentNode.data.facultyId) {
+        if (parentNode.data.studentName === 'PHD Thesis') {
+          const theses = await fetchPhdTheses(parentNode.data.facultyId);
+          childrenData = theses.map(thesis => ({
+            label: thesis.title,
+            nodeType: 'thesis' as NodeType,
+            phdThesisId: thesis._id,
+            thesisData: undefined,
+          }));
+        } else if (parentNode.data.studentName === 'Research') {
+          const research = await fetchResearch(parentNode.data.facultyId);
+          childrenData = research.map(paper => ({
+            label: paper.title,
+            nodeType: 'thesis' as NodeType,
+            researchId: paper._id,
+            thesisData: undefined,
+          }));
+        }
       }
     } catch (error) {
       console.error('Error fetching children:', error);
@@ -322,7 +353,7 @@ const MindMapContent = () => {
   // Create nodes and edges from children data
   const createNodesFromChildren = useCallback((
     parentNode: Node<CustomNodeData>,
-    childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>,
+    childrenData: Array<{ label: string; nodeType: NodeType; categoryName?: string; departmentName?: string; departmentId?: string; facultyId?: string; thesisId?: string; phdThesisId?: string; researchId?: string; handle?: string; professorName?: string; studentName?: string; thesisData?: ThesisData }>,
     startIndex: number
   ): { nodes: Node<CustomNodeData>[]; edges: Edge[] } => {
     const newLevel = parentNode.data.level + 1;
@@ -345,6 +376,12 @@ const MindMapContent = () => {
           selected: false,
           nodeType: child.nodeType,
           categoryName: child.categoryName,
+          departmentName: child.departmentName,
+          departmentId: child.departmentId,
+          facultyId: child.facultyId,
+          thesisId: child.thesisId,
+          phdThesisId: child.phdThesisId,
+          researchId: child.researchId,
           handle: child.handle,
           professorName: child.professorName,
           studentName: child.studentName,
@@ -356,7 +393,6 @@ const MindMapContent = () => {
         id: `e-${parentNode.id}-${childId}`,
         source: parentNode.id,
         target: childId,
-        animated: true,
         type: 'smoothstep',
         style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
       });
@@ -386,21 +422,779 @@ const MindMapContent = () => {
     return descendants;
   }, []);
 
+  // Handle programmatic navigation when navigationPath changes
+  useEffect(() => {
+    if (!navigationPath) return;
+
+    // Use refs to track state during async operations
+    const pendingChildrenRef = { current: null as typeof pendingChildren };
+    const nodesRef = { current: nodes };
+
+    const navigateToPath = async () => {
+      setIsLoading(true);
+      
+      try {
+        // Step 0: Collapse everything first - reset to only root node
+        expandedNodes.current.clear();
+        setPendingChildren(null);
+        
+        const rootNode: Node<CustomNodeData> = {
+          id: '1',
+          type: 'custom',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'IITD Research',
+            level: 1,
+            expanded: false,
+            isMaxDepth: false,
+            selected: false,
+            nodeType: 'root',
+          },
+        };
+        
+        await new Promise<void>((resolve) => {
+          setNodes([rootNode]);
+          setEdges([]);
+          nodesRef.current = [rootNode];
+          setTimeout(resolve, 100);
+        });
+
+        // Step 1: Find and expand the root node (Layer 1 - "IITD Research")
+        const currentRootNode = nodesRef.current.find(n => n.id === '1');
+        if (!currentRootNode) {
+          console.error('Root node not found');
+          return;
+        }
+
+        // Check if root is already expanded
+        const isRootExpanded = expandedNodes.current.has('1');
+        
+        if (!isRootExpanded) {
+          // Expand root node to show categories
+          const childrenData = await fetchChildrenData(currentRootNode as Node<CustomNodeData>);
+          
+          if (childrenData.length === 0) {
+            console.error('No children data for root node');
+            return;
+          }
+
+          const initialBatch = childrenData.slice(0, BATCH_SIZE);
+          const remaining = childrenData.slice(BATCH_SIZE);
+          
+          if (remaining.length > 0) {
+            setPendingChildren({
+              parentId: currentRootNode.id,
+              children: remaining,
+              currentIndex: BATCH_SIZE
+            });
+          }
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            currentRootNode as Node<CustomNodeData>,
+            initialBatch,
+            0
+          );
+
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              let updatedNodes = [...prevNodes, ...newNodes];
+              expandedNodes.current.add('1');
+              
+              updatedNodes = updatedNodes.map(n => 
+                n.id === '1' 
+                  ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+                  : { ...n, data: { ...n.data, selected: false } }
+              );
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Wait for state to update before proceeding to Layer 2
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Step 2: Find and expand the category node (Layer 2)
+        let categoryNode: Node<CustomNodeData> | undefined;
+        
+        await new Promise<void>((resolve) => {
+          setNodes((currentNodes) => {
+            nodesRef.current = currentNodes;
+            categoryNode = currentNodes.find(n => 
+              n.data.level === 2 && 
+              n.data.categoryName === navigationPath.category
+            ) as Node<CustomNodeData> | undefined;
+            resolve();
+            return currentNodes;
+          });
+        });
+
+        if (!categoryNode) {
+          console.error(`Category node not found for: ${navigationPath.category}`);
+          onNavigationComplete();
+          return;
+        }
+
+        console.log(`Found category node: ${categoryNode.data.label} (ID: ${categoryNode.id})`);
+        
+        // Expand the category node
+        const isCategoryExpanded = expandedNodes.current.has(categoryNode.id);
+        
+        if (!isCategoryExpanded) {
+          const childrenData = await fetchChildrenData(categoryNode as Node<CustomNodeData>);
+          
+          if (childrenData.length === 0) {
+            console.error('No children data for category node');
+            onNavigationComplete();
+            return;
+          }
+
+          const initialBatch = childrenData.slice(0, BATCH_SIZE);
+          const remaining = childrenData.slice(BATCH_SIZE);
+          
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: categoryNode.id,
+              children: remaining,
+              currentIndex: BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            categoryNode as Node<CustomNodeData>,
+            initialBatch,
+            0
+          );
+
+          const categoryNodeId = categoryNode.id;
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              let updatedNodes = [...prevNodes, ...newNodes];
+              expandedNodes.current.add(categoryNodeId);
+              
+              updatedNodes = updatedNodes.map(n => 
+                n.id === categoryNodeId 
+                  ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+                  : { ...n, data: { ...n.data, selected: false } }
+              );
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Step 3: Find the department node (Layer 3)
+        // Keep loading batches until we find the target department or exhaust all children
+        const categoryNodeId = categoryNode.id;
+        let departmentNode: Node<CustomNodeData> | undefined;
+        let attempts = 0;
+        const maxAttempts = 100; // Safety limit to prevent infinite loops
+
+        while (!departmentNode && attempts < maxAttempts) {
+          attempts++;
+          
+          // Check current nodes for the department
+          await new Promise<void>((resolve) => {
+            setNodes((currentNodes) => {
+              nodesRef.current = currentNodes;
+              departmentNode = currentNodes.find(n => 
+                n.data.level === 3 && 
+                n.data.departmentId === navigationPath.department_id
+              ) as Node<CustomNodeData> | undefined;
+              resolve();
+              return currentNodes;
+            });
+          });
+
+          if (departmentNode) {
+            console.log(`Found department node: ${departmentNode.data.label} (ID: ${departmentNode.id})`);
+            break;
+          }
+
+          // Check if there are more children to load for this category
+          let currentPendingChildren: typeof pendingChildren = null;
+          await new Promise<void>((resolve) => {
+            setPendingChildren((current) => {
+              currentPendingChildren = current;
+              pendingChildrenRef.current = current;
+              resolve();
+              return current;
+            });
+          });
+
+          if (!currentPendingChildren || currentPendingChildren.parentId !== categoryNodeId) {
+            console.error(`Department not found: ${navigationPath.department_id}. All batches exhausted.`);
+            break;
+          }
+
+          // Load next batch
+          console.log(`Department not in current batch, loading next batch... (attempt ${attempts})`);
+          
+          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
+          if (!parentNode) {
+            console.error('Parent node not found for loading next batch');
+            break;
+          }
+
+          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
+          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
+          const startIndex = currentPendingChildren.currentIndex;
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            parentNode as Node<CustomNodeData>,
+            nextBatch,
+            startIndex
+          );
+
+          // Update pending children state
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: currentPendingChildren.parentId,
+              children: remaining,
+              currentIndex: startIndex + BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              const updatedNodes = [...prevNodes, ...newNodes];
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        if (!departmentNode) {
+          console.error(`Department node not found after ${attempts} attempts`);
+          onNavigationComplete();
+          return;
+        }
+
+        // Step 4: Expand the department node (Layer 3) to show faculties
+        const isDepartmentExpanded = expandedNodes.current.has(departmentNode.id);
+        
+        if (!isDepartmentExpanded) {
+          const childrenData = await fetchChildrenData(departmentNode as Node<CustomNodeData>);
+          
+          if (childrenData.length === 0) {
+            console.log('No children data for department node');
+            onNavigationComplete();
+            return;
+          }
+
+          const initialBatch = childrenData.slice(0, BATCH_SIZE);
+          const remaining = childrenData.slice(BATCH_SIZE);
+          
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: departmentNode.id,
+              children: remaining,
+              currentIndex: BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            departmentNode as Node<CustomNodeData>,
+            initialBatch,
+            0
+          );
+
+          const departmentNodeId = departmentNode.id;
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              let updatedNodes = [...prevNodes, ...newNodes];
+              expandedNodes.current.add(departmentNodeId);
+              
+              updatedNodes = updatedNodes.map(n => 
+                n.id === departmentNodeId 
+                  ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+                  : { ...n, data: { ...n.data, selected: false } }
+              );
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Step 5: Find the faculty node (Layer 4)
+        // Keep loading batches until we find the target faculty or exhaust all children
+        const departmentNodeId = departmentNode.id;
+        let facultyNode: Node<CustomNodeData> | undefined;
+        attempts = 0; // Reset attempts counter
+
+        while (!facultyNode && attempts < maxAttempts) {
+          attempts++;
+          
+          // Check current nodes for the faculty
+          await new Promise<void>((resolve) => {
+            setNodes((currentNodes) => {
+              nodesRef.current = currentNodes;
+              facultyNode = currentNodes.find(n => 
+                n.data.level === 4 && 
+                n.data.facultyId === navigationPath.faculty_id
+              ) as Node<CustomNodeData> | undefined;
+              resolve();
+              return currentNodes;
+            });
+          });
+
+          if (facultyNode) {
+            console.log(`Found faculty node: ${facultyNode.data.label} (ID: ${facultyNode.id})`);
+            break;
+          }
+
+          // Check if there are more children to load for this department
+          let currentPendingChildren: typeof pendingChildren = null;
+          await new Promise<void>((resolve) => {
+            setPendingChildren((current) => {
+              currentPendingChildren = current;
+              pendingChildrenRef.current = current;
+              resolve();
+              return current;
+            });
+          });
+
+          if (!currentPendingChildren || currentPendingChildren.parentId !== departmentNodeId) {
+            console.error(`Faculty not found: ${navigationPath.faculty_id}. All batches exhausted.`);
+            break;
+          }
+
+          // Load next batch
+          console.log(`Faculty not in current batch, loading next batch... (attempt ${attempts})`);
+          
+          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
+          if (!parentNode) {
+            console.error('Parent node not found for loading next batch');
+            break;
+          }
+
+          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
+          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
+          const startIndex = currentPendingChildren.currentIndex;
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            parentNode as Node<CustomNodeData>,
+            nextBatch,
+            startIndex
+          );
+
+          // Update pending children state
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: currentPendingChildren.parentId,
+              children: remaining,
+              currentIndex: startIndex + BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              const updatedNodes = [...prevNodes, ...newNodes];
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        if (!facultyNode) {
+          console.error(`Faculty node not found after ${attempts} attempts`);
+          onNavigationComplete();
+          return;
+        }
+
+        // Step 6: Expand the faculty node (Layer 4) to show project types
+        const isFacultyExpanded = expandedNodes.current.has(facultyNode.id);
+        
+        if (!isFacultyExpanded) {
+          const childrenData = await fetchChildrenData(facultyNode as Node<CustomNodeData>);
+          
+          if (childrenData.length === 0) {
+            console.log('No children data for faculty node');
+            onNavigationComplete();
+            return;
+          }
+
+          const initialBatch = childrenData.slice(0, BATCH_SIZE);
+          const remaining = childrenData.slice(BATCH_SIZE);
+          
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: facultyNode.id,
+              children: remaining,
+              currentIndex: BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            facultyNode as Node<CustomNodeData>,
+            initialBatch,
+            0
+          );
+
+          const facultyNodeId = facultyNode.id;
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              let updatedNodes = [...prevNodes, ...newNodes];
+              expandedNodes.current.add(facultyNodeId);
+              
+              updatedNodes = updatedNodes.map(n => 
+                n.id === facultyNodeId 
+                  ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+                  : { ...n, data: { ...n.data, selected: false } }
+              );
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Step 7: Find and expand the project type node (Layer 5)
+        // Project types are "PHD Thesis" or "Research" - only 2 options, so no batch loading needed
+        const facultyNodeId = facultyNode.id;
+        let projectTypeNode: Node<CustomNodeData> | undefined;
+        
+        await new Promise<void>((resolve) => {
+          setNodes((currentNodes) => {
+            nodesRef.current = currentNodes;
+            // Find the project type node that matches navigationPath.project_type
+            // The node's label or studentName should match the project_type
+            projectTypeNode = currentNodes.find(n => 
+              n.data.level === 5 && 
+              n.id.startsWith(facultyNodeId + '-') &&
+              (n.data.label === navigationPath.project_type || n.data.studentName === navigationPath.project_type)
+            ) as Node<CustomNodeData> | undefined;
+            resolve();
+            return currentNodes;
+          });
+        });
+
+        if (!projectTypeNode) {
+          console.error(`Project type node not found for: ${navigationPath.project_type}`);
+          onNavigationComplete();
+          return;
+        }
+
+        console.log(`Found project type node: ${projectTypeNode.data.label} (ID: ${projectTypeNode.id})`);
+
+        // Expand the project type node to show documents
+        const isProjectTypeExpanded = expandedNodes.current.has(projectTypeNode.id);
+        
+        if (!isProjectTypeExpanded) {
+          const childrenData = await fetchChildrenData(projectTypeNode as Node<CustomNodeData>);
+          
+          if (childrenData.length === 0) {
+            console.log('No children data for project type node');
+            onNavigationComplete();
+            return;
+          }
+
+          const initialBatch = childrenData.slice(0, BATCH_SIZE);
+          const remaining = childrenData.slice(BATCH_SIZE);
+          
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: projectTypeNode.id,
+              children: remaining,
+              currentIndex: BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            projectTypeNode as Node<CustomNodeData>,
+            initialBatch,
+            0
+          );
+
+          const projectTypeNodeId = projectTypeNode.id;
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              let updatedNodes = [...prevNodes, ...newNodes];
+              expandedNodes.current.add(projectTypeNodeId);
+              
+              updatedNodes = updatedNodes.map(n => 
+                n.id === projectTypeNodeId 
+                  ? { ...n, data: { ...n.data, expanded: true, selected: true } }
+                  : { ...n, data: { ...n.data, selected: false } }
+              );
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Step 8: Find the document node (Layer 6) and highlight the path
+        // Keep loading batches until we find the target document or exhaust all children
+        const projectTypeNodeId = projectTypeNode.id;
+        let documentNode: Node<CustomNodeData> | undefined;
+        attempts = 0; // Reset attempts counter
+
+        while (!documentNode && attempts < maxAttempts) {
+          attempts++;
+          
+          // Check current nodes for the document
+          await new Promise<void>((resolve) => {
+            setNodes((currentNodes) => {
+              nodesRef.current = currentNodes;
+              // Find the document node that matches navigationPath.doc_id
+              // The node's phdThesisId or researchId should match the doc_id
+              documentNode = currentNodes.find(n => 
+                n.data.level === 6 && 
+                n.id.startsWith(projectTypeNodeId + '-') &&
+                (n.data.phdThesisId === navigationPath.doc_id || n.data.researchId === navigationPath.doc_id)
+              ) as Node<CustomNodeData> | undefined;
+              resolve();
+              return currentNodes;
+            });
+          });
+
+          if (documentNode) {
+            console.log(`Found document node: ${documentNode.data.label} (ID: ${documentNode.id})`);
+            break;
+          }
+
+          // Check if there are more children to load for this project type
+          let currentPendingChildren: typeof pendingChildren = null;
+          await new Promise<void>((resolve) => {
+            setPendingChildren((current) => {
+              currentPendingChildren = current;
+              pendingChildrenRef.current = current;
+              resolve();
+              return current;
+            });
+          });
+
+          if (!currentPendingChildren || currentPendingChildren.parentId !== projectTypeNodeId) {
+            console.error(`Document not found: ${navigationPath.doc_id}. All batches exhausted.`);
+            break;
+          }
+
+          // Load next batch
+          console.log(`Document not in current batch, loading next batch... (attempt ${attempts})`);
+          
+          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
+          if (!parentNode) {
+            console.error('Parent node not found for loading next batch');
+            break;
+          }
+
+          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
+          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
+          const startIndex = currentPendingChildren.currentIndex;
+
+          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
+            parentNode as Node<CustomNodeData>,
+            nextBatch,
+            startIndex
+          );
+
+          // Update pending children state
+          if (remaining.length > 0) {
+            const newPendingChildren = {
+              parentId: currentPendingChildren.parentId,
+              children: remaining,
+              currentIndex: startIndex + BATCH_SIZE
+            };
+            setPendingChildren(newPendingChildren);
+            pendingChildrenRef.current = newPendingChildren;
+          } else {
+            setPendingChildren(null);
+            pendingChildrenRef.current = null;
+          }
+
+          await new Promise<void>((resolve) => {
+            setNodes((prevNodes) => {
+              const updatedNodes = [...prevNodes, ...newNodes];
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        // Step 9: Highlight the entire path from root to document
+        if (documentNode) {
+          // Get all node IDs in the path (e.g., "1-2-3-4-1-2" -> ["1", "1-2", "1-2-3", "1-2-3-4", "1-2-3-4-1", "1-2-3-4-1-2"])
+          const pathNodeIds: string[] = [];
+          const parts = documentNode.id.split('-');
+          for (let i = 1; i <= parts.length; i++) {
+            pathNodeIds.push(parts.slice(0, i).join('-'));
+          }
+          
+          console.log('Highlighting path:', pathNodeIds);
+
+          // Update all nodes to highlight the path
+          await new Promise<void>((resolve) => {
+            setNodes((currentNodes) => {
+              const updatedNodes = currentNodes.map(n => ({
+                ...n,
+                data: {
+                  ...n.data,
+                  highlighted: pathNodeIds.includes(n.id),
+                  selected: n.id === documentNode!.id, // Select only the final document node
+                }
+              }));
+              
+              const layoutedNodes = calculateTreeLayout(updatedNodes);
+              nodesRef.current = layoutedNodes;
+              setTimeout(resolve, 100);
+              return layoutedNodes;
+            });
+          });
+
+          // Also highlight the edges in the path by matching source and target
+          setEdges((prevEdges) => 
+            prevEdges.map(edge => {
+              // Check if this edge connects two consecutive nodes in the path
+              const sourceIndex = pathNodeIds.indexOf(edge.source);
+              const targetIndex = pathNodeIds.indexOf(edge.target);
+              const isPathEdge = sourceIndex !== -1 && targetIndex !== -1 && targetIndex === sourceIndex + 1;
+              
+              return {
+                ...edge,
+                style: isPathEdge
+                  ? { 
+                      stroke: 'hsl(45, 100%, 50%)', 
+                      strokeWidth: 4,
+                      filter: 'drop-shadow(0 0 8px hsl(45, 100%, 50%)) drop-shadow(0 0 16px hsl(45, 100%, 50%, 0.6))'
+                    }
+                  : { stroke: 'hsl(var(--primary))', strokeWidth: 2 }
+              };
+            })
+          );
+        } else {
+          console.error(`Document node not found after ${attempts} attempts`);
+        }
+
+        // Mark navigation as complete
+        onNavigationComplete();
+
+      } catch (error) {
+        console.error('Error during navigation:', error);
+        onNavigationComplete();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    navigateToPath();
+  }, [navigationPath]);
+
   // Handle node click with debouncing
   const handleNodeClick = useCallback(async (event: React.MouseEvent, node: Node<CustomNodeData>) => {
     event.stopPropagation();
     
-    // If it's a thesis node, show the thesis card
-    if (node.data.nodeType === 'thesis' && node.data.thesisData) {
+    // Clear any highlighting from navigation path
+    setNodes((prevNodes) => 
+      prevNodes.map(n => ({
+        ...n,
+        data: { ...n.data, highlighted: false, selected: false }
+      }))
+    );
+    setEdges((prevEdges) => 
+      prevEdges.map(edge => ({
+        ...edge,
+        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 }
+      }))
+    );
+    
+    // If it's a thesis node, show the appropriate thesis card
+    if (node.data.nodeType === 'thesis') {
       setIsLoading(true);
       try {
-        // Fetch full thesis details
-        const thesisDetails = await fetchThesisById(node.data.thesisData.id);
-        setSelectedThesis(thesisDetails);
+        // Check if it's a PhD thesis
+        if (node.data.phdThesisId) {
+          const phdThesisDetails = await fetchPhdThesisById(node.data.phdThesisId);
+          setSelectedPhdThesis(phdThesisDetails);
+        }
+        // Check if it's a research paper
+        else if (node.data.researchId) {
+          const researchDetails = await fetchResearchById(node.data.researchId);
+          setSelectedResearch(researchDetails);
+        }
+        // Otherwise it's a regular thesis
+        else if (node.data.thesisData) {
+          const thesisDetails = await fetchThesisById(node.data.thesisData.id);
+          setSelectedThesis(thesisDetails);
+        }
       } catch (error) {
         console.error('Error fetching thesis details:', error);
-        // Fallback to the data we already have
-        setSelectedThesis(node.data.thesisData);
+        // Fallback to the data we already have for regular thesis
+        if (node.data.thesisData) {
+          setSelectedThesis(node.data.thesisData);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -616,7 +1410,7 @@ const MindMapContent = () => {
   };
 
   return (
-    <div className="w-full h-[calc(100vh-5rem)] relative">
+    <div className="w-full h-full relative">
       {isLoading && (
         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="flex items-center gap-2 bg-background p-4 rounded-lg shadow-lg border">
@@ -640,7 +1434,6 @@ const MindMapContent = () => {
         proOptions={{ hideAttribution: true }}
       >
         <Background />
-        <Controls showInteractive={false} />
         
         <Panel position="top-right" className="bg-background/95 backdrop-blur p-3 rounded-lg border border-border shadow-lg">
           <div className="flex flex-col gap-2">
@@ -701,15 +1494,6 @@ const MindMapContent = () => {
           </div>
         </Panel>
 
-        <Panel position="bottom-left" className="bg-background/95 backdrop-blur p-3 rounded-lg border border-border shadow-lg">
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p><kbd className="px-1.5 py-0.5 bg-muted rounded">Click</kbd> node to expand/collapse</p>
-            <p><kbd className="px-1.5 py-0.5 bg-muted rounded">Drag</kbd> background to pan</p>
-            <p><kbd className="px-1.5 py-0.5 bg-muted rounded">Scroll</kbd> to zoom</p>
-            <p><kbd className="px-1.5 py-0.5 bg-muted rounded">Esc</kbd> to collapse all</p>
-          </div>
-        </Panel>
-
       </ReactFlow>
 
       {/* Thesis Details Card */}
@@ -719,14 +1503,38 @@ const MindMapContent = () => {
           onClose={() => setSelectedThesis(null)} 
         />
       )}
+
+      {/* PhD Thesis Details Card */}
+      {selectedPhdThesis && (
+        <PhdThesisCard 
+          thesis={selectedPhdThesis} 
+          onClose={() => setSelectedPhdThesis(null)} 
+        />
+      )}
+
+      {/* Research Paper Details Card */}
+      {selectedResearch && (
+        <ResearchCard 
+          research={selectedResearch} 
+          onClose={() => setSelectedResearch(null)} 
+        />
+      )}
     </div>
   );
 };
 
-const MindMap = () => {
+interface MindMapProps {
+  navigationPath: OpenPathResponse | null;
+  onNavigationComplete: () => void;
+}
+
+const MindMap = ({ navigationPath, onNavigationComplete }: MindMapProps) => {
   return (
     <ReactFlowProvider>
-      <MindMapContent />
+      <MindMapContent 
+        navigationPath={navigationPath} 
+        onNavigationComplete={onNavigationComplete}
+      />
     </ReactFlowProvider>
   );
 };

@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import type { ThesisData } from '@/lib/api';
 
 export type NodeType = 'root' | 'category' | 'collection' | 'professor' | 'student' | 'thesis';
@@ -11,8 +10,15 @@ export interface CustomNodeData {
   expanded: boolean;
   isMaxDepth: boolean;
   selected?: boolean;
+  highlighted?: boolean;     // For navigation path highlighting
   nodeType: NodeType;
   categoryName?: string;      // For category nodes (Departments/Schools/Centres)
+  departmentName?: string;    // For collection nodes (department/school/centre name)
+  departmentId?: string;      // For collection nodes (department/school/centre ID)
+  facultyId?: string;         // For professor and student nodes (faculty member ID)
+  thesisId?: string;          // For regular thesis nodes (thesis ID)
+  phdThesisId?: string;       // For PhD thesis nodes (PhD thesis document ID)
+  researchId?: string;        // For research paper nodes (research document ID)
   handle?: string;            // For collection nodes (department/school/centre handle)
   professorName?: string;     // For professor nodes
   studentName?: string;       // For student nodes
@@ -40,13 +46,13 @@ const getLineHeight = (fontSize: number): number => {
 };
 
 const CustomNode = ({ data }: NodeProps) => {
-  const { label, level, expanded, isMaxDepth, selected } = data as CustomNodeData;
+  const { label, level, expanded, isMaxDepth, selected, highlighted } = data as CustomNodeData;
   
   const fontSize = getFontSize(label);
   const lineHeight = getLineHeight(fontSize);
   
-  // Color variations based on level
-  const getNodeColor = () => {
+  // Color variations based on level (for text)
+  const getTextColor = () => {
     const colors = [
       'hsl(var(--primary))',
       'hsl(280, 70%, 50%)',
@@ -58,6 +64,14 @@ const CustomNode = ({ data }: NodeProps) => {
       'hsl(300, 60%, 50%)',
     ];
     return colors[(level - 1) % colors.length];
+  };
+  
+  // Border color - golden if highlighted, otherwise based on level
+  const getBorderColor = () => {
+    if (highlighted) {
+      return 'hsl(45, 100%, 50%)';
+    }
+    return getTextColor();
   };
 
   return (
@@ -81,18 +95,20 @@ const CustomNode = ({ data }: NodeProps) => {
         style={{ 
           width: `${NODE_WIDTH}px`,
           height: `${NODE_HEIGHT}px`,
-          borderColor: getNodeColor(),
-          borderWidth: selected ? '4px' : '3px',
+          borderColor: getBorderColor(),
+          borderWidth: highlighted ? '5px' : (selected ? '4px' : '3px'),
           borderStyle: 'solid',
           backgroundColor: 'hsl(var(--background))',
-          boxShadow: selected ? `0 0 20px ${getNodeColor()}40` : undefined,
+          boxShadow: highlighted 
+            ? `0 0 25px hsl(45, 100%, 50%, 0.6), 0 0 50px hsl(45, 100%, 50%, 0.3)` 
+            : (selected ? `0 0 20px ${getBorderColor()}40` : undefined),
         }}
       >
         <div className="text-center px-2 w-full overflow-hidden flex items-center justify-center" style={{ height: `${NODE_HEIGHT - 16}px` }}>
           <p 
             className="font-bold leading-tight break-words"
             style={{ 
-              color: getNodeColor(),
+              color: getTextColor(),
               fontSize: `${fontSize}px`,
               lineHeight: lineHeight,
               wordBreak: 'break-word',
@@ -106,28 +122,6 @@ const CustomNode = ({ data }: NodeProps) => {
             {label}
           </p>
         </div>
-        
-        {isMaxDepth && (
-          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
-            <Lock className="h-3 w-3 text-muted-foreground" />
-          </div>
-        )}
-        
-        {!isMaxDepth && (
-          <div 
-            className="absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center transition-transform"
-            style={{ 
-              backgroundColor: getNodeColor(),
-              color: 'white',
-            }}
-          >
-            {expanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </div>
-        )}
       </div>
       
       {/* Source handle on RIGHT for parents (connects to children) */}
