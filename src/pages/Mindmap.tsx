@@ -1,31 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import MindMap from "@/components/MindMap";
-import NavigateModal from "@/components/NavigateModal";
-import { Button } from "@/components/ui/button";
-import { Compass, Loader2 } from "lucide-react";
-import { OpenPathResponse, fetchOpenPath } from "@/lib/api";
+import { OpenPathResponse } from "@/lib/api";
 
 const Mindmap = () => {
-  const [isNavigateModalOpen, setIsNavigateModalOpen] = useState(false);
+  const location = useLocation();
   const [navigationPath, setNavigationPath] = useState<OpenPathResponse | null>(null);
-  const [isLoadingPath, setIsLoadingPath] = useState(false);
 
-  const handleNavigate = async (documentJson: string) => {
-    setIsLoadingPath(true);
-    try {
-      // Parse the JSON string to object
-      const documentData = JSON.parse(documentJson);
-      const pathResponse = await fetchOpenPath(documentData);
-      setNavigationPath(pathResponse);
-      setIsNavigateModalOpen(false);
-    } catch (error) {
-      console.error('Error fetching open path:', error);
-      alert('Failed to fetch navigation path. Please check the document data.');
-    } finally {
-      setIsLoadingPath(false);
+  // Check if navigation path was passed from Explore page
+  useEffect(() => {
+    if (location.state?.navigationPath) {
+      setNavigationPath(location.state.navigationPath);
+      // Clear the location state to prevent re-triggering on component updates
+      window.history.replaceState({}, document.title);
     }
-  };
+  }, [location.state]);
 
   const handleNavigationComplete = () => {
     setNavigationPath(null);
@@ -39,13 +29,6 @@ const Mindmap = () => {
         <div className="h-full flex flex-col px-4 py-8">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-4xl md:text-5xl font-bold">Mind Map</h1>
-            <Button 
-              onClick={() => setIsNavigateModalOpen(true)}
-              className="flex items-center gap-2"
-            >
-              <Compass className="h-4 w-4" />
-              Navigate
-            </Button>
           </div>
           <div className="flex-1 overflow-hidden">
             <MindMap 
@@ -55,22 +38,6 @@ const Mindmap = () => {
           </div>
         </div>
       </main>
-
-      <NavigateModal
-        isOpen={isNavigateModalOpen}
-        onClose={() => setIsNavigateModalOpen(false)}
-        onSubmit={handleNavigate}
-      />
-
-      {/* Loading overlay for path fetching */}
-      {isLoadingPath && (
-        <div className="fixed inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="flex items-center gap-2 bg-background p-4 rounded-lg shadow-lg border">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">Fetching navigation path...</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

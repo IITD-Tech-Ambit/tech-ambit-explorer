@@ -1,17 +1,21 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { searchResearch, type SearchRequest, type SearchDocument, type SearchResponse, type RelatedFaculty } from "@/lib/api";
+import { searchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type SearchResponse, type RelatedFaculty } from "@/lib/api";
 
 const Explore = () => {
+  const navigate = useNavigate();
+  
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [results, setResults] = useState<SearchDocument[]>([]);
   const [pagination, setPagination] = useState<SearchResponse['pagination'] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -141,6 +145,26 @@ const Explore = () => {
         return [...prev, field];
       }
     });
+  };
+
+  // Handle navigate to mind map
+  const handleNavigateToMindMap = async (documentId: string) => {
+    setIsNavigating(true);
+    try {
+      // Step 1: Fetch full research document
+      const fullDocument = await fetchFullResearchDocument(documentId);
+      
+      // Step 2: Fetch open path
+      const pathResponse = await fetchOpenPath(fullDocument);
+      
+      // Step 3: Navigate to mind map with path
+      navigate('/mindmap', { state: { navigationPath: pathResponse } });
+    } catch (error) {
+      console.error('Error navigating to mind map:', error);
+      alert('Failed to navigate to mind map. Please ensure the research paper has a matched IIT Delhi faculty profile.');
+    } finally {
+      setIsNavigating(false);
+    }
   };
 
   // Filter results based on activeFilter (for display purposes)
@@ -679,10 +703,29 @@ const Explore = () => {
 
             {/* Modal Footer - Fixed at bottom */}
             <div className="flex justify-end gap-2 p-6 border-t border-border flex-shrink-0 bg-background shrink-0">
+              <Button
+                onClick={() => handleNavigateToMindMap(selectedDocument._id)}
+                disabled={isNavigating}
+                className="gap-2"
+                variant="default"
+              >
+                {isNavigating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Navigating...
+                  </>
+                ) : (
+                  <>
+                    <Compass className="h-4 w-4" />
+                    Navigate to Mind Map
+                  </>
+                )}
+              </Button>
               {selectedDocument.link && (
                 <Button
                   onClick={() => window.open(selectedDocument.link, '_blank', 'noopener,noreferrer')}
                   className="gap-2"
+                  variant="secondary"
                 >
                   <ExternalLink className="h-4 w-4" />
                   View Original Paper

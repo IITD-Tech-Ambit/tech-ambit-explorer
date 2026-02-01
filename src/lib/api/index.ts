@@ -26,6 +26,9 @@ export type {
   OpenPathResponse 
 } from './types';
 
+// Re-export specific functions
+export { fetchFullResearchDocument } from './services/thesisService';
+
 // Query Keys
 export { queryKeys } from './hooks/queryKeys';
 

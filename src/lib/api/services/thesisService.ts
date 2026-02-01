@@ -112,3 +112,16 @@ export const fetchOpenPath = async (documentData: object): Promise<OpenPathRespo
   if (!data.success) throw new Error(data.error || 'Failed to get open path');
   return data.data;
 };
+
+export const fetchFullResearchDocument = async (documentId: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/research/temporary`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ _id: documentId }),
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch full research document');
+  return data.data;
+};
