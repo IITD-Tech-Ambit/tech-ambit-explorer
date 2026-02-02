@@ -246,6 +246,7 @@ export interface DirectoryDepartment {
     _id: string;
     name: string;
     code: string;
+    category?: string;
 }
 
 export interface DirectoryFaculty {
@@ -258,6 +259,7 @@ export interface DirectoryFaculty {
     orcId?: string;
     scopusId?: string;
     department: DirectoryDepartment;
+    tags?: string[];
 }
 
 export interface DirectoryPagination {
@@ -272,6 +274,41 @@ export interface DirectoryPagination {
 export interface DirectoryResponse {
     data: DirectoryFaculty[];
     pagination: DirectoryPagination;
+}
+
+// Directory search response
+export interface DirectorySearchResult {
+    faculties: DirectoryFaculty[];
+    departments: DirectoryDepartment[];
+    total: number;
+}
+
+// Grouped departments response
+export interface GroupedDepartmentFaculty {
+    _id: string;
+    name: string;
+    email: string;
+    citationCount: number;
+    hIndex: number;
+    research_areas: string[];
+    orcId?: string;
+    scopusId?: string;
+}
+
+export interface GroupedDepartment {
+    _id: string;
+    department: DirectoryDepartment;
+    faculties: GroupedDepartmentFaculty[];
+    stats: {
+        totalFaculty: number;
+        avgHIndex: number;
+    };
+}
+
+export interface GroupedDepartmentsResponse {
+    departments: GroupedDepartment[];
+    totalDepartments: number;
+    totalFaculty: number;
 }
 
 export interface Coworker {

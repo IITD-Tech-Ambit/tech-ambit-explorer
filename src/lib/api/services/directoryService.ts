@@ -1,6 +1,17 @@
-import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse } from '../types';
+import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
 
 const API_BASE_URL = 'http://localhost:3002/api/directory';
+
+export const searchFaculties = async (
+    query: string,
+    limit: number = 10
+): Promise<DirectorySearchResult> => {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    const response = await fetch(`${API_BASE_URL}/search?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Search failed');
+    return data.data;
+};
 
 export const getFaculties = async (
     page: number = 1,
@@ -17,6 +28,16 @@ export const getFaculties = async (
     const response = await fetch(`${API_BASE_URL}?${params}`);
     const data = await response.json();
     if (!data.success) throw new Error('Failed to fetch faculties');
+    return data.data;
+};
+
+export const getGroupedFaculties = async (
+    category: string = 'departments'
+): Promise<GroupedDepartmentsResponse> => {
+    const params = new URLSearchParams({ category });
+    const response = await fetch(`${API_BASE_URL}/grouped?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Failed to fetch grouped faculties');
     return data.data;
 };
 
