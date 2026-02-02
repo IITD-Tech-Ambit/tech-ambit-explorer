@@ -462,7 +462,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
     const navigateToPath = async () => {
       setIsBuilding(true);
       setIsLoading(true);
-      setBuildingProgress('Initializing...');
+      setBuildingProgress('Preparing your journey...');
       
       // Zoom out initially to show building effect (very zoomed out to see the whole tree)
       setViewport({ x: 0, y: 0, zoom: 0.25 }, { duration: 300 });
@@ -494,7 +494,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         });
 
         // Step 1: Find and expand the root node (Layer 1 - "IITD Research")
-        setBuildingProgress('Loading categories...');
+        setBuildingProgress('Discovering research domains...');
         const currentRootNode = nodesRef.current.find(n => n.id === '1');
         if (!currentRootNode) {
           console.error('Root node not found');
@@ -575,7 +575,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         console.log(`Found category node: ${categoryNode.data.label} (ID: ${categoryNode.id})`);
-        setBuildingProgress(`Loading ${navigationPath.category}...`);
+        setBuildingProgress(`Exploring ${navigationPath.category}...`);
         
         // Expand the category node
         const isCategoryExpanded = expandedNodes.current.has(categoryNode.id);
@@ -630,7 +630,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         // Step 3: Find the department node (Layer 3)
-        setBuildingProgress('Loading department...');
+        setBuildingProgress('Connecting to department...');
         let departmentNode: Node<CustomNodeData> | undefined;
         
         // Department should be in the limited batch we just created
@@ -653,7 +653,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
         
         console.log(`Found department node: ${departmentNode.data.label} (ID: ${departmentNode.id})`);
-        setBuildingProgress(`Loading ${departmentNode.data.label}...`);
+        setBuildingProgress(`Building ${departmentNode.data.label}...`);
 
         // Step 4: Expand the department node (Layer 3) to show faculties
         const isDepartmentExpanded = expandedNodes.current.has(departmentNode.id);
@@ -708,7 +708,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         // Step 5: Find the faculty node (Layer 4)
-        setBuildingProgress('Loading faculty...');
+        setBuildingProgress('Finding researchers...');
         let facultyNode: Node<CustomNodeData> | undefined;
         
         await new Promise<void>((resolve) => {
@@ -730,7 +730,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
         
         console.log(`Found faculty node: ${facultyNode.data.label} (ID: ${facultyNode.id})`);
-        setBuildingProgress(`Loading ${facultyNode.data.label}'s research...`);
+        setBuildingProgress(`Crafting ${facultyNode.data.label}'s work...`);
 
         // Step 6: Expand the faculty node (Layer 4) to show project types
         const isFacultyExpanded = expandedNodes.current.has(facultyNode.id);
@@ -785,7 +785,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         // Step 7: Find and expand the project type node (Layer 5)
-        setBuildingProgress('Loading project types...');
+        setBuildingProgress('Mapping research types...');
         const facultyNodeId = facultyNode.id;
         let projectTypeNode: Node<CustomNodeData> | undefined;
         
@@ -811,7 +811,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         console.log(`Found project type node: ${projectTypeNode.data.label} (ID: ${projectTypeNode.id})`);
-        setBuildingProgress('Loading documents...');
+        setBuildingProgress('Gathering publications...');
 
         // Expand the project type node to show documents
         const isProjectTypeExpanded = expandedNodes.current.has(projectTypeNode.id);
@@ -866,7 +866,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         // Step 8: Find the document node (Layer 6)
-        setBuildingProgress('Finding target document...');
+        setBuildingProgress('Pinpointing your research...');
         const projectTypeNodeId = projectTypeNode.id;
         let documentNode: Node<CustomNodeData> | undefined;
         
@@ -884,7 +884,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         });
 
         // Step 9: Highlight the entire path from root to document
-        setBuildingProgress('Highlighting path...');
+        setBuildingProgress('Illuminating the path...');
         if (documentNode) {
           console.log(`Found document node: ${documentNode.data.label} (ID: ${documentNode.id})`);
           
