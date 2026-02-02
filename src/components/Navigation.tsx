@@ -72,21 +72,25 @@ const Navigation = () => {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "px-4 py-2 rounded-lg transition-smooth font-medium text-foreground",
+                  "relative px-4 py-2 rounded-lg font-medium transition-all duration-200",
                   isActive(item.path)
-                    ? "bg-primary text-primary-foreground shadow-elegant"
-                    : "hover:bg-secondary/80"
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
                 aria-current={isActive(item.path) ? "page" : undefined}
               >
                 {item.name}
+                {/* Active indicator line */}
+                {isActive(item.path) && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
+                )}
               </Link>
             ))}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="ml-2"
+              className="ml-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
@@ -116,10 +120,10 @@ const Navigation = () => {
                 to={item.path}
                 onClick={() => setIsOpen(false)}
                 className={cn(
-                  "block px-4 py-3 rounded-lg transition-smooth font-medium text-foreground",
+                  "block px-4 py-3 rounded-lg font-medium transition-all duration-200",
                   isActive(item.path)
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-secondary/80"
+                    ? "text-primary bg-primary/10 border-l-2 border-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
               >
                 {item.name}
