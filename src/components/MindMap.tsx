@@ -12,7 +12,7 @@ import {
   useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, Minus, Maximize2, Loader2 } from 'lucide-react';
+import { Plus, Minus, Maximize2, Loader2, Cog } from 'lucide-react';
 import { Button } from './ui/button';
 import CustomNode, { CustomNodeData, NodeType } from './CustomNode';
 import ThesisCard from './ThesisCard';
@@ -80,10 +80,12 @@ interface MindMapContentProps {
 const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContentProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CustomNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { fitView, getZoom, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, getZoom, zoomIn, zoomOut, setViewport } = useReactFlow();
   const [zoomLevel, setZoomLevel] = useState(100);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [buildingProgress, setBuildingProgress] = useState('');
   const [selectedThesis, setSelectedThesis] = useState<ThesisData | null>(null);
   const [selectedPhdThesis, setSelectedPhdThesis] = useState<PhdThesisData | null>(null);
   const [selectedResearch, setSelectedResearch] = useState<ResearchData | null>(null);
@@ -97,6 +99,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
     currentIndex: number;
   } | null>(null);
   const BATCH_SIZE = 5;
+  const NAVIGATION_BATCH_SIZE = 5; // Max nodes to show at each level during navigation
 
   // Initialize with root node
   useEffect(() => {
@@ -430,8 +433,39 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
     const pendingChildrenRef = { current: null as typeof pendingChildren };
     const nodesRef = { current: nodes };
 
+    // Helper function to get a limited batch of children centered around the target
+    const getLimitedBatchAroundTarget = <T extends { departmentId?: string; facultyId?: string; phdThesisId?: string; researchId?: string; label?: string; studentName?: string }>(
+      allChildren: T[],
+      targetFinder: (item: T) => boolean,
+      maxCount: number = NAVIGATION_BATCH_SIZE
+    ): T[] => {
+      const targetIndex = allChildren.findIndex(targetFinder);
+      if (targetIndex === -1) {
+        // Target not found, return first batch
+        return allChildren.slice(0, maxCount);
+      }
+      
+      // Calculate start index to center target in the batch
+      const halfCount = Math.floor(maxCount / 2);
+      let startIndex = Math.max(0, targetIndex - halfCount);
+      let endIndex = startIndex + maxCount;
+      
+      // Adjust if we're at the end of the list
+      if (endIndex > allChildren.length) {
+        endIndex = allChildren.length;
+        startIndex = Math.max(0, endIndex - maxCount);
+      }
+      
+      return allChildren.slice(startIndex, endIndex);
+    };
+
     const navigateToPath = async () => {
+      setIsBuilding(true);
       setIsLoading(true);
+      setBuildingProgress('Initializing...');
+      
+      // Zoom out initially to show building effect (very zoomed out to see the whole tree)
+      setViewport({ x: 0, y: 0, zoom: 0.25 }, { duration: 300 });
       
       try {
         // Step 0: Collapse everything first - reset to only root node
@@ -460,6 +494,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         });
 
         // Step 1: Find and expand the root node (Layer 1 - "IITD Research")
+        setBuildingProgress('Loading categories...');
         const currentRootNode = nodesRef.current.find(n => n.id === '1');
         if (!currentRootNode) {
           console.error('Root node not found');
@@ -470,7 +505,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         const isRootExpanded = expandedNodes.current.has('1');
         
         if (!isRootExpanded) {
-          // Expand root node to show categories
+          // Expand root node to show categories - filter to only show target category + neighbors
           const childrenData = await fetchChildrenData(currentRootNode as Node<CustomNodeData>);
           
           if (childrenData.length === 0) {
@@ -478,20 +513,16 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
             return;
           }
 
-          const initialBatch = childrenData.slice(0, BATCH_SIZE);
-          const remaining = childrenData.slice(BATCH_SIZE);
-          
-          if (remaining.length > 0) {
-            setPendingChildren({
-              parentId: currentRootNode.id,
-              children: remaining,
-              currentIndex: BATCH_SIZE
-            });
-          }
+          // For categories, only show up to 5 centered around the target category
+          const limitedBatch = getLimitedBatchAroundTarget(
+            childrenData,
+            (item) => item.categoryName === navigationPath.category,
+            NAVIGATION_BATCH_SIZE
+          );
 
           const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
             currentRootNode as Node<CustomNodeData>,
-            initialBatch,
+            limitedBatch,
             0
           );
 
@@ -514,6 +545,9 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
           });
 
           setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Keep zoomed out to see the building
+          fitView({ padding: 0.5, duration: 200 });
           
           // Wait for state to update before proceeding to Layer 2
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -541,6 +575,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         console.log(`Found category node: ${categoryNode.data.label} (ID: ${categoryNode.id})`);
+        setBuildingProgress(`Loading ${navigationPath.category}...`);
         
         // Expand the category node
         const isCategoryExpanded = expandedNodes.current.has(categoryNode.id);
@@ -554,25 +589,16 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
             return;
           }
 
-          const initialBatch = childrenData.slice(0, BATCH_SIZE);
-          const remaining = childrenData.slice(BATCH_SIZE);
-          
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: categoryNode.id,
-              children: remaining,
-              currentIndex: BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
+          // Only show up to 5 departments centered around the target
+          const limitedBatch = getLimitedBatchAroundTarget(
+            childrenData,
+            (item) => item.departmentId === navigationPath.department_id,
+            NAVIGATION_BATCH_SIZE
+          );
 
           const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
             categoryNode as Node<CustomNodeData>,
-            initialBatch,
+            limitedBatch,
             0
           );
 
@@ -596,105 +622,38 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
           });
 
           setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Keep zoomed out to see the building
+          fitView({ padding: 0.3, duration: 200 });
+          
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
         // Step 3: Find the department node (Layer 3)
-        // Keep loading batches until we find the target department or exhaust all children
-        const categoryNodeId = categoryNode.id;
+        setBuildingProgress('Loading department...');
         let departmentNode: Node<CustomNodeData> | undefined;
-        let attempts = 0;
-        const maxAttempts = 100; // Safety limit to prevent infinite loops
-
-        while (!departmentNode && attempts < maxAttempts) {
-          attempts++;
-          
-          // Check current nodes for the department
-          await new Promise<void>((resolve) => {
-            setNodes((currentNodes) => {
-              nodesRef.current = currentNodes;
-              departmentNode = currentNodes.find(n => 
-                n.data.level === 3 && 
-                n.data.departmentId === navigationPath.department_id
-              ) as Node<CustomNodeData> | undefined;
-              resolve();
-              return currentNodes;
-            });
+        
+        // Department should be in the limited batch we just created
+        await new Promise<void>((resolve) => {
+          setNodes((currentNodes) => {
+            nodesRef.current = currentNodes;
+            departmentNode = currentNodes.find(n => 
+              n.data.level === 3 && 
+              n.data.departmentId === navigationPath.department_id
+            ) as Node<CustomNodeData> | undefined;
+            resolve();
+            return currentNodes;
           });
-
-          if (departmentNode) {
-            console.log(`Found department node: ${departmentNode.data.label} (ID: ${departmentNode.id})`);
-            break;
-          }
-
-          // Check if there are more children to load for this category
-          let currentPendingChildren: typeof pendingChildren = null;
-          await new Promise<void>((resolve) => {
-            setPendingChildren((current) => {
-              currentPendingChildren = current;
-              pendingChildrenRef.current = current;
-              resolve();
-              return current;
-            });
-          });
-
-          if (!currentPendingChildren || currentPendingChildren.parentId !== categoryNodeId) {
-            console.error(`Department not found: ${navigationPath.department_id}. All batches exhausted.`);
-            break;
-          }
-
-          // Load next batch
-          console.log(`Department not in current batch, loading next batch... (attempt ${attempts})`);
-          
-          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
-          if (!parentNode) {
-            console.error('Parent node not found for loading next batch');
-            break;
-          }
-
-          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
-          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
-          const startIndex = currentPendingChildren.currentIndex;
-
-          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
-            parentNode as Node<CustomNodeData>,
-            nextBatch,
-            startIndex
-          );
-
-          // Update pending children state
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: currentPendingChildren.parentId,
-              children: remaining,
-              currentIndex: startIndex + BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
-
-          await new Promise<void>((resolve) => {
-            setNodes((prevNodes) => {
-              const updatedNodes = [...prevNodes, ...newNodes];
-              const layoutedNodes = calculateTreeLayout(updatedNodes);
-              nodesRef.current = layoutedNodes;
-              setTimeout(resolve, 100);
-              return layoutedNodes;
-            });
-          });
-
-          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
+        });
 
         if (!departmentNode) {
-          console.error(`Department node not found after ${attempts} attempts`);
+          console.error(`Department node not found: ${navigationPath.department_id}`);
           onNavigationComplete();
           return;
         }
+        
+        console.log(`Found department node: ${departmentNode.data.label} (ID: ${departmentNode.id})`);
+        setBuildingProgress(`Loading ${departmentNode.data.label}...`);
 
         // Step 4: Expand the department node (Layer 3) to show faculties
         const isDepartmentExpanded = expandedNodes.current.has(departmentNode.id);
@@ -708,25 +667,16 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
             return;
           }
 
-          const initialBatch = childrenData.slice(0, BATCH_SIZE);
-          const remaining = childrenData.slice(BATCH_SIZE);
-          
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: departmentNode.id,
-              children: remaining,
-              currentIndex: BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
+          // Only show up to 5 faculties centered around the target
+          const limitedBatch = getLimitedBatchAroundTarget(
+            childrenData,
+            (item) => item.facultyId === navigationPath.faculty_id,
+            NAVIGATION_BATCH_SIZE
+          );
 
           const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
             departmentNode as Node<CustomNodeData>,
-            initialBatch,
+            limitedBatch,
             0
           );
 
@@ -750,104 +700,37 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
           });
 
           setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Keep zoomed out to see the building
+          fitView({ padding: 0.3, duration: 200 });
+          
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
         // Step 5: Find the faculty node (Layer 4)
-        // Keep loading batches until we find the target faculty or exhaust all children
-        const departmentNodeId = departmentNode.id;
+        setBuildingProgress('Loading faculty...');
         let facultyNode: Node<CustomNodeData> | undefined;
-        attempts = 0; // Reset attempts counter
-
-        while (!facultyNode && attempts < maxAttempts) {
-          attempts++;
-          
-          // Check current nodes for the faculty
-          await new Promise<void>((resolve) => {
-            setNodes((currentNodes) => {
-              nodesRef.current = currentNodes;
-              facultyNode = currentNodes.find(n => 
-                n.data.level === 4 && 
-                n.data.facultyId === navigationPath.faculty_id
-              ) as Node<CustomNodeData> | undefined;
-              resolve();
-              return currentNodes;
-            });
+        
+        await new Promise<void>((resolve) => {
+          setNodes((currentNodes) => {
+            nodesRef.current = currentNodes;
+            facultyNode = currentNodes.find(n => 
+              n.data.level === 4 && 
+              n.data.facultyId === navigationPath.faculty_id
+            ) as Node<CustomNodeData> | undefined;
+            resolve();
+            return currentNodes;
           });
-
-          if (facultyNode) {
-            console.log(`Found faculty node: ${facultyNode.data.label} (ID: ${facultyNode.id})`);
-            break;
-          }
-
-          // Check if there are more children to load for this department
-          let currentPendingChildren: typeof pendingChildren = null;
-          await new Promise<void>((resolve) => {
-            setPendingChildren((current) => {
-              currentPendingChildren = current;
-              pendingChildrenRef.current = current;
-              resolve();
-              return current;
-            });
-          });
-
-          if (!currentPendingChildren || currentPendingChildren.parentId !== departmentNodeId) {
-            console.error(`Faculty not found: ${navigationPath.faculty_id}. All batches exhausted.`);
-            break;
-          }
-
-          // Load next batch
-          console.log(`Faculty not in current batch, loading next batch... (attempt ${attempts})`);
-          
-          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
-          if (!parentNode) {
-            console.error('Parent node not found for loading next batch');
-            break;
-          }
-
-          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
-          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
-          const startIndex = currentPendingChildren.currentIndex;
-
-          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
-            parentNode as Node<CustomNodeData>,
-            nextBatch,
-            startIndex
-          );
-
-          // Update pending children state
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: currentPendingChildren.parentId,
-              children: remaining,
-              currentIndex: startIndex + BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
-
-          await new Promise<void>((resolve) => {
-            setNodes((prevNodes) => {
-              const updatedNodes = [...prevNodes, ...newNodes];
-              const layoutedNodes = calculateTreeLayout(updatedNodes);
-              nodesRef.current = layoutedNodes;
-              setTimeout(resolve, 100);
-              return layoutedNodes;
-            });
-          });
-
-          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
+        });
 
         if (!facultyNode) {
-          console.error(`Faculty node not found after ${attempts} attempts`);
+          console.error(`Faculty node not found: ${navigationPath.faculty_id}`);
           onNavigationComplete();
           return;
         }
+        
+        console.log(`Found faculty node: ${facultyNode.data.label} (ID: ${facultyNode.id})`);
+        setBuildingProgress(`Loading ${facultyNode.data.label}'s research...`);
 
         // Step 6: Expand the faculty node (Layer 4) to show project types
         const isFacultyExpanded = expandedNodes.current.has(facultyNode.id);
@@ -861,25 +744,16 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
             return;
           }
 
-          const initialBatch = childrenData.slice(0, BATCH_SIZE);
-          const remaining = childrenData.slice(BATCH_SIZE);
-          
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: facultyNode.id,
-              children: remaining,
-              currentIndex: BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
+          // Only show up to 5 project types centered around the target
+          const limitedBatch = getLimitedBatchAroundTarget(
+            childrenData,
+            (item) => item.label === navigationPath.project_type || item.studentName === navigationPath.project_type,
+            NAVIGATION_BATCH_SIZE
+          );
 
           const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
             facultyNode as Node<CustomNodeData>,
-            initialBatch,
+            limitedBatch,
             0
           );
 
@@ -903,11 +777,15 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
           });
 
           setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Keep zoomed out to see the building
+          fitView({ padding: 0.3, duration: 200 });
+          
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
         // Step 7: Find and expand the project type node (Layer 5)
-        // Project types are "PHD Thesis" or "Research" - only 2 options, so no batch loading needed
+        setBuildingProgress('Loading project types...');
         const facultyNodeId = facultyNode.id;
         let projectTypeNode: Node<CustomNodeData> | undefined;
         
@@ -933,6 +811,7 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         }
 
         console.log(`Found project type node: ${projectTypeNode.data.label} (ID: ${projectTypeNode.id})`);
+        setBuildingProgress('Loading documents...');
 
         // Expand the project type node to show documents
         const isProjectTypeExpanded = expandedNodes.current.has(projectTypeNode.id);
@@ -946,25 +825,16 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
             return;
           }
 
-          const initialBatch = childrenData.slice(0, BATCH_SIZE);
-          const remaining = childrenData.slice(BATCH_SIZE);
-          
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: projectTypeNode.id,
-              children: remaining,
-              currentIndex: BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
+          // Only show up to 5 documents centered around the target
+          const limitedBatch = getLimitedBatchAroundTarget(
+            childrenData,
+            (item) => item.phdThesisId === navigationPath.doc_id || item.researchId === navigationPath.doc_id,
+            NAVIGATION_BATCH_SIZE
+          );
 
           const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
             projectTypeNode as Node<CustomNodeData>,
-            initialBatch,
+            limitedBatch,
             0
           );
 
@@ -988,104 +858,36 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
           });
 
           setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+          
+          // Keep zoomed out to see the building
+          fitView({ padding: 0.3, duration: 200 });
+          
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
-        // Step 8: Find the document node (Layer 6) and highlight the path
-        // Keep loading batches until we find the target document or exhaust all children
+        // Step 8: Find the document node (Layer 6)
+        setBuildingProgress('Finding target document...');
         const projectTypeNodeId = projectTypeNode.id;
         let documentNode: Node<CustomNodeData> | undefined;
-        attempts = 0; // Reset attempts counter
-
-        while (!documentNode && attempts < maxAttempts) {
-          attempts++;
-          
-          // Check current nodes for the document
-          await new Promise<void>((resolve) => {
-            setNodes((currentNodes) => {
-              nodesRef.current = currentNodes;
-              // Find the document node that matches navigationPath.doc_id
-              // The node's phdThesisId or researchId should match the doc_id
-              documentNode = currentNodes.find(n => 
-                n.data.level === 6 && 
-                n.id.startsWith(projectTypeNodeId + '-') &&
-                (n.data.phdThesisId === navigationPath.doc_id || n.data.researchId === navigationPath.doc_id)
-              ) as Node<CustomNodeData> | undefined;
-              resolve();
-              return currentNodes;
-            });
+        
+        await new Promise<void>((resolve) => {
+          setNodes((currentNodes) => {
+            nodesRef.current = currentNodes;
+            documentNode = currentNodes.find(n => 
+              n.data.level === 6 && 
+              n.id.startsWith(projectTypeNodeId + '-') &&
+              (n.data.phdThesisId === navigationPath.doc_id || n.data.researchId === navigationPath.doc_id)
+            ) as Node<CustomNodeData> | undefined;
+            resolve();
+            return currentNodes;
           });
-
-          if (documentNode) {
-            console.log(`Found document node: ${documentNode.data.label} (ID: ${documentNode.id})`);
-            break;
-          }
-
-          // Check if there are more children to load for this project type
-          let currentPendingChildren: typeof pendingChildren = null;
-          await new Promise<void>((resolve) => {
-            setPendingChildren((current) => {
-              currentPendingChildren = current;
-              pendingChildrenRef.current = current;
-              resolve();
-              return current;
-            });
-          });
-
-          if (!currentPendingChildren || currentPendingChildren.parentId !== projectTypeNodeId) {
-            console.error(`Document not found: ${navigationPath.doc_id}. All batches exhausted.`);
-            break;
-          }
-
-          // Load next batch
-          console.log(`Document not in current batch, loading next batch... (attempt ${attempts})`);
-          
-          const parentNode = nodesRef.current.find(n => n.id === currentPendingChildren!.parentId);
-          if (!parentNode) {
-            console.error('Parent node not found for loading next batch');
-            break;
-          }
-
-          const nextBatch = currentPendingChildren.children.slice(0, BATCH_SIZE);
-          const remaining = currentPendingChildren.children.slice(BATCH_SIZE);
-          const startIndex = currentPendingChildren.currentIndex;
-
-          const { nodes: newNodes, edges: newEdges } = createNodesFromChildren(
-            parentNode as Node<CustomNodeData>,
-            nextBatch,
-            startIndex
-          );
-
-          // Update pending children state
-          if (remaining.length > 0) {
-            const newPendingChildren = {
-              parentId: currentPendingChildren.parentId,
-              children: remaining,
-              currentIndex: startIndex + BATCH_SIZE
-            };
-            setPendingChildren(newPendingChildren);
-            pendingChildrenRef.current = newPendingChildren;
-          } else {
-            setPendingChildren(null);
-            pendingChildrenRef.current = null;
-          }
-
-          await new Promise<void>((resolve) => {
-            setNodes((prevNodes) => {
-              const updatedNodes = [...prevNodes, ...newNodes];
-              const layoutedNodes = calculateTreeLayout(updatedNodes);
-              nodesRef.current = layoutedNodes;
-              setTimeout(resolve, 100);
-              return layoutedNodes;
-            });
-          });
-
-          setEdges((prevEdges) => [...prevEdges, ...newEdges]);
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
+        });
 
         // Step 9: Highlight the entire path from root to document
+        setBuildingProgress('Highlighting path...');
         if (documentNode) {
+          console.log(`Found document node: ${documentNode.data.label} (ID: ${documentNode.id})`);
+          
           // Get all node IDs in the path (e.g., "1-2-3-4-1-2" -> ["1", "1-2", "1-2-3", "1-2-3-4", "1-2-3-4-1", "1-2-3-4-1-2"])
           const pathNodeIds: string[] = [];
           const parts = documentNode.id.split('-');
@@ -1134,8 +936,12 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
               };
             })
           );
+          
+          // Fit view to show the complete path and then zoom in a bit
+          await new Promise(resolve => setTimeout(resolve, 300));
+          fitView({ padding: 0.2, duration: 500 });
         } else {
-          console.error(`Document node not found after ${attempts} attempts`);
+          console.error(`Document node not found: ${navigationPath.doc_id}`);
         }
 
         // Mark navigation as complete
@@ -1146,6 +952,8 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         onNavigationComplete();
       } finally {
         setIsLoading(false);
+        setIsBuilding(false);
+        setBuildingProgress('');
       }
     };
 
@@ -1411,7 +1219,22 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
 
   return (
     <div className="w-full h-full relative">
-      {isLoading && (
+      {/* Building Animation Overlay */}
+      {isBuilding && (
+        <div className="absolute inset-0 bg-background/40 backdrop-blur-[2px] z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4 bg-background/90 p-6 rounded-xl shadow-lg border">
+            <div className="relative">
+              <Cog className="h-16 w-16 text-primary animate-[spin_3s_linear_infinite]" />
+              <Cog className="absolute top-0 left-8 h-10 w-10 text-primary/70 animate-[spin_2s_linear_infinite_reverse]" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-foreground mb-2">Building Mind Map</h3>
+              <p className="text-sm text-muted-foreground">{buildingProgress || 'Preparing visualization...'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {isLoading && !isBuilding && (
         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="flex items-center gap-2 bg-background p-4 rounded-lg shadow-lg border">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
