@@ -11,18 +11,6 @@ import type {
  * Handles all magazine/content-related API calls
  */
 
-// Fetch all magazines
-export const getMagazines = async (): Promise<Magazine[]> => {
-    const response = await apiClient.get<ApiResponse<Magazine[]>>(ENDPOINTS.content.getAll);
-    return response.data.data;
-};
-
-// Fetch only online magazines (filtered client-side)
-export const getOnlineMagazines = async (): Promise<Magazine[]> => {
-    const allMagazines = await getMagazines();
-    return allMagazines.filter(magazine => magazine.status === 'online');
-};
-
 // Fetch paginated magazines
 export const getPaginatedMagazines = async (
     page: number = 1,

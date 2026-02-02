@@ -9,7 +9,7 @@ export const useDirectorySearch = (
     options?: Omit<UseQueryOptions<DirectorySearchResult, Error>, 'queryKey' | 'queryFn'>
 ): UseQueryResult<DirectorySearchResult, Error> => {
     return useQuery<DirectorySearchResult, Error>({
-        queryKey: ['directory', 'search', query],
+        queryKey: queryKeys.directory.search(query),
         queryFn: () => searchFaculties(query, limit),
         enabled: query.length >= 2,
         staleTime: 30 * 1000, // 30 seconds
@@ -37,7 +37,7 @@ export const useGroupedFaculties = (
     options?: Omit<UseQueryOptions<GroupedDepartmentsResponse, Error>, 'queryKey' | 'queryFn'>
 ): UseQueryResult<GroupedDepartmentsResponse, Error> => {
     return useQuery<GroupedDepartmentsResponse, Error>({
-        queryKey: ['directory', 'grouped', category],
+        queryKey: queryKeys.directory.grouped(category),
         queryFn: () => getGroupedFaculties(category),
         staleTime: 5 * 60 * 1000,
         ...options,

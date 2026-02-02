@@ -1,8 +1,6 @@
 import { useQuery, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
 import { 
-    getMagazines, 
-    getOnlineMagazines, 
     getPaginatedMagazines, 
     getMagazineById 
 } from '../services/magazineService';
@@ -11,30 +9,6 @@ import type { Magazine, PaginatedMagazinesResponse } from '../types';
 /**
  * Custom React Query hooks for magazine operations
  */
-
-// Hook to fetch all magazines
-export const useMagazines = (
-    options?: Omit<UseQueryOptions<Magazine[], Error>, 'queryKey' | 'queryFn'>
-): UseQueryResult<Magazine[], Error> => {
-    return useQuery<Magazine[], Error>({
-        queryKey: queryKeys.magazines.lists(),
-        queryFn: getMagazines,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        ...options,
-    });
-};
-
-// Hook to fetch online magazines only
-export const useOnlineMagazines = (
-    options?: Omit<UseQueryOptions<Magazine[], Error>, 'queryKey' | 'queryFn'>
-): UseQueryResult<Magazine[], Error> => {
-    return useQuery<Magazine[], Error>({
-        queryKey: queryKeys.magazines.list({ status: 'online' }),
-        queryFn: getOnlineMagazines,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        ...options,
-    });
-};
 
 // Hook to fetch paginated magazines
 export const usePaginatedMagazines = (

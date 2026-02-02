@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +13,16 @@ import type { DirectoryFaculty } from "@/lib/api/types";
 
 const Explore = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   
-  // Search state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
+  // Initialize search state from URL params for persistence across navigation
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || "");
+  const [submittedQuery, setSubmittedQuery] = useState(() => searchParams.get('q') || "");
   const [isNavigating, setIsNavigating] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const page = searchParams.get('page');
+    return page ? parseInt(page, 10) : 1;
+  });
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
 
   // Faculty modal state for People tab
@@ -28,8 +32,8 @@ const Explore = () => {
   // Tab state
   const [activeTab, setActiveTab] = useState<'websites' | 'people'>('websites');
 
-  // Filter state
-  const [activeFilter, setActiveFilter] = useState("All");
+  // Filter state - initialize from URL params
+  const [activeFilter, setActiveFilter] = useState(() => searchParams.get('filter') || "All");
   const [showFilters, setShowFilters] = useState(false);
 
   // Group by department toggle - persisted in localStorage
@@ -64,7 +68,11 @@ const Explore = () => {
   }, [selectedDocument]);
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
-  const [sortBy, setSortBy] = useState<"relevance" | "date" | "citations">("relevance");
+  // Initialize sortBy from URL params
+  const [sortBy, setSortBy] = useState<"relevance" | "date" | "citations">(() => {
+    const sort = searchParams.get('sort');
+    return (sort === 'date' || sort === 'citations') ? sort : 'relevance';
+  });
   const [perPage, setPerPage] = useState(20);
   const [searchIn, setSearchIn] = useState<Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>>([]);
 
@@ -103,15 +111,7 @@ const Explore = () => {
   }, [submittedQuery, currentPage, perPage, sortBy, yearFrom, yearTo, activeFilter, searchIn]);
 
   // Use React Query for search
-  const { data: searchData, isLoading, isFetching, refetch } = useSearchResearch(searchRequest);
-
-  // Refetch when searchRequest changes and is not null
-  useEffect(() => {
-    if (searchRequest) {
-      console.log('Triggering refetch for:', searchRequest.query);
-      refetch();
-    }
-  }, [searchRequest, refetch]);
+  const { data: searchData, isLoading, isFetching } = useSearchResearch(searchRequest);
 
   // Derived state from query
   const results = searchData?.results || [];
@@ -119,12 +119,20 @@ const Explore = () => {
   const relatedFaculty = searchData?.related_faculty || [];
   const hasSearched = !!submittedQuery.trim();
 
-  // Perform search - update query and reset page
+  // Perform search - update query and reset page, sync to URL
   const performSearch = (page: number = 1) => {
     if (!searchQuery.trim()) return;
     console.log('performSearch called:', { searchQuery, page });
     setSubmittedQuery(searchQuery);
     setCurrentPage(page);
+    
+    // Sync to URL params for persistence across navigation
+    const newParams = new URLSearchParams();
+    newParams.set('q', searchQuery);
+    newParams.set('page', String(page));
+    if (activeFilter !== 'All') newParams.set('filter', activeFilter);
+    if (sortBy !== 'relevance') newParams.set('sort', sortBy);
+    setSearchParams(newParams, { replace: true });
   };
 
   // Handle search on Enter key
@@ -809,11 +817,11 @@ const Explore = () => {
           onClick={() => setSelectedDocument(null)}
         >
           <div
-            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col flex flex-col"
+            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header - Fixed */}
-            <div className="flex items-start justify-between p-6 border-b border-border flex-shrink-0 shrink-0">
+            <div className="flex items-start justify-between p-6 border-b border-border shrink-0">
               <div className="flex-1 pr-4">
                 <h2 className="text-2xl font-bold mb-2">{selectedDocument.title}</h2>
                 <div className="flex flex-wrap gap-2">
@@ -899,7 +907,7 @@ const Explore = () => {
             </div>
 
             {/* Modal Footer - Fixed at bottom */}
-            <div className="flex justify-end gap-2 p-6 border-t border-border flex-shrink-0 bg-background shrink-0">
+            <div className="flex justify-end gap-2 p-6 border-t border-border shrink-0 bg-background">
               <Button
                 onClick={() => handleNavigateToMindMap(selectedDocument._id)}
                 disabled={isNavigating}

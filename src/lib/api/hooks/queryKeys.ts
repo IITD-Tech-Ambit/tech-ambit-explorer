@@ -30,6 +30,8 @@ export const queryKeys = {
         details: () => [...queryKeys.directory.all, 'detail'] as const,
         detail: (id: string) => [...queryKeys.directory.details(), id] as const,
         coworking: (id: string) => [...queryKeys.directory.all, 'coworking', id] as const,
+        search: (query: string) => [...queryKeys.directory.all, 'search', query] as const,
+        grouped: (category: string) => [...queryKeys.directory.all, 'grouped', category] as const,
     },
 
     // Search query keys
