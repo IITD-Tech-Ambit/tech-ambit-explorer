@@ -195,7 +195,7 @@ const Footer = () => {
         <div className="border-t border-border/30 dark:border-slate-800 mt-12 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} <span className="text-foreground font-medium">Tech Ambit</span>, IIT Delhi. All rights reserved.
+              © {new Date().getFullYear()} <span className="text-foreground font-medium">Research Ambit</span>, IIT Delhi. All rights reserved.
             </p>
             <div className="flex items-center space-x-6 text-sm text-muted-foreground">
               <a href="#" className="hover:text-primary transition-colors duration-300">Privacy Policy</a>
