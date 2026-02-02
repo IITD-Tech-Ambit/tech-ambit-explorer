@@ -1,6 +1,6 @@
 import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
 
-const API_BASE_URL = 'http://localhost:3002/api/directory';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/directory`;
 
 export const searchFaculties = async (
     query: string,
