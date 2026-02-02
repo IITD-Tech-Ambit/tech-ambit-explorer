@@ -36,7 +36,7 @@ const Footer = () => {
   return (
     <footer 
       ref={footerRef}
-      className="relative bg-gradient-to-b from-card to-background border-t border-border mt-20 overflow-hidden"
+      className="relative bg-gradient-to-b from-muted/30 via-card to-background dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-950 border-t border-border/50 mt-20 overflow-hidden"
     >
       {/* Animated glow cursor effect */}
       <div
@@ -46,7 +46,7 @@ const Footer = () => {
           top: mousePosition.y - 200,
           width: 400,
           height: 400,
-          background: `radial-gradient(circle, hsl(222 78% 48% / 0.15) 0%, hsl(178 70% 45% / 0.08) 40%, transparent 70%)`,
+          background: `radial-gradient(circle, hsl(222 78% 48% / 0.12) 0%, hsl(178 70% 45% / 0.06) 40%, transparent 70%)`,
           borderRadius: '50%',
           opacity: isHovering ? 1 : 0,
           filter: 'blur(40px)',
@@ -54,18 +54,18 @@ const Footer = () => {
       />
       
       {/* Decorative top border gradient */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       
       <div className="container mx-auto px-4 py-16 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand Section */}
           <div className="lg:col-span-1">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
                 <span className="text-white font-bold text-lg">R</span>
               </div>
               <div>
-                <span className="font-bold text-lg">Research Ambit</span>
+                <span className="font-bold text-lg text-foreground">Research Ambit</span>
                 <p className="text-xs text-muted-foreground">IIT Delhi</p>
               </div>
             </div>
@@ -76,21 +76,21 @@ const Footer = () => {
             <div className="flex items-center space-x-3">
               <a 
                 href="#" 
-                className="w-9 h-9 rounded-full bg-muted hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
                 aria-label="Twitter"
               >
                 <Twitter className="h-4 w-4" />
               </a>
               <a 
                 href="#" 
-                className="w-9 h-9 rounded-full bg-muted hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
                 aria-label="LinkedIn"
               >
                 <Linkedin className="h-4 w-4" />
               </a>
               <a 
                 href="#" 
-                className="w-9 h-9 rounded-full bg-muted hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110"
+                className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
                 aria-label="GitHub"
               >
                 <Github className="h-4 w-4" />
@@ -100,7 +100,7 @@ const Footer = () => {
 
           {/* Quick Links */}
           <div>
-            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground/80">Quick Links</h3>
+            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Quick Links</h3>
             <ul className="space-y-3 text-sm">
               {[
                 { to: "/explore", label: "Explore Research" },
@@ -123,7 +123,7 @@ const Footer = () => {
 
           {/* Research Areas */}
           <div>
-            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground/80">Research Areas</h3>
+            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Research Areas</h3>
             <ul className="space-y-3 text-sm">
               {[
                 "Artificial Intelligence",
@@ -150,7 +150,7 @@ const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground/80">Contact</h3>
+            <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Contact</h3>
             <ul className="space-y-4 text-sm">
               <li className="group">
                 <a 
@@ -159,7 +159,7 @@ const Footer = () => {
                   rel="noopener noreferrer"
                   className="flex items-start space-x-3 text-muted-foreground hover:text-foreground transition-colors duration-300"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
                     <MapPin className="h-4 w-4 text-primary" />
                   </div>
                   <span className="pt-1">IIT Delhi, Hauz Khas,<br />New Delhi - 110016</span>
@@ -170,7 +170,7 @@ const Footer = () => {
                   href="mailto:iitdambit@iitd.ac.in"
                   className="flex items-center space-x-3 text-muted-foreground hover:text-foreground transition-colors duration-300"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/20 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-accent/10 dark:bg-accent/20 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/20 dark:group-hover:bg-accent/30 transition-colors">
                     <Mail className="h-4 w-4 text-accent" />
                   </div>
                   <span>iitdambit@iitd.ac.in</span>
@@ -181,7 +181,7 @@ const Footer = () => {
                   href="tel:+911126591234"
                   className="flex items-center space-x-3 text-muted-foreground hover:text-foreground transition-colors duration-300"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
                     <Phone className="h-4 w-4 text-primary" />
                   </div>
                   <span>+91-11-2659-1234</span>
@@ -192,7 +192,7 @@ const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-border/50 mt-12 pt-8">
+        <div className="border-t border-border/30 dark:border-slate-800 mt-12 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} <span className="text-foreground font-medium">Tech Ambit</span>, IIT Delhi. All rights reserved.
@@ -213,9 +213,9 @@ const Footer = () => {
         </div>
       </div>
       
-      {/* Decorative corner gradients */}
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-primary/5 to-transparent pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-64 h-64 bg-gradient-to-tl from-accent/5 to-transparent pointer-events-none" />
+      {/* Decorative corner gradients - Enhanced for dark mode */}
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-primary/5 dark:from-primary/10 to-transparent pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-64 h-64 bg-gradient-to-tl from-accent/5 dark:from-accent/10 to-transparent pointer-events-none" />
     </footer>
   );
 };
