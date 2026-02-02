@@ -43,6 +43,9 @@ const Explore = () => {
     localStorage.setItem('explore-group-by-dept', String(groupByDepartment));
   }, [groupByDepartment]);
 
+  // Client-side sort state
+  const [clientSort, setClientSort] = useState<'relevance' | 'citations'>('relevance');
+
   // Collapsible department sections state (by default all expanded)
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
 
@@ -222,6 +225,15 @@ const Explore = () => {
     ? results
     : results.filter((item) => item.document_type === activeFilter);
 
+  // Sort results client-side based on clientSort
+  const sortedResults = useMemo(() => {
+    if (clientSort === 'citations') {
+      return [...filteredResults].sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
+    }
+    // For 'relevance', keep original API order
+    return filteredResults;
+  }, [filteredResults, clientSort]);
+
   return (
     <div className="min-h-screen page-bg">
       <Navigation />
@@ -239,17 +251,28 @@ const Explore = () => {
 
           {/* Search Bar */}
           <div className="relative max-w-2xl animate-slide-up">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+              <Search className="w-5 h-5 text-foreground/60" />
+            </div>
             <Input
               type="text"
               placeholder="Search by department, project, faculty, or keywords..."
-              className="h-12 text-base search-input pr-16"
+              className="pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleKeyPress}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
             <Button
               onClick={() => performSearch(1)}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+              className="absolute right-2 top-1/2 -translate-y-1/2"
               disabled={isLoading}
               size="icon"
             >
@@ -420,22 +443,35 @@ const Explore = () => {
             <p className="text-muted-foreground">
               Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
             </p>
-            <Button
-              variant={groupByDepartment ? "default" : "outline"}
-              size="sm"
-              onClick={() => setGroupByDepartment(!groupByDepartment)}
-              className="gap-2"
-            >
-              <Building className="h-4 w-4" />
-              {groupByDepartment ? "Grouped by Department" : "Group by Department"}
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Sort by:</span>
+                <select
+                  value={clientSort}
+                  onChange={(e) => setClientSort(e.target.value as 'relevance' | 'citations')}
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="relevance">Relevance</option>
+                  <option value="citations">Citations</option>
+                </select>
+              </div>
+              <Button
+                variant={groupByDepartment ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGroupByDepartment(!groupByDepartment)}
+                className="gap-2"
+              >
+                <Building className="h-4 w-4" />
+                {groupByDepartment ? "Grouped by Department" : "Group by Department"}
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Results Grid - Websites Tab - Flat List (API Order - Default) */}
-        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && !groupByDepartment && (
+        {/* Results Grid - Websites Tab - Flat List (Sorted by clientSort) */}
+        {!isLoading && activeTab === 'websites' && sortedResults.length > 0 && !groupByDepartment && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredResults.map((item, index) => (
+            {sortedResults.map((item, index) => (
               <Card
                 key={item._id || index}
                 className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
@@ -493,16 +529,16 @@ const Explore = () => {
         )}
 
         {/* Results Grid - Websites Tab - Grouped by Department */}
-        {!isLoading && activeTab === 'websites' && filteredResults.length > 0 && groupByDepartment && (() => {
+        {!isLoading && activeTab === 'websites' && sortedResults.length > 0 && groupByDepartment && (() => {
           // Group results by department (field_associated)
-          const groupedByDept = filteredResults.reduce((groups, item) => {
+          const groupedByDept = sortedResults.reduce((groups, item) => {
             const dept = item.field_associated || 'Other';
             if (!groups[dept]) {
               groups[dept] = [];
             }
             groups[dept].push(item);
             return groups;
-          }, {} as Record<string, typeof filteredResults>);
+          }, {} as Record<string, typeof sortedResults>);
 
           // Sort departments alphabetically
           const sortedDepartments = Object.keys(groupedByDept).sort((a, b) => {

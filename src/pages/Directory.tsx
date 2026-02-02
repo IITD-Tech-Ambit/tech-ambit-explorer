@@ -105,15 +105,15 @@ const Directory = () => {
                     </p>
 
                     <div className="relative max-w-2xl animate-slide-up">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                            <Search className="w-5 h-5 text-muted-foreground" />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                            <Search className="w-5 h-5 text-foreground/60" />
                         </div>
                         <Input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search by faculty name or department..."
-                            className="pl-12 pr-12 h-14 text-base rounded-xl border-2 focus:border-primary bg-background/80 backdrop-blur-sm"
+                            className="pl-12 pr-12 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
                         />
                         {isSearchLoading && debouncedSearch.length >= 2 && (
                             <div className="absolute right-14 top-1/2 -translate-y-1/2">
