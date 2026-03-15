@@ -1,61 +1,62 @@
-# Dependency directories
+# ==================== DEPENDENCIES ====================
 node_modules/
 jspm_packages/
+.npm
+.yarn-integrity
+.pnpm-debug.log*
 
-# Logs
-logs
+# ==================== ENVIRONMENT FILES ====================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ==================== LOGS ====================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
-.pnpm-debug.log*
 
-# Diagnostic reports
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional stylelint cache
-.stylelintcache
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
-
-# Build outputs
+# ==================== BUILD / OUTPUT ====================
 dist/
 build/
 out/
 .next/
 .nuxt/
+coverage/
+.nyc_output/
 
-# IDE files
+# ==================== TYPESCRIPT ====================
+*.tsbuildinfo
+
+# ==================== VITE ====================
+# Vite cache / temp
+.vite/
+
+# ==================== OS FILES ====================
+.DS_Store
+._*
+Thumbs.db
+
+# ==================== IDE / EDITOR ====================
 .vscode/
 .idea/
 *.swp
 *.swo
-.DS_Store
+*.sublime-project
+*.sublime-workspace
 
-# Coverage folders
-coverage/
-.nyc_output/
+# ==================== LINTING / FORMATTING ====================
+.eslintcache
+.stylelintcache
 
-# OS metadata
-Thumbs.db
+# ==================== MISC ====================
+*.tgz
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ==================== PACKAGE MANAGER ====================
+# Bun lockfile (use package-lock.json as canonical)
+bun.lockb
