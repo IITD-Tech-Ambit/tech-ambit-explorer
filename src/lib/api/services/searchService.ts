@@ -1,6 +1,6 @@
 import type { SearchRequest, SearchResponse, SearchDocument } from '../types';
 
-const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
+const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3001/api/v1';
 
 /** 
  * Perform a hybrid search using BM25 + SPECTER2 semantic embeddings
@@ -18,12 +18,7 @@ export async function searchResearch(request: SearchRequest): Promise<SearchResp
     throw new Error(`Search failed: ${response.statusText}`);
   }
 
-  const data = await response.json();
-
-  // DEBUG: Log raw API response to check department data
-  console.log('Raw API response related_faculty:', JSON.stringify(data.related_faculty?.slice(0, 2), null, 2));
-
-  return data;
+  return response.json();
 }
 
 /**

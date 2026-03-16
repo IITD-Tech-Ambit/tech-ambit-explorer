@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import FacultyModal from "@/components/directory/FacultyModal";
@@ -25,12 +25,12 @@ const Explore = () => {
   });
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
 
+  // State for filtering papers by author
+  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+
   // Faculty modal state for People tab
   const [selectedPeopleFaculty, setSelectedPeopleFaculty] = useState<DirectoryFaculty | null>(null);
   const [facultyModalOpen, setFacultyModalOpen] = useState(false);
-
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'websites' | 'people'>('websites');
 
   // Filter state - initialize from URL params
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('filter') || "All");
@@ -52,6 +52,54 @@ const Explore = () => {
 
   // Collapsible department sections state (by default all expanded)
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
+
+  // Sidebar toggle state
+  const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(true);
+  const [peopleSortBy, setPeopleSortBy] = useState("Departments");
+  const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
+  const isResizing = useRef(false);
+  const [isResizingState, setIsResizingState] = useState(false);
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    setIsResizingState(true);
+    document.body.style.cursor = 'col-resize';
+    // Disable user selection while dragging
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    isResizing.current = false;
+    setIsResizingState(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  const resize = useCallback((mouseMoveEvent: MouseEvent) => {
+    if (isResizing.current && leftColRef.current && containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      const rect = leftColRef.current.getBoundingClientRect();
+      // Mouse X relative to the left edge of the sidebar
+      const newWidthPx = mouseMoveEvent.clientX - rect.left;
+      const newWidth = (newWidthPx / containerWidth) * 100;
+
+      if (newWidth >= 16 && newWidth <= 32) {
+        setSidebarWidth(newWidth);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   // Disable body scroll when modal is open
   useEffect(() => {
@@ -125,6 +173,7 @@ const Explore = () => {
     console.log('performSearch called:', { searchQuery, page });
     setSubmittedQuery(searchQuery);
     setCurrentPage(page);
+    setSelectedAuthor(null);
     
     // Sync to URL params for persistence across navigation
     const newParams = new URLSearchParams();
@@ -228,19 +277,36 @@ const Explore = () => {
     }
   };
 
-  // Filter results based on activeFilter (for display purposes)
-  const filteredResults = activeFilter === "All"
-    ? results
-    : results.filter((item) => item.document_type === activeFilter);
 
-  // Sort results client-side based on clientSort
+  // Filter results based on activeFilter (for display purposes)
+  const filteredResults = useMemo(() => {
+    const base = activeFilter === "All"
+      ? results
+      : results.filter((item) => item.document_type === activeFilter);
+    return base;
+  }, [activeFilter, results]);
+
+  // Sort results client-side based on clientSort and selectedAuthor filter
   const sortedResults = useMemo(() => {
+    // Determine the list of papers to display (filter by selected author if any)
+    const finalResults = selectedAuthor 
+      ? filteredResults.filter(item => 
+          item.authors?.some(a => {
+             // Comparing lowercased names since author_name is the field
+             const paperAuthorName = (a.author_name || a.name || '').toLowerCase();
+             const filterName = selectedAuthor.toLowerCase();
+             // Partial match in case of slight formatting differences, or strict equality
+             return paperAuthorName.includes(filterName) || filterName.includes(paperAuthorName);
+          })
+        )
+      : [...filteredResults];
+      
     if (clientSort === 'citations') {
-      return [...filteredResults].sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
+      return finalResults.sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
     }
     // For 'relevance', keep original API order
-    return filteredResults;
-  }, [filteredResults, clientSort]);
+    return finalResults;
+  }, [filteredResults, clientSort, selectedAuthor]);
 
   return (
     <div className="min-h-screen page-bg">
@@ -391,33 +457,7 @@ const Explore = () => {
         )}
       </section>
 
-      {/* Tabs - Only show after search */}
-      {hasSearched && !isLoading && (
-        <section className="container mx-auto px-4">
-          <div className="flex items-center gap-1 mb-6">
-            <button
-              onClick={() => setActiveTab('websites')}
-              className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'websites'
-                ? 'bg-[#1e3a5f] text-white'
-                : 'bg-[#1e3a5f]/80 text-white/80 hover:bg-[#1e3a5f]/90'
-                }`}
-            >
-              Research Papers
-            </button>
-            <button
-              onClick={() => setActiveTab('people')}
-              className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'people'
-                ? 'bg-[#1e3a5f] text-white'
-                : 'bg-[#1e3a5f]/80 text-white/80 hover:bg-[#1e3a5f]/90'
-                }`}
-            >
-              People
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* Research Items Grid */}
+      {/* Research Items Grid Layout */}
       <section className="container mx-auto px-4 pb-20">
         {/* Loading State */}
         {isLoading && (
@@ -445,41 +485,313 @@ const Explore = () => {
           </div>
         )}
 
-        {/* Results Header - Websites Tab */}
-        {hasSearched && !isLoading && activeTab === 'websites' && filteredResults.length > 0 && pagination && (
-          <div className="mb-6 flex items-center justify-between">
-            <p className="text-muted-foreground">
-              Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
-            </p>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Sort by:</span>
-                <select
-                  value={clientSort}
-                  onChange={(e) => setClientSort(e.target.value as 'relevance' | 'citations')}
-                  className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="relevance">Relevance</option>
-                  <option value="citations">Citations</option>
-                </select>
-              </div>
-              <Button
-                variant={groupByDepartment ? "default" : "outline"}
-                size="sm"
-                onClick={() => setGroupByDepartment(!groupByDepartment)}
-                className="gap-2"
-              >
-                <Building className="h-4 w-4" />
-                {groupByDepartment ? "Grouped by Department" : "Group by Department"}
-              </Button>
+        {/* Results Layout Grid */}
+        {hasSearched && !isLoading && (filteredResults.length > 0 || relatedFaculty.length > 0) && (
+          <div 
+            ref={containerRef}
+            className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
+            style={{ '--sidebar-width': `${sidebarWidth}%` } as React.CSSProperties}
+          >
+            
+            {/* Left Column - People Section */}
+            <div 
+              className={`relative shrink-0 flex items-stretch ${!isResizingState ? 'transition-all duration-300 ease-in-out' : ''} ${isPeopleSidebarOpen ? 'w-full xl:w-[var(--sidebar-width)]' : 'w-full xl:w-8'}`}
+            >
+        <div 
+          ref={leftColRef}
+          className={`w-full space-y-6 pt-1`}
+        >
+          <div className={`flex items-center gap-2 mb-2 border-b border-border pb-4 ${isPeopleSidebarOpen ? 'justify-between pr-4' : 'justify-center border-transparent xl:border-border'}`}>
+            <div className={`flex items-center gap-2 ${!isPeopleSidebarOpen && 'xl:hidden'}`}>
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="text-2xl font-bold text-foreground">People</h2>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={() => setIsPeopleSidebarOpen(!isPeopleSidebarOpen)}
+              title={isPeopleSidebarOpen ? "Collapse People Sidebar" : "Expand People Sidebar"}
+            >
+              {isPeopleSidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+            </Button>
+          </div>
+          
+          <div className={`transition-all duration-300 overflow-hidden pr-4 ${isPeopleSidebarOpen ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
+          <>
+            <div className="mb-4 mt-2 flex items-center justify-start gap-3">
+              <label className="text-sm font-medium text-muted-foreground whitespace-nowrap">Sort By</label>
+              <select
+                className="px-3 py-1.5 border border-input rounded-md bg-background text-sm w-[130px] shrink-0"
+                value={peopleSortBy}
+                onChange={(e) => setPeopleSortBy(e.target.value)}
+              >
+                <option value="Departments">Departments</option>
+                <option value="Relevance">Relevance</option>
+              </select>
+            </div>
+
+            {peopleSortBy === "Relevance" ? (() => {
+              const allowedAffiliations = [
+                'Indian Institute of Technology Delhi',
+                'Indian Institute of Technology Delhi, New Delhi, India',
+                'Indian Institute of Technology Delhi-Abu Dhabi',
+                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+              ];
+
+              // Track IITD author frequencies
+              const authorCounts = new Map<string, {name: string; count: number}>();
+
+              filteredResults.forEach(item => {
+                if (item.authors) {
+                  item.authors.forEach(a => {
+                    const affiliation = a.author_affiliation || a.affiliation || '';
+                    if (allowedAffiliations.includes(affiliation)) {
+                      // Normalize the original name strictly to ensure we group properly
+                      const rawName = a.author_name || a.name || '';
+                      if (!rawName) return;
+                      // Just taking a simple title-case formatting to avoid duplicated random casings
+                      const formattedName = rawName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+                      
+                      const existing = authorCounts.get(formattedName);
+                      if (existing) {
+                        existing.count += 1;
+                      } else {
+                        authorCounts.set(formattedName, { name: formattedName, count: 1 });
+                      }
+                    }
+                  });
+                }
+              });
+
+              const sortedAuthors = Array.from(authorCounts.values()).sort((a, b) => {
+                if (b.count !== a.count) {
+                  return b.count - a.count; // Decending count
+                }
+                return a.name.localeCompare(b.name); // Alphabetical fallback
+              });
+
+              if (sortedAuthors.length > 0) {
+                return (
+                  <div className="space-y-2">
+                    <div className="mb-4">
+                      <p className="text-muted-foreground">
+                        Found <span className="font-semibold text-primary">{sortedAuthors.length}</span> related IITD authors
+                      </p>
+                    </div>
+                    <ul className="space-y-3 pl-2">
+                      {sortedAuthors.map((author) => {
+                        const isSelected = selectedAuthor === author.name;
+                        return (
+                          <li key={author.name}>
+                            <button
+                              onClick={() => setSelectedAuthor(isSelected ? null : author.name)}
+                              className={`text-sm text-left flex items-start justify-between w-full transition-colors ${
+                                isSelected 
+                                  ? "text-primary font-semibold" 
+                                  : "text-muted-foreground hover:text-primary"
+                              }`}
+                            >
+                              <div className="flex items-start">
+                                <span className="shrink-0 mr-2 mt-[2px]">•</span>
+                                <span>{author.name}</span>
+                              </div>
+                              <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{author.count}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+                  <h3 className="text-lg font-semibold mb-1">No IITD Authors Found</h3>
+                  <p className="text-sm text-muted-foreground px-4">No IIT Delhi affiliated authors found in the current search results</p>
+                </div>
+              );
+
+            })() : (() => {
+              const allowedAffiliations = [
+                'Indian Institute of Technology Delhi',
+                'Indian Institute of Technology Delhi, New Delhi, India',
+                'Indian Institute of Technology Delhi-Abu Dhabi',
+                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+              ];
+              // Map all valid IITD faculty names explicitly stated on the papers
+              const iitdAuthorsMap = new Map<string, string>();
+              filteredResults.forEach(item => {
+                if (item.authors) {
+                  item.authors.forEach(a => {
+                    if (allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')) {
+                      const rawName = a.author_name || a.name || '';
+                      if (rawName) {
+                        const formattedName = rawName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+                        iitdAuthorsMap.set(rawName.toLowerCase(), formattedName);
+                      }
+                    }
+                  });
+                }
+              });
+
+              // Intersect related faculty subset
+              const filteredRelatedFaculty = relatedFaculty.filter(faculty => 
+                iitdAuthorsMap.has((faculty.name || '').toLowerCase())
+              );
+
+              // Gather names already included in the official faculty directory
+              const matchedFacultyNames = new Set(filteredRelatedFaculty.map(f => (f.name || '').toLowerCase()));
+
+              // Add the authors from papers that weren't in the official faculty list
+              const unmatchedAuthors: typeof relatedFaculty = [];
+              iitdAuthorsMap.forEach((formattedName, lowerName) => {
+                if (!matchedFacultyNames.has(lowerName)) {
+                  unmatchedAuthors.push({
+                    _id: 'unmatched-' + lowerName,
+                    name: formattedName,
+                    department: { name: 'Other', _id: 'other' },
+                    email: '',
+                    paperCount: 0,
+                  });
+                }
+              });
+
+              const allFacultyToRender = [...filteredRelatedFaculty, ...unmatchedAuthors];
+
+              if (allFacultyToRender.length > 0) {
+                // Group faculty by department
+                const groupedByDepartment = allFacultyToRender.reduce((groups, faculty) => {
+                const dept = faculty.department?.name || 'Other';
+                if (!groups[dept]) {
+                  groups[dept] = [];
+                }
+                groups[dept].push(faculty);
+                return groups;
+              }, {} as Record<string, typeof relatedFaculty>);
+
+              // Sort departments by number of professors (descending), then alphabetically
+              const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
+                if (a === 'Other') return 1;
+                if (b === 'Other') return -1;
+                const countDiff = groupedByDepartment[b].length - groupedByDepartment[a].length;
+                if (countDiff !== 0) return countDiff;
+                return a.localeCompare(b);
+              });
+
+              return (
+                <>
+                  <div className="mb-6">
+                    <p className="text-muted-foreground">
+                      Found <span className="font-semibold text-primary">{allFacultyToRender.length}</span> related IITD authors
+                    </p>
+                  </div>
+                  <div className="space-y-6">
+                    {sortedDepartments.map((department) => (
+                      <div key={department} className="mb-2">
+                        {/* Department Header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {department} <span className="text-xs font-normal text-muted-foreground ml-1">({groupedByDepartment[department].length})</span>
+                          </h3>
+                        </div>
+
+                        {/* Faculty List */}
+                        <ul className="space-y-2 pl-4">
+                          {[...groupedByDepartment[department]].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((faculty) => {
+                            const isSelected = selectedAuthor === faculty.name;
+                            return (
+                            <li key={faculty._id}>
+                              <button
+                                onClick={() => setSelectedAuthor(isSelected ? null : faculty.name)}
+                                className={`text-sm text-left flex items-start w-full transition-colors ${
+                                  isSelected 
+                                    ? "text-primary font-semibold" 
+                                    : "text-muted-foreground hover:text-primary"
+                                }`}
+                              >
+                                <span className="shrink-0 mr-2">•</span>
+                                <span>{faculty.name}</span>
+                              </button>
+                            </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
+                <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+                <h3 className="text-lg font-semibold mb-1">No Faculty Found</h3>
+                <p className="text-sm text-muted-foreground px-4">No matched IIT Delhi faculty profiles for these search results</p>
+              </div>
+            );
+          })()}
+        </>
+          </div>
+        </div>
+        
+        {/* Resizer Handle */}
+        {isPeopleSidebarOpen && (
+          <div
+            onMouseDown={startResizing}
+            className="group w-4 cursor-col-resize hidden xl:flex justify-center z-10 shrink-0 py-4"
+            style={{ marginRight: '-8px', marginLeft: '-8px' }}
+          >
+            <div className="h-full w-[2px] bg-border/60 group-hover:bg-primary/50 group-active:bg-primary transition-colors rounded-full" />
           </div>
         )}
+        </div> {/* End Left Column */}
 
-        {/* Results Grid - Websites Tab - Flat List (Sorted by clientSort) */}
-        {!isLoading && activeTab === 'websites' && sortedResults.length > 0 && !groupByDepartment && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {sortedResults.map((item, index) => (
+        {/* Right Column - Research Papers */}
+            <div className={`transition-all duration-300 w-full flex-1 ${isPeopleSidebarOpen ? 'xl:pl-8' : 'xl:pl-4'} border-t xl:border-t-0 xl:border-l border-border pt-8 xl:pt-0 space-y-6`}>
+              <div className="flex items-center gap-2 mb-2 border-b border-border pb-4">
+                <FileText className="h-5 w-5 text-primary" />
+                <h2 className="text-2xl font-bold text-foreground">Research Papers</h2>
+              </div>
+              
+              {/* Results Header - Websites Tab */}
+              {filteredResults.length > 0 && pagination && (
+                <div className="flex items-center justify-between">
+                  <p className="text-muted-foreground">
+                    Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Sort by:</span>
+                      <select
+                        value={clientSort}
+                        onChange={(e) => setClientSort(e.target.value as 'relevance' | 'citations')}
+                        className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="relevance">Relevance</option>
+                        <option value="citations">Citations</option>
+                      </select>
+                    </div>
+                    <Button
+                      variant={groupByDepartment ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setGroupByDepartment(!groupByDepartment)}
+                      className="gap-2 hidden md:flex"
+                    >
+                      <Building className="h-4 w-4" />
+                      {groupByDepartment ? "Grouped by Dept" : "Group by Dept"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Results Grid - Websites Tab - Flat List (Sorted by clientSort) */}
+              {sortedResults.length > 0 && !groupByDepartment && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {sortedResults.map((item, index) => (
               <Card
                 key={item._id || index}
                 className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
@@ -495,12 +807,27 @@ const Explore = () => {
                     )}
                   </div>
                   <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                  {item.authors && item.authors.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                      {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                    </p>
-                  )}
+                  {item.authors && item.authors.length > 0 && (() => {
+                    const allowedAffiliations = [
+                      'Indian Institute of Technology Delhi',
+                      'Indian Institute of Technology Delhi, New Delhi, India',
+                      'Indian Institute of Technology Delhi-Abu Dhabi',
+                      'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                    ];
+                    const iitdAuthors = item.authors.filter(a =>
+                      allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                    );
+                    
+                    if (iitdAuthors.length === 0) return null;
+                    
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-semibold text-primary/80 mr-1">IITD Authors:</span>
+                        {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                        {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
+                      </p>
+                    );
+                  })()}
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
@@ -537,7 +864,7 @@ const Explore = () => {
         )}
 
         {/* Results Grid - Websites Tab - Grouped by Department */}
-        {!isLoading && activeTab === 'websites' && sortedResults.length > 0 && groupByDepartment && (() => {
+        {sortedResults.length > 0 && groupByDepartment && (() => {
           // Group results by department (field_associated)
           const groupedByDept = sortedResults.reduce((groups, item) => {
             const dept = item.field_associated || 'Other';
@@ -599,12 +926,27 @@ const Explore = () => {
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
                             <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                            {item.authors && item.authors.length > 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                                {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                              </p>
-                            )}
+                            {item.authors && item.authors.length > 0 && (() => {
+                              const allowedAffiliations = [
+                                'Indian Institute of Technology Delhi',
+                                'Indian Institute of Technology Delhi, New Delhi, India',
+                                'Indian Institute of Technology Delhi-Abu Dhabi',
+                                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                              ];
+                              const iitdAuthors = item.authors.filter(a =>
+                                allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                              );
+                              
+                              if (iitdAuthors.length === 0) return null;
+                              
+                              return (
+                                <p className="text-sm text-muted-foreground">
+                                  <span className="font-semibold text-primary/80 mr-1">IITD Authors:</span>
+                                  {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                                  {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
+                                </p>
+                              );
+                            })()}
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
@@ -652,8 +994,8 @@ const Explore = () => {
         })()}
 
         {/* Pagination - Websites Tab */}
-        {pagination && pagination.total_pages > 1 && !isLoading && activeTab === 'websites' && (
-          <div className="flex justify-center items-center gap-2 mt-8">
+        {pagination && pagination.total_pages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
               onClick={() => performSearch(1)}
@@ -705,109 +1047,16 @@ const Explore = () => {
               Last
             </Button>
 
-            <span className="text-sm text-muted-foreground ml-4">
+            <span className="text-sm text-muted-foreground ml-4 hidden sm:inline-block">
               Page {currentPage} of {pagination.total_pages}
             </span>
           </div>
         )}
-
-        {/* People Tab - Faculty Cards - Grouped by Department */}
-        {hasSearched && !isLoading && activeTab === 'people' && (
-          <>
-            {relatedFaculty.length > 0 ? (() => {
-              // Group faculty by department
-              const groupedByDepartment = relatedFaculty.reduce((groups, faculty) => {
-                const dept = faculty.department?.name || 'Other';
-                if (!groups[dept]) {
-                  groups[dept] = [];
-                }
-                groups[dept].push(faculty);
-                return groups;
-              }, {} as Record<string, typeof relatedFaculty>);
-
-              // Sort departments alphabetically
-              const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
-                if (a === 'Other') return 1;
-                if (b === 'Other') return -1;
-                return a.localeCompare(b);
-              });
-
-              return (
-                <>
-                  <div className="mb-6">
-                    <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{relatedFaculty.length}</span> related faculty members
-                    </p>
-                  </div>
-                  <div className="space-y-6">
-                    {sortedDepartments.map((department) => (
-                      <div key={department} className="rounded-xl border border-border/50 bg-card/50 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                        {/* Department Header - Clickable */}
-                        <button
-                          onClick={() => toggleDepartment(`people-${department}`)}
-                          className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Building className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <h2 className="text-lg font-bold text-foreground">{department}</h2>
-                            <p className="text-xs text-muted-foreground">{groupedByDepartment[department].length} faculty members</p>
-                          </div>
-                          <Badge variant="secondary" className="mr-2">
-                            {groupedByDepartment[department].length}
-                          </Badge>
-                          <ChevronDown 
-                            className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${
-                              isDeptExpanded(`people-${department}`) ? 'rotate-180' : ''
-                            }`} 
-                          />
-                        </button>
-
-                        {/* Faculty Grid for this Department - Collapsible */}
-                        <div
-                          className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                            isDeptExpanded(`people-${department}`) ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'
-                          }`}
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 pt-0">
-                            {groupedByDepartment[department].map((faculty) => (
-                              <Card 
-                                key={faculty._id} 
-                                className="hover:shadow-elegant transition-smooth border-border cursor-pointer"
-                                onClick={() => handleFacultyClick(faculty)}
-                              >
-                                <CardContent className="p-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                      <Users className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                      <h3 className="font-semibold">{faculty.name}</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                        {faculty.email}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              );
-            })() : (
-              <div className="text-center py-20">
-                <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No Faculty Found</h3>
-                <p className="text-muted-foreground">No matched faculty profiles for the current search results</p>
-              </div>
-            )}
-          </>
+        </div> {/* End Right Column */}
+        
+        </div> /* End Full Grid */
         )}
+
       </section>
 
       {/* Document Detail Modal */}
@@ -844,21 +1093,35 @@ const Explore = () => {
             {/* Modal Content */}
             <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
               {/* Authors */}
-              {selectedDocument.authors && selectedDocument.authors.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Authors</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDocument.authors.map((author, idx) => (
-                      <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
-                        <div className="font-medium text-sm">{author.author_name || author.name}</div>
-                        {(author.author_affiliation || author.affiliation) && (
-                          <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
-                        )}
-                      </div>
-                    ))}
+              {selectedDocument.authors && selectedDocument.authors.length > 0 && (() => {
+                const allowedAffiliations = [
+                  'Indian Institute of Technology Delhi',
+                  'Indian Institute of Technology Delhi, New Delhi, India',
+                  'Indian Institute of Technology Delhi-Abu Dhabi',
+                  'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                ];
+                const iitdAuthors = selectedDocument.authors.filter(a =>
+                  allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                );
+                
+                if (iitdAuthors.length === 0) return null;
+                
+                return (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">IITD Authors</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {iitdAuthors.map((author, idx) => (
+                        <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
+                          <div className="font-medium text-sm">{author.author_name || author.name}</div>
+                          {(author.author_affiliation || author.affiliation) && (
+                            <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Abstract */}
               {selectedDocument.abstract && (
