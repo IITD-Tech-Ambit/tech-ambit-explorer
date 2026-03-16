@@ -173,6 +173,7 @@ export interface SearchAuthor {
     affiliation?: string;
     author_email?: string;
     author_id?: string;
+    matched_profile?: string | null;
 }
 
 export interface SearchDocument {
@@ -346,4 +347,44 @@ export interface FacultyCoworkingResponse {
     coworkersFromPapers: Coworker[];
     studentsSupervised: SupervisedStudent[];
     stats: FacultyCoworkingStats;
+}
+
+// Author-Scoped Search Types
+export interface AuthorScopedSearchRequest {
+    query: string;
+    author_id: string;
+    page?: number;
+    per_page?: number;
+}
+
+export interface AuthorScopedSearchResponse {
+    results: (SearchDocument & { similarity_score?: number })[];
+    author: {
+        name: string;
+        author_id: string;
+        total_papers: number;
+    };
+    pagination: SearchPagination;
+    cacheHit?: boolean;
+}
+
+export interface FacultyForQueryDepartment {
+    name: string;
+    faculty: {
+        name: string;
+        author_id: string;
+        paper_count: number;
+    }[];
+    total_paper_count: number;
+}
+
+export interface AllFacultyForQueryResponse {
+    departments: FacultyForQueryDepartment[];
+    total_faculty: number;
+    total_matching_papers: number;
+    cacheHit?: boolean;
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
 }

@@ -1,4 +1,4 @@
-import type { SearchRequest, SearchResponse, SearchDocument } from '../types';
+import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse } from '../types';
 
 const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3001/api/v1';
 
@@ -16,6 +16,25 @@ export async function searchResearch(request: SearchRequest): Promise<SearchResp
 
   if (!response.ok) {
     throw new Error(`Search failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Author-scoped search: semantic similarity within one author's papers
+ */
+export async function authorScopedSearch(request: AuthorScopedSearchRequest): Promise<AuthorScopedSearchResponse> {
+  const response = await fetch(`${SEARCH_API_BASE_URL}/search/author-scope`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Author-scoped search failed: ${response.statusText}`);
   }
 
   return response.json();
@@ -69,6 +88,21 @@ export async function checkSearchHealth(): Promise<{
 
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get all faculty matching a query (OpenSearch aggregation, no documents)
+ */
+export async function getAllFacultyForQuery(query: string): Promise<AllFacultyForQueryResponse> {
+  const response = await fetch(
+    `${SEARCH_API_BASE_URL}/search/faculty-for-query?query=${encodeURIComponent(query)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Faculty for query failed: ${response.statusText}`);
   }
 
   return response.json();

@@ -39,5 +39,9 @@ export const queryKeys = {
         all: ['search'] as const,
         results: (request: Record<string, unknown>) => [...queryKeys.search.all, 'results', request] as const,
         document: (id: string) => [...queryKeys.search.all, 'document', id] as const,
+        authorScoped: (authorId: string, query: string, page: number) => 
+            [...queryKeys.search.all, 'authorScoped', authorId, query, page] as const,
+        facultyForQuery: (query: string) =>
+            [...queryKeys.search.all, 'facultyForQuery', query] as const,
     },
 } as const;
