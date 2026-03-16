@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,6 +52,47 @@ const Explore = () => {
 
   // Sidebar toggle state
   const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(16); // percentage width
+  const isResizing = useRef(false);
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    // Disable user selection while dragging
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    isResizing.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  const resize = useCallback((mouseMoveEvent: MouseEvent) => {
+    if (isResizing.current && leftColRef.current && containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      const rect = leftColRef.current.getBoundingClientRect();
+      // Mouse X relative to the left edge of the sidebar
+      const newWidthPx = mouseMoveEvent.clientX - rect.left;
+      const newWidth = (newWidthPx / containerWidth) * 100;
+
+      if (newWidth >= 16 && newWidth <= 32) {
+        setSidebarWidth(newWidth);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   // Disable body scroll when modal is open
   useEffect(() => {
@@ -421,11 +462,19 @@ const Explore = () => {
 
         {/* Results Layout Grid */}
         {hasSearched && !isLoading && (filteredResults.length > 0 || relatedFaculty.length > 0) && (
-          <div className="flex flex-col xl:flex-row items-start gap-8">
+          <div 
+            ref={containerRef}
+            className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
+            style={{ '--sidebar-width': `${sidebarWidth}%` } as React.CSSProperties}
+          >
             
             {/* Left Column - People Section */}
-        <div className={`transition-all duration-300 ${isPeopleSidebarOpen ? 'w-full xl:w-1/4' : 'w-full xl:w-12'} space-y-6 pt-1`}>
-          <div className={`flex items-center gap-2 mb-2 border-b border-border pb-4 ${isPeopleSidebarOpen ? 'justify-between' : 'justify-center border-transparent xl:border-border'}`}>
+            <div className={`relative shrink-0 flex items-stretch ${isPeopleSidebarOpen ? 'w-full xl:w-[var(--sidebar-width)]' : 'w-full xl:w-8'}`}>
+        <div 
+          ref={leftColRef}
+          className={`transition-[width] duration-300 w-full space-y-6 pt-1`}
+        >
+          <div className={`flex items-center gap-2 mb-2 border-b border-border pb-4 ${isPeopleSidebarOpen ? 'justify-between pr-4' : 'justify-center border-transparent xl:border-border'}`}>
             <div className={`flex items-center gap-2 ${!isPeopleSidebarOpen && 'xl:hidden'}`}>
               <Users className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold text-foreground">People</h2>
@@ -441,11 +490,35 @@ const Explore = () => {
             </Button>
           </div>
           
-          <div className={`transition-all duration-300 overflow-hidden ${isPeopleSidebarOpen ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
+          <div className={`transition-all duration-300 overflow-hidden pr-4 ${isPeopleSidebarOpen ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
           <>
-            {relatedFaculty.length > 0 ? (() => {
-              // Group faculty by department
-              const groupedByDepartment = relatedFaculty.reduce((groups, faculty) => {
+            {(() => {
+              const allowedAffiliations = [
+                'Indian Institute of Technology Delhi',
+                'Indian Institute of Technology Delhi, New Delhi, India',
+                'Indian Institute of Technology Delhi-Abu Dhabi',
+                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+              ];
+              // Map all valid IITD faculty names explicitly stated on the papers
+              const iitdAuthorNames = new Set<string>();
+              filteredResults.forEach(item => {
+                if (item.authors) {
+                  item.authors.forEach(a => {
+                    if (allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')) {
+                      iitdAuthorNames.add((a.author_name || a.name || '').toLowerCase());
+                    }
+                  });
+                }
+              });
+
+              // Intersect related faculty subset
+              const filteredRelatedFaculty = relatedFaculty.filter(faculty => 
+                iitdAuthorNames.has((faculty.name || '').toLowerCase())
+              );
+
+              if (filteredRelatedFaculty.length > 0) {
+                // Group faculty by department
+                const groupedByDepartment = filteredRelatedFaculty.reduce((groups, faculty) => {
                 const dept = faculty.department?.name || 'Other';
                 if (!groups[dept]) {
                   groups[dept] = [];
@@ -454,10 +527,12 @@ const Explore = () => {
                 return groups;
               }, {} as Record<string, typeof relatedFaculty>);
 
-              // Sort departments alphabetically
+              // Sort departments by number of professors (descending), then alphabetically
               const sortedDepartments = Object.keys(groupedByDepartment).sort((a, b) => {
                 if (a === 'Other') return 1;
                 if (b === 'Other') return -1;
+                const countDiff = groupedByDepartment[b].length - groupedByDepartment[a].length;
+                if (countDiff !== 0) return countDiff;
                 return a.localeCompare(b);
               });
 
@@ -465,82 +540,66 @@ const Explore = () => {
                 <>
                   <div className="mb-6">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{relatedFaculty.length}</span> related faculty members
+                      Found <span className="font-semibold text-primary">{filteredRelatedFaculty.length}</span> related faculty members
                     </p>
                   </div>
                   <div className="space-y-6">
                     {sortedDepartments.map((department) => (
-                      <div key={department} className="rounded-xl border border-border/50 bg-card/50 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                        {/* Department Header - Clickable */}
-                        <button
-                          onClick={() => toggleDepartment(`people-${department}`)}
-                          className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Building className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <h2 className="text-lg font-bold text-foreground">{department}</h2>
-                            <p className="text-xs text-muted-foreground">{groupedByDepartment[department].length} faculty members</p>
-                          </div>
-                          <Badge variant="secondary" className="mr-2">
-                            {groupedByDepartment[department].length}
-                          </Badge>
-                          <ChevronDown 
-                            className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${
-                              isDeptExpanded(`people-${department}`) ? 'rotate-180' : ''
-                            }`} 
-                          />
-                        </button>
-
-                        {/* Faculty Grid for this Department - Collapsible */}
-                        <div
-                          className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                            isDeptExpanded(`people-${department}`) ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'
-                          }`}
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 pt-0">
-                            {groupedByDepartment[department].map((faculty) => (
-                              <Card 
-                                key={faculty._id} 
-                                className="hover:shadow-elegant transition-smooth border-border cursor-pointer"
-                                onClick={() => handleFacultyClick(faculty)}
-                              >
-                                <CardContent className="p-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                      <Users className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                      <h3 className="font-semibold">{faculty.name}</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                        {faculty.email}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
+                      <div key={department} className="mb-2">
+                        {/* Department Header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {department} <span className="text-xs font-normal text-muted-foreground ml-1">({groupedByDepartment[department].length})</span>
+                          </h3>
                         </div>
+
+                        {/* Faculty List */}
+                        <ul className="space-y-2 pl-4">
+                          {[...groupedByDepartment[department]].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((faculty) => (
+                            <li key={faculty._id}>
+                              <button
+                                onClick={() => handleFacultyClick(faculty)}
+                                className="text-sm text-muted-foreground hover:text-primary transition-colors text-left flex items-start w-full"
+                              >
+                                <span className="shrink-0 mr-2">•</span>
+                                <span>{faculty.name}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ))}
                   </div>
                 </>
               );
-            })() : (
+            }
+
+            return (
               <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
                 <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
                 <h3 className="text-lg font-semibold mb-1">No Faculty Found</h3>
-                <p className="text-sm text-muted-foreground px-4">No matched faculty profiles for these search results</p>
+                <p className="text-sm text-muted-foreground px-4">No matched IIT Delhi faculty profiles for these search results</p>
               </div>
-            )}
-          </>
+            );
+          })()}
+        </>
           </div>
+        </div>
+        
+        {/* Resizer Handle */}
+        {isPeopleSidebarOpen && (
+          <div
+            onMouseDown={startResizing}
+            className="group w-4 cursor-col-resize hidden xl:flex justify-center z-10 shrink-0 py-4"
+            style={{ marginRight: '-8px', marginLeft: '-8px' }}
+          >
+            <div className="h-full w-[2px] bg-border/60 group-hover:bg-primary/50 group-active:bg-primary transition-colors rounded-full" />
+          </div>
+        )}
         </div> {/* End Left Column */}
 
         {/* Right Column - Research Papers */}
-            <div className={`transition-all duration-300 w-full ${isPeopleSidebarOpen ? 'xl:w-3/4' : 'flex-1'} border-t xl:border-t-0 xl:border-l border-border pt-8 xl:pt-0 xl:pl-8 space-y-6`}>
+            <div className={`transition-all duration-300 w-full flex-1 ${isPeopleSidebarOpen ? 'xl:pl-8' : 'xl:pl-4'} border-t xl:border-t-0 xl:border-l border-border pt-8 xl:pt-0 space-y-6`}>
               <div className="flex items-center gap-2 mb-2 border-b border-border pb-4">
                 <FileText className="h-5 w-5 text-primary" />
                 <h2 className="text-2xl font-bold text-foreground">Research Papers</h2>
