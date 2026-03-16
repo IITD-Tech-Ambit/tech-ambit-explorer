@@ -52,7 +52,7 @@ const Explore = () => {
 
   // Sidebar toggle state
   const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(16); // percentage width
+  const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
   const isResizing = useRef(false);
   const leftColRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -269,19 +269,38 @@ const Explore = () => {
     }
   };
 
-  // Filter results based on activeFilter (for display purposes)
-  const filteredResults = activeFilter === "All"
-    ? results
-    : results.filter((item) => item.document_type === activeFilter);
+  // State for filtering papers by author
+  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
 
-  // Sort results client-side based on clientSort
+  // Filter results based on activeFilter (for display purposes)
+  const filteredResults = useMemo(() => {
+    const base = activeFilter === "All"
+      ? results
+      : results.filter((item) => item.document_type === activeFilter);
+    return base;
+  }, [activeFilter, results]);
+
+  // Sort results client-side based on clientSort and selectedAuthor filter
   const sortedResults = useMemo(() => {
+    // Determine the list of papers to display (filter by selected author if any)
+    const finalResults = selectedAuthor 
+      ? filteredResults.filter(item => 
+          item.authors?.some(a => {
+             // Comparing lowercased names since author_name is the field
+             const paperAuthorName = (a.author_name || a.name || '').toLowerCase();
+             const filterName = selectedAuthor.toLowerCase();
+             // Partial match in case of slight formatting differences, or strict equality
+             return paperAuthorName.includes(filterName) || filterName.includes(paperAuthorName);
+          })
+        )
+      : [...filteredResults];
+      
     if (clientSort === 'citations') {
-      return [...filteredResults].sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
+      return finalResults.sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
     }
     // For 'relevance', keep original API order
-    return filteredResults;
-  }, [filteredResults, clientSort]);
+    return finalResults;
+  }, [filteredResults, clientSort, selectedAuthor]);
 
   return (
     <div className="min-h-screen page-bg">
@@ -555,17 +574,24 @@ const Explore = () => {
 
                         {/* Faculty List */}
                         <ul className="space-y-2 pl-4">
-                          {[...groupedByDepartment[department]].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((faculty) => (
+                          {[...groupedByDepartment[department]].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((faculty) => {
+                            const isSelected = selectedAuthor === faculty.name;
+                            return (
                             <li key={faculty._id}>
                               <button
-                                onClick={() => handleFacultyClick(faculty)}
-                                className="text-sm text-muted-foreground hover:text-primary transition-colors text-left flex items-start w-full"
+                                onClick={() => setSelectedAuthor(isSelected ? null : faculty.name)}
+                                className={`text-sm text-left flex items-start w-full transition-colors ${
+                                  isSelected 
+                                    ? "text-primary font-semibold" 
+                                    : "text-muted-foreground hover:text-primary"
+                                }`}
                               >
                                 <span className="shrink-0 mr-2">•</span>
                                 <span>{faculty.name}</span>
                               </button>
                             </li>
-                          ))}
+                            );
+                          })}
                         </ul>
                       </div>
                     ))}
