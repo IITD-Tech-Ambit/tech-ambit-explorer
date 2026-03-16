@@ -25,6 +25,9 @@ const Explore = () => {
   });
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
 
+  // State for filtering papers by author
+  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+
   // Faculty modal state for People tab
   const [selectedPeopleFaculty, setSelectedPeopleFaculty] = useState<DirectoryFaculty | null>(null);
   const [facultyModalOpen, setFacultyModalOpen] = useState(false);
@@ -52,14 +55,17 @@ const Explore = () => {
 
   // Sidebar toggle state
   const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(true);
+  const [peopleSortBy, setPeopleSortBy] = useState("Departments");
   const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
   const isResizing = useRef(false);
+  const [isResizingState, setIsResizingState] = useState(false);
   const leftColRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isResizing.current = true;
+    setIsResizingState(true);
     document.body.style.cursor = 'col-resize';
     // Disable user selection while dragging
     document.body.style.userSelect = 'none';
@@ -67,6 +73,7 @@ const Explore = () => {
 
   const stopResizing = useCallback(() => {
     isResizing.current = false;
+    setIsResizingState(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   }, []);
@@ -166,6 +173,7 @@ const Explore = () => {
     console.log('performSearch called:', { searchQuery, page });
     setSubmittedQuery(searchQuery);
     setCurrentPage(page);
+    setSelectedAuthor(null);
     
     // Sync to URL params for persistence across navigation
     const newParams = new URLSearchParams();
@@ -269,8 +277,6 @@ const Explore = () => {
     }
   };
 
-  // State for filtering papers by author
-  const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
 
   // Filter results based on activeFilter (for display purposes)
   const filteredResults = useMemo(() => {
@@ -488,10 +494,12 @@ const Explore = () => {
           >
             
             {/* Left Column - People Section */}
-            <div className={`relative shrink-0 flex items-stretch ${isPeopleSidebarOpen ? 'w-full xl:w-[var(--sidebar-width)]' : 'w-full xl:w-8'}`}>
+            <div 
+              className={`relative shrink-0 flex items-stretch ${!isResizingState ? 'transition-all duration-300 ease-in-out' : ''} ${isPeopleSidebarOpen ? 'w-full xl:w-[var(--sidebar-width)]' : 'w-full xl:w-8'}`}
+            >
         <div 
           ref={leftColRef}
-          className={`transition-[width] duration-300 w-full space-y-6 pt-1`}
+          className={`w-full space-y-6 pt-1`}
         >
           <div className={`flex items-center gap-2 mb-2 border-b border-border pb-4 ${isPeopleSidebarOpen ? 'justify-between pr-4' : 'justify-center border-transparent xl:border-border'}`}>
             <div className={`flex items-center gap-2 ${!isPeopleSidebarOpen && 'xl:hidden'}`}>
@@ -511,7 +519,102 @@ const Explore = () => {
           
           <div className={`transition-all duration-300 overflow-hidden pr-4 ${isPeopleSidebarOpen ? 'opacity-100 max-h-[5000px]' : 'opacity-0 max-h-0'}`}>
           <>
-            {(() => {
+            <div className="mb-4 mt-2 flex items-center justify-start gap-3">
+              <label className="text-sm font-medium text-muted-foreground whitespace-nowrap">Sort By</label>
+              <select
+                className="px-3 py-1.5 border border-input rounded-md bg-background text-sm w-[130px] shrink-0"
+                value={peopleSortBy}
+                onChange={(e) => setPeopleSortBy(e.target.value)}
+              >
+                <option value="Departments">Departments</option>
+                <option value="Relevance">Relevance</option>
+              </select>
+            </div>
+
+            {peopleSortBy === "Relevance" ? (() => {
+              const allowedAffiliations = [
+                'Indian Institute of Technology Delhi',
+                'Indian Institute of Technology Delhi, New Delhi, India',
+                'Indian Institute of Technology Delhi-Abu Dhabi',
+                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+              ];
+
+              // Track IITD author frequencies
+              const authorCounts = new Map<string, {name: string; count: number}>();
+
+              filteredResults.forEach(item => {
+                if (item.authors) {
+                  item.authors.forEach(a => {
+                    const affiliation = a.author_affiliation || a.affiliation || '';
+                    if (allowedAffiliations.includes(affiliation)) {
+                      // Normalize the original name strictly to ensure we group properly
+                      const rawName = a.author_name || a.name || '';
+                      if (!rawName) return;
+                      // Just taking a simple title-case formatting to avoid duplicated random casings
+                      const formattedName = rawName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+                      
+                      const existing = authorCounts.get(formattedName);
+                      if (existing) {
+                        existing.count += 1;
+                      } else {
+                        authorCounts.set(formattedName, { name: formattedName, count: 1 });
+                      }
+                    }
+                  });
+                }
+              });
+
+              const sortedAuthors = Array.from(authorCounts.values()).sort((a, b) => {
+                if (b.count !== a.count) {
+                  return b.count - a.count; // Decending count
+                }
+                return a.name.localeCompare(b.name); // Alphabetical fallback
+              });
+
+              if (sortedAuthors.length > 0) {
+                return (
+                  <div className="space-y-2">
+                    <div className="mb-4">
+                      <p className="text-muted-foreground">
+                        Found <span className="font-semibold text-primary">{sortedAuthors.length}</span> related IITD authors
+                      </p>
+                    </div>
+                    <ul className="space-y-3 pl-2">
+                      {sortedAuthors.map((author) => {
+                        const isSelected = selectedAuthor === author.name;
+                        return (
+                          <li key={author.name}>
+                            <button
+                              onClick={() => setSelectedAuthor(isSelected ? null : author.name)}
+                              className={`text-sm text-left flex items-start justify-between w-full transition-colors ${
+                                isSelected 
+                                  ? "text-primary font-semibold" 
+                                  : "text-muted-foreground hover:text-primary"
+                              }`}
+                            >
+                              <div className="flex items-start">
+                                <span className="shrink-0 mr-2 mt-[2px]">•</span>
+                                <span>{author.name}</span>
+                              </div>
+                              <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{author.count}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+                  <h3 className="text-lg font-semibold mb-1">No IITD Authors Found</h3>
+                  <p className="text-sm text-muted-foreground px-4">No IIT Delhi affiliated authors found in the current search results</p>
+                </div>
+              );
+
+            })() : (() => {
               const allowedAffiliations = [
                 'Indian Institute of Technology Delhi',
                 'Indian Institute of Technology Delhi, New Delhi, India',
