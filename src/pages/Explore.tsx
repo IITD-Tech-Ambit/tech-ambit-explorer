@@ -495,12 +495,27 @@ const Explore = () => {
                     )}
                   </div>
                   <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                  {item.authors && item.authors.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                      {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                    </p>
-                  )}
+                  {item.authors && item.authors.length > 0 && (() => {
+                    const allowedAffiliations = [
+                      'Indian Institute of Technology Delhi',
+                      'Indian Institute of Technology Delhi, New Delhi, India',
+                      'Indian Institute of Technology Delhi-Abu Dhabi',
+                      'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                    ];
+                    const iitdAuthors = item.authors.filter(a =>
+                      allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                    );
+                    
+                    if (iitdAuthors.length === 0) return null;
+                    
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-semibold text-primary/80 mr-1">IITD Authors:</span>
+                        {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                        {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
+                      </p>
+                    );
+                  })()}
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
@@ -599,12 +614,27 @@ const Explore = () => {
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
                             <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                            {item.authors && item.authors.length > 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                {item.authors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                                {item.authors.length > 3 && ` +${item.authors.length - 3} more`}
-                              </p>
-                            )}
+                            {item.authors && item.authors.length > 0 && (() => {
+                              const allowedAffiliations = [
+                                'Indian Institute of Technology Delhi',
+                                'Indian Institute of Technology Delhi, New Delhi, India',
+                                'Indian Institute of Technology Delhi-Abu Dhabi',
+                                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                              ];
+                              const iitdAuthors = item.authors.filter(a =>
+                                allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                              );
+                              
+                              if (iitdAuthors.length === 0) return null;
+                              
+                              return (
+                                <p className="text-sm text-muted-foreground">
+                                  <span className="font-semibold text-primary/80 mr-1">IITD Authors:</span>
+                                  {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
+                                  {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
+                                </p>
+                              );
+                            })()}
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
@@ -844,21 +874,35 @@ const Explore = () => {
             {/* Modal Content */}
             <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
               {/* Authors */}
-              {selectedDocument.authors && selectedDocument.authors.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Authors</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDocument.authors.map((author, idx) => (
-                      <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
-                        <div className="font-medium text-sm">{author.author_name || author.name}</div>
-                        {(author.author_affiliation || author.affiliation) && (
-                          <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
-                        )}
-                      </div>
-                    ))}
+              {selectedDocument.authors && selectedDocument.authors.length > 0 && (() => {
+                const allowedAffiliations = [
+                  'Indian Institute of Technology Delhi',
+                  'Indian Institute of Technology Delhi, New Delhi, India',
+                  'Indian Institute of Technology Delhi-Abu Dhabi',
+                  'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
+                ];
+                const iitdAuthors = selectedDocument.authors.filter(a =>
+                  allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
+                );
+                
+                if (iitdAuthors.length === 0) return null;
+                
+                return (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">IITD Authors</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {iitdAuthors.map((author, idx) => (
+                        <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
+                          <div className="font-medium text-sm">{author.author_name || author.name}</div>
+                          {(author.author_affiliation || author.affiliation) && (
+                            <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Abstract */}
               {selectedDocument.abstract && (
