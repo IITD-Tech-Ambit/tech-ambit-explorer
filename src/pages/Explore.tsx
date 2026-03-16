@@ -622,12 +622,16 @@ const Explore = () => {
                 'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
               ];
               // Map all valid IITD faculty names explicitly stated on the papers
-              const iitdAuthorNames = new Set<string>();
+              const iitdAuthorsMap = new Map<string, string>();
               filteredResults.forEach(item => {
                 if (item.authors) {
                   item.authors.forEach(a => {
                     if (allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')) {
-                      iitdAuthorNames.add((a.author_name || a.name || '').toLowerCase());
+                      const rawName = a.author_name || a.name || '';
+                      if (rawName) {
+                        const formattedName = rawName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+                        iitdAuthorsMap.set(rawName.toLowerCase(), formattedName);
+                      }
                     }
                   });
                 }
@@ -635,12 +639,31 @@ const Explore = () => {
 
               // Intersect related faculty subset
               const filteredRelatedFaculty = relatedFaculty.filter(faculty => 
-                iitdAuthorNames.has((faculty.name || '').toLowerCase())
+                iitdAuthorsMap.has((faculty.name || '').toLowerCase())
               );
 
-              if (filteredRelatedFaculty.length > 0) {
+              // Gather names already included in the official faculty directory
+              const matchedFacultyNames = new Set(filteredRelatedFaculty.map(f => (f.name || '').toLowerCase()));
+
+              // Add the authors from papers that weren't in the official faculty list
+              const unmatchedAuthors: typeof relatedFaculty = [];
+              iitdAuthorsMap.forEach((formattedName, lowerName) => {
+                if (!matchedFacultyNames.has(lowerName)) {
+                  unmatchedAuthors.push({
+                    _id: 'unmatched-' + lowerName,
+                    name: formattedName,
+                    department: { name: 'Other', _id: 'other' },
+                    email: '',
+                    paperCount: 0,
+                  });
+                }
+              });
+
+              const allFacultyToRender = [...filteredRelatedFaculty, ...unmatchedAuthors];
+
+              if (allFacultyToRender.length > 0) {
                 // Group faculty by department
-                const groupedByDepartment = filteredRelatedFaculty.reduce((groups, faculty) => {
+                const groupedByDepartment = allFacultyToRender.reduce((groups, faculty) => {
                 const dept = faculty.department?.name || 'Other';
                 if (!groups[dept]) {
                   groups[dept] = [];
@@ -662,7 +685,7 @@ const Explore = () => {
                 <>
                   <div className="mb-6">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{filteredRelatedFaculty.length}</span> related faculty members
+                      Found <span className="font-semibold text-primary">{allFacultyToRender.length}</span> related IITD authors
                     </p>
                   </div>
                   <div className="space-y-6">
