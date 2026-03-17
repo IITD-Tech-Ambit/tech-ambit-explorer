@@ -30,6 +30,7 @@ const Navigation = () => {
     { name: "Directory", path: "/directory" },
     { name: "Magazines", path: "/magazines" },
     { name: "Mind Map", path: "/mindmap" },
+    { name: "Contributors", path: "/contributors" },
   ];
 
   const isActive = (path: string) => location.pathname === path;

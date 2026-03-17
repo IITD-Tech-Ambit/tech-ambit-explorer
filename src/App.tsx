@@ -10,6 +10,7 @@ import Directory from "./pages/Directory";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
+import Contributors from "./pages/Contributors";
 import NotFound from "./pages/NotFound";
 
 // Configure React Query with production-ready defaults
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/magazines" element={<Magazines />} />
           <Route path="/magazines/:id" element={<MagazineDetail />} />
           <Route path="/mindmap" element={<Mindmap />} />
+          <Route path="/contributors" element={<Contributors />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
