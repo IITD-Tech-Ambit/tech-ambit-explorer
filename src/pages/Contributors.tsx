@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Linkedin, Mail, Users, Heart, Sparkles, Send, UserPlus, GraduationCap, Award, Star, CheckCircle2, X } from "lucide-react";
+import { Linkedin, Mail, Users, Heart, Sparkles, Send, UserPlus, GraduationCap, Award, Star, CheckCircle2, X, Globe } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 
-import deanAvatar from "@/assets/image.png";
-import mentor1Avatar from "@/assets/mentor1-avatar.png";
-import mentor2Avatar from "@/assets/mentor2-avatar.png";
+import deanAvatar from "@/assets/image(Dean).png";
+import mentor1Avatar from "@/assets/image(OM).png";
+import mentor2Avatar from "@/assets/image(Harun).png";
+import mentor3Avatar from "@/assets/image(Shilpi).png";
+import mentor4Avatar from "@/assets/archana.jpeg";
 
 /* ───────── Data ───────── */
 
@@ -22,27 +24,41 @@ interface TeamMember {
 }
 
 const dean: TeamMember = {
-  name: "Dr. Aswhwini K Aggarwal",
+  name: "Prof. Aswhwini K Aggarwal",
   role: "Dean in Charge",
   avatar: deanAvatar,
-  linkedin: "#",
-  email: "mailto:dean@iitd.ac.in",
+  linkedin: "https://textile.iitd.ac.in/faculty-profile/7",
+  email: "mailto:ashwini@textile.iitd.ac.in",
 };
 
 const mentors: TeamMember[] = [
   {
-    name: "Dr Omprakash",
+    name: "Prof. Shilpi Sharma",
+    role: "Mentor",
+    avatar: mentor3Avatar,
+    linkedin: "https://beb.iitd.ac.in/shilpi.html",
+    email: "mailto:shilpi@dbeb.iitd.ac.in",
+  },
+  {
+    name: "Prof. Omprakash",
     role: "Mentor",
     avatar: mentor1Avatar,
-    linkedin: "#",
+    linkedin: "https://iprana-lab.github.io/",
     email: "mailto:omprakash@iitd.ac.in",
   },
   {
-    name: "Dr Mahesh",
+    name: "Prof. Harun Venkatesan",
     role: "Mentor",
     avatar: mentor2Avatar,
-    linkedin: "#",
-    email: "mailto:mahesh@iitd.ac.in",
+    linkedin: "https://textile.iitd.ac.in/faculty-profile/22",
+    email: "mailto:harun@textile.iitd.ac.in",
+  },
+  {
+    name: "Dr. Archana Trivedi",
+    role: "Mentor",
+    avatar: mentor4Avatar,
+    linkedin: "https://www.linkedin.com/in/archana-trivedi-a1968115/?originalSubdomain=in",
+    email: "mailto:ird12649@iitd.ac.in",
   },
 ];
 
@@ -51,35 +67,35 @@ const phaseContributors: TeamMember[] = [
     name: "Anuradha Barnwal",
     role: "Operations",
     entryNumber: "bb1230659@iitd.ac.in",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/anuradha-barnwal-701674229?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "bb1230659@iitd.ac.in",
   },
   {
     name: "Rahul Arvind Masand",
     role: "Operations",
     entryNumber: "ch7221476@iitd.ac.in",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/rahul-masand-787010250?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221476@iitd.ac.in",
   },
   {
     name: "Sudarshan Kumar",
     role: "Tech",
     entryNumber: "ch7221511@iitd.ac.in",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/sudarshan-iiitd?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221511@iitd.ac.in",
   },
   {
     name: "Prem Bhugra",
     role: "Tech",
     entryNumber: "ch7221038@iitd.ac.in",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/prembhugra-iitd?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221038@iitd.ac.in",
   },
   {
     name: "Vivek Kumar",
     role: "Tech",
     entryNumber: "ce1221555@iitd.ac.in",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/vivek-kumar-0b344124b?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ce1221555@iitd.ac.in",
   },
   {
@@ -237,9 +253,9 @@ const MemberCard = ({
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500/20 hover:border-blue-500/40 transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-blue-500/10"
-          aria-label={`${member.name} LinkedIn`}
+          aria-label={`${member.name} Website`}
         >
-          <Linkedin className="w-4 h-4" />
+          <Globe className="w-4 h-4" />
         </a>
       )}
       {member.email && (
