@@ -63,7 +63,7 @@ const Explore = () => {
   const PEOPLE_PER_PAGE = 20;
 
   // Search mode: basic (BM25 only) or advanced (hybrid BM25 + k-NN)
-  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('advanced');
+  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic');
 
   // Search-on-Search (refine within results)
   const [refineQuery, setRefineQuery] = useState('');
@@ -194,6 +194,7 @@ const Explore = () => {
   // All faculty for query (lazy - only fires when showAllFaculty is true)
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
     submittedQuery,
+    searchMode,
     { enabled: showAllFaculty }
   );
 

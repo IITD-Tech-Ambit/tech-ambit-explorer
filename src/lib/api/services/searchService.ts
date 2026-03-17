@@ -96,9 +96,9 @@ export async function checkSearchHealth(): Promise<{
 /**
  * Get all faculty matching a query (OpenSearch aggregation, no documents)
  */
-export async function getAllFacultyForQuery(query: string): Promise<AllFacultyForQueryResponse> {
+export async function getAllFacultyForQuery(query: string, mode: string = 'advanced'): Promise<AllFacultyForQueryResponse> {
   const response = await fetch(
-    `${SEARCH_API_BASE_URL}/search/faculty-for-query?query=${encodeURIComponent(query)}`
+    `${SEARCH_API_BASE_URL}/search/faculty-for-query?query=${encodeURIComponent(query)}&mode=${mode}`
   );
 
   if (!response.ok) {

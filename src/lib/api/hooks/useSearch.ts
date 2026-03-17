@@ -81,13 +81,15 @@ export const useAuthorScopedSearch = (
  */
 export const useAllFacultyForQuery = (
     query: string,
+    mode: string = 'advanced',
     options?: { enabled?: boolean }
 ) => {
     const isEnabled = options?.enabled === true && !!query.trim();
     
     return useQuery<AllFacultyForQueryResponse, Error>({
-        queryKey: queryKeys.search.facultyForQuery(query),
-        queryFn: () => getAllFacultyForQuery(query),
+        // Include mode in queryKey so basic/advanced searches cache separately
+        queryKey: [...queryKeys.search.facultyForQuery(query), mode],
+        queryFn: () => getAllFacultyForQuery(query, mode),
         enabled: isEnabled,
         staleTime: 1000 * 60 * 10,  // Cache for 10 minutes (heavy query)
         gcTime: 1000 * 60 * 15,
