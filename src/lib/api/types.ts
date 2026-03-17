@@ -240,6 +240,8 @@ export interface SearchRequest {
     sort?: 'relevance' | 'date' | 'citations' | 'impact' | 'normalized';
     filters?: SearchFilters;
     search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
+    mode?: 'basic' | 'advanced';
+    refine_within?: string;
 }
 
 // Directory/Faculty Types

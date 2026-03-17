@@ -20,7 +20,9 @@ export const useSearchResearch = (
             query: request.query, 
             page: request.page, 
             filters: JSON.stringify(request.filters || {}), 
-            sort: request.sort 
+            sort: request.sort,
+            mode: request.mode || 'advanced',
+            refine_within: request.refine_within || null
           }
         : { empty: true };
     

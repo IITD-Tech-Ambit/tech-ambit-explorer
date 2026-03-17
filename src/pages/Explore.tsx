@@ -61,6 +61,13 @@ const Explore = () => {
   const [isPeopleLoadingMore, setIsPeopleLoadingMore] = useState(false);
   const [peoplePage, setPeoplePage] = useState(1);
   const PEOPLE_PER_PAGE = 20;
+
+  // Search mode: basic (BM25 only) or advanced (hybrid BM25 + k-NN)
+  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('advanced');
+
+  // Search-on-Search (refine within results)
+  const [refineQuery, setRefineQuery] = useState('');
+  const [submittedRefineQuery, setSubmittedRefineQuery] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
   const isResizing = useRef(false);
   const [isResizingState, setIsResizingState] = useState(false);
@@ -145,12 +152,14 @@ const Explore = () => {
     if (!submittedQuery.trim()) return null;
     
     const request: SearchRequest = {
-      query: submittedQuery,
+      query: submittedRefineQuery || submittedQuery,
       page: currentPage,
       per_page: perPage,
       sort: sortBy,
       filters: {},
       search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
+      mode: searchMode,
+      ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
     };
 
     // Add year filters
@@ -164,7 +173,7 @@ const Explore = () => {
 
     console.log('Built searchRequest:', request);
     return request;
-  }, [submittedQuery, currentPage, perPage, sortBy, yearFrom, yearTo, activeFilter, searchIn]);
+  }, [submittedQuery, submittedRefineQuery, currentPage, perPage, sortBy, yearFrom, yearTo, activeFilter, searchIn, searchMode]);
 
   // Use React Query for search
   const { data: searchData, isLoading, isFetching } = useSearchResearch(searchRequest);
@@ -223,6 +232,9 @@ const Explore = () => {
     setCurrentPage(page);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
+    // Clear any active refinement when submitting a new base query
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
 
     
     // Sync to URL params for persistence across navigation
@@ -373,38 +385,67 @@ const Explore = () => {
 
           {/* Search and Filters Container */}
           <div className="flex flex-col sm:flex-row gap-3 items-start animate-slide-up max-w-[800px]">
-            {/* Search Bar */}
-            <div className="relative flex-1 w-full">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                <Search className="w-5 h-5 text-foreground/60" />
-              </div>
-              <Input
-                type="text"
-                placeholder="Search by department, project, faculty, or keywords..."
-                className="pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
+            {/* Search Bar and Mode Toggle Row */}
+            <div className="flex-1 w-full flex flex-col sm:flex-row gap-3 items-center">
+              {/* Search Bar */}
+              <div className="relative flex-1 w-full">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                  <Search className="w-5 h-5 text-foreground/60" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Search by department, project, faculty, or keywords..."
+                  className="pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
+                  >
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+                <Button
+                  onClick={() => performSearch(1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  disabled={isLoading}
+                  size="icon"
                 >
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              )}
-              <Button
-                onClick={() => performSearch(1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-                disabled={isLoading}
-                size="icon"
-              >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
-            </div>
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
 
-            {/* Filter toggle beside search bar */}
+              {/* Basic vs Advanced Search Mode Toggle */}
+              <div className="flex items-center shrink-0">
+                <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center">
+                  <button
+                    onClick={() => setSearchMode('basic')}
+                    className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
+                      searchMode === 'basic' 
+                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="BM25 Keyword matching only"
+                  >
+                    Basic
+                  </button>
+                  <button
+                    onClick={() => setSearchMode('advanced')}
+                    className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
+                      searchMode === 'advanced' 
+                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Hybrid Keyword + AI Semantic matching"
+                  >
+                    Advanced
+                  </button>
+                </div>
+              </div>
+            </div>
             <div className="relative w-full sm:w-auto">
               <Button
                 variant={showFilters ? "default" : "outline"}
@@ -490,6 +531,71 @@ const Explore = () => {
             </div>
           </div>
         </div>
+
+        {/* Search-on-Search (Refine Results) Area */}
+        {hasSearched && !isLoading && (
+          <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
+            {submittedRefineQuery ? (
+              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {pagination?.total || 0} refined results found
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setRefineQuery('');
+                    setSubmittedRefineQuery('');
+                  }}
+                  className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear refinement
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2 items-center bg-card border border-border rounded-lg p-2 shadow-sm">
+                <Search className="w-4 h-4 text-muted-foreground ml-2" />
+                <Input
+                  type="text"
+                  placeholder={`Search within these ${pagination?.total || 0} results...`}
+                  className="border-0 focus-visible:ring-0 shadow-none h-9 text-sm bg-transparent"
+                  value={refineQuery}
+                  onChange={(e) => setRefineQuery(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && refineQuery.trim()) {
+                      setSubmittedRefineQuery(refineQuery);
+                    }
+                  }}
+                />
+                {refineQuery && (
+                  <button
+                    onClick={() => setRefineQuery("")}
+                    className="p-1.5 rounded-full hover:bg-muted transition-colors mr-1"
+                  >
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 px-3"
+                  onClick={() => {
+                    if (refineQuery.trim()) setSubmittedRefineQuery(refineQuery);
+                  }}
+                  disabled={!refineQuery.trim()}
+                >
+                  Refine
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Click-away overlay for filters */}
