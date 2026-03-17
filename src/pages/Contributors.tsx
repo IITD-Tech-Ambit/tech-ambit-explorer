@@ -10,7 +10,7 @@ import deanAvatar from "@/assets/image(Dean).png";
 import mentor1Avatar from "@/assets/image(OM).png";
 import mentor2Avatar from "@/assets/image(Harun).png";
 import mentor3Avatar from "@/assets/image(Shilpi).png";
-import mentor4Avatar from "@/assets/image(Harun).png";
+import mentor4Avatar from "@/assets/archana.jpeg";
 
 /* ───────── Data ───────── */
 
@@ -52,6 +52,13 @@ const mentors: TeamMember[] = [
     avatar: mentor2Avatar,
     linkedin: "https://textile.iitd.ac.in/faculty-profile/22",
     email: "mailto:harun@textile.iitd.ac.in",
+  },
+  {
+    name: "Dr. Archana Trivedi",
+    role: "Mentor",
+    avatar: mentor4Avatar,
+    linkedin: "https://www.linkedin.com/in/archana-trivedi-a1968115/?originalSubdomain=in",
+    email: "mailto:ird12649@iitd.ac.in",
   },
 ];
 
