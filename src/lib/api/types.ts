@@ -357,6 +357,8 @@ export interface AuthorScopedSearchRequest {
     author_id: string;
     page?: number;
     per_page?: number;
+    mode?: 'basic' | 'advanced';
+    refine_within?: string;
 }
 
 export interface AuthorScopedSearchResponse {

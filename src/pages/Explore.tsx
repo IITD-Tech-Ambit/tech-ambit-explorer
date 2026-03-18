@@ -186,16 +186,18 @@ const Explore = () => {
       author_id: selectedAuthor.author_id,
       page: authorScopedPage,
       per_page: 20,
+      mode: searchMode,
+      ...(submittedRefineQuery ? { refine_within: submittedRefineQuery } : {}),
     };
-  }, [selectedAuthor, submittedQuery, authorScopedPage]);
+  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode]);
 
   const { data: authorScopedData, isLoading: isAuthorScopedLoading } = useAuthorScopedSearch(authorScopedRequest);
 
-  // All faculty for query (lazy - only fires when showAllFaculty is true)
+  // All faculty for query (fetches precise counts based on the active mode)
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
     submittedQuery,
     searchMode,
-    { enabled: showAllFaculty }
+    { enabled: !!submittedQuery.trim() }
   );
 
   // IntersectionObserver for infinite scroll in People sidebar
@@ -789,11 +791,22 @@ const Explore = () => {
                       const rawName = a.author_name || a.name || '';
                       if (!rawName) return;
                       const formattedName = rawName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                      
+                      // Look up precise global count for this query
+                      let preciseCount = 1; // fallback
+                      if (allFacultyData?.departments) {
+                        for (const dept of allFacultyData.departments) {
+                          const found = dept.faculty.find(f => f.author_id === a.author_id);
+                          if (found) {
+                            preciseCount = found.paper_count;
+                            break;
+                          }
+                        }
+                      }
+
                       const existing = authorData.get(a.author_id);
-                      if (existing) {
-                        existing.count += 1;
-                      } else {
-                        authorData.set(a.author_id, { name: formattedName, author_id: a.author_id, count: 1 });
+                      if (!existing) {
+                        authorData.set(a.author_id, { name: formattedName, author_id: a.author_id, count: preciseCount });
                       }
                     }
                   });
@@ -954,7 +967,7 @@ const Explore = () => {
                 <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 animate-slide-up">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-foreground">
-                      Showing results for "<span className="text-primary">{submittedQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works
+                      Showing results for "<span className="text-primary">{submittedQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">(in {searchMode} mode)</span>
                     </p>
                     {authorScopedData && (
                       <p className="text-xs text-muted-foreground mt-1">

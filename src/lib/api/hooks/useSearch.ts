@@ -62,11 +62,11 @@ export const useAuthorScopedSearch = (
         && !!request.author_id;
     
     return useQuery<AuthorScopedSearchResponse, Error>({
-        queryKey: queryKeys.search.authorScoped(
+        queryKey: [...queryKeys.search.authorScoped(
             request?.author_id || '',
             request?.query || '',
             request?.page || 1
-        ),
+        ), request?.mode || 'advanced'],
         queryFn: () => authorScopedSearch(request!),
         enabled: isEnabled,
         staleTime: 1000 * 60 * 5,
