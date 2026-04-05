@@ -773,56 +773,9 @@ const Explore = () => {
                 </>
               );
             })() : (() => {
-              /* From Results mode - client-side */
-              const allowedAffiliations = [
-                'Indian Institute of Technology Delhi',
-                'Indian Institute of Technology Delhi, New Delhi, India',
-                'Indian Institute of Technology Delhi-Abu Dhabi',
-                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-              ];
+              /* From Results mode - uses related_faculty from search response + expert_id */
 
-              // Build author frequency + ID map from current page results (only matched faculty)
-              const authorData = new Map<string, { name: string; author_id: string; count: number }>();
-              filteredResults.forEach(item => {
-                if (item.authors) {
-                  item.authors.forEach(a => {
-                    const affiliation = a.author_affiliation || a.affiliation || '';
-                    if (allowedAffiliations.includes(affiliation) && a.matched_profile && a.author_id) {
-                      const rawName = a.author_name || a.name || '';
-                      if (!rawName) return;
-                      const formattedName = rawName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-                      
-                      // Look up precise global count for this query
-                      let preciseCount = 1; // fallback
-                      if (allFacultyData?.departments) {
-                        for (const dept of allFacultyData.departments) {
-                          const found = dept.faculty.find(f => f.author_id === a.author_id);
-                          if (found) {
-                            preciseCount = found.paper_count;
-                            break;
-                          }
-                        }
-                      }
-
-                      const existing = authorData.get(a.author_id);
-                      if (!existing) {
-                        authorData.set(a.author_id, { name: formattedName, author_id: a.author_id, count: preciseCount });
-                      }
-                    }
-                  });
-                }
-              });
-
-              // Build author_id → name for relatedFaculty lookup
-              const authorIdMap = new Map<string, string>();
-              authorData.forEach((v, k) => authorIdMap.set(v.name.toLowerCase(), k));
-
-              // Only show related faculty who have matching author_ids
-              const filteredRelatedFaculty = relatedFaculty.filter(f =>
-                authorIdMap.has((f.name || '').toLowerCase())
-              );
-
-              if (filteredRelatedFaculty.length === 0) {
+              if (relatedFaculty.length === 0) {
                 return (
                   <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
                     <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
@@ -832,15 +785,28 @@ const Explore = () => {
                 );
               }
 
+              // Enrich related_faculty with precise paper counts from allFacultyData
+              const enrichedFaculty = relatedFaculty.map(f => {
+                let preciseCount = f.paperCount;
+                if (allFacultyData?.departments) {
+                  for (const dept of allFacultyData.departments) {
+                    const found = dept.faculty.find(af => af.author_id === (f as any).expert_id);
+                    if (found) {
+                      preciseCount = found.paper_count;
+                      break;
+                    }
+                  }
+                }
+                return { ...f, paperCount: preciseCount };
+              });
+
               // Group by department with relevance-based ordering
-              const deptGroups: Record<string, { faculty: typeof filteredRelatedFaculty; totalCount: number }> = {};
-              filteredRelatedFaculty.forEach(faculty => {
+              const deptGroups: Record<string, { faculty: typeof enrichedFaculty; totalCount: number }> = {};
+              enrichedFaculty.forEach(faculty => {
                 const dept = faculty.department?.name || 'Unknown';
                 if (!deptGroups[dept]) deptGroups[dept] = { faculty: [], totalCount: 0 };
                 deptGroups[dept].faculty.push(faculty);
-                const authorId = authorIdMap.get((faculty.name || '').toLowerCase()) || '';
-                const authorInfo = authorData.get(authorId);
-                deptGroups[dept].totalCount += authorInfo?.count || 0;
+                deptGroups[dept].totalCount += faculty.paperCount;
               });
 
               // Sort departments by total paper count (relevance)
@@ -860,7 +826,7 @@ const Explore = () => {
 
               // Regroup visible items by department
               const deptOrder: string[] = [];
-              const groupedVisible: Record<string, typeof filteredRelatedFaculty> = {};
+              const groupedVisible: Record<string, typeof enrichedFaculty> = {};
               visibleItems.forEach(item => {
                 if (!groupedVisible[item.department]) {
                   groupedVisible[item.department] = [];
@@ -873,7 +839,7 @@ const Explore = () => {
                 <>
                   <div className="shrink-0 mb-4 mt-2">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{filteredRelatedFaculty.length}</span> faculty on this page{' '}
+                      Found <span className="font-semibold text-primary">{enrichedFaculty.length}</span> faculty on this page{' '}
                       <button
                         className="text-primary hover:underline font-medium text-sm"
                         onClick={() => { setShowAllFaculty(true); setPeoplePage(1); }}
@@ -893,8 +859,7 @@ const Explore = () => {
                         </div>
                         <ul className="space-y-2 pl-4">
                           {groupedVisible[department].map((faculty) => {
-                            const facultyAuthorId = authorIdMap.get((faculty.name || '').toLowerCase()) || '';
-                            const authorInfo = authorData.get(facultyAuthorId);
+                            const facultyAuthorId = (faculty as any).expert_id || '';
                             const isSelected = selectedAuthor?.author_id === facultyAuthorId;
                             return (
                               <li key={faculty._id}>
@@ -910,9 +875,7 @@ const Explore = () => {
                                     <span className="shrink-0 mr-2">•</span>
                                     <span>{faculty.name}</span>
                                   </div>
-                                  {authorInfo && (
-                                    <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{authorInfo.count}</span>
-                                  )}
+                                  <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paperCount}</span>
                                 </button>
                               </li>
                             );
