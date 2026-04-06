@@ -91,7 +91,8 @@ export interface DepartmentCollection {
 
 export interface Faculty {
     _id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
 }
 
 export interface PhdThesisData {
