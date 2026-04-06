@@ -264,6 +264,9 @@ export interface DirectoryFaculty {
     scopusId?: string;
     department: DirectoryDepartment;
     tags?: string[];
+    profileImageUrl?: string | null;
+    designation?: string | null;
+    workingFromYear?: number | null;
 }
 
 export interface DirectoryPagination {
@@ -297,6 +300,9 @@ export interface GroupedDepartmentFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    profileImageUrl?: string | null;
+    designation?: string | null;
+    workingFromYear?: number | null;
 }
 
 export interface GroupedDepartment {
