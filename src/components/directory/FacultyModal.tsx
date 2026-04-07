@@ -94,7 +94,7 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
                         <StatPill
                             icon={Award}
                             label="h-index"
@@ -106,18 +106,11 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                             value={coworkingData?.citationCount ?? faculty.citationCount ?? 0}
                         />
                         {coworkingData?.stats && (
-                            <>
-                                <StatPill
-                                    icon={Users}
-                                    label="co-authors"
-                                    value={coworkingData.stats.uniqueCoauthors}
-                                />
-                                <StatPill
-                                    icon={GraduationCap}
-                                    label="students"
-                                    value={coworkingData.stats.totalStudentsSupervised}
-                                />
-                            </>
+                            <StatPill
+                                icon={Users}
+                                label="co-authors"
+                                value={coworkingData.stats.uniqueCoauthors}
+                            />
                         )}
                     </div>
                 </DialogHeader>
