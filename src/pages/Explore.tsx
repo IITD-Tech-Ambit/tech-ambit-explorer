@@ -10,7 +10,144 @@ import Footer from "@/components/Footer";
 import FacultyModal from "@/components/directory/FacultyModal";
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
-import type { DirectoryFaculty, AuthorScopedSearchRequest } from "@/lib/api/types";
+import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
+import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
+
+/**
+ * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
+ * Names for Explore result cards: when a faculty member is selected, they are listed first.
+ */
+type ExploreCardAuthorEntry = { name: string; author_id: string };
+
+function dedupeAuthorEntries(entries: ExploreCardAuthorEntry[]): ExploreCardAuthorEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    if (!e.author_id || seen.has(e.author_id)) return false;
+    seen.add(e.author_id);
+    return true;
+  });
+}
+
+function getExploreCardAuthorEntries(
+  authors: SearchAuthor[] | undefined,
+  selectedAuthor: { name: string; author_id: string } | null
+): ExploreCardAuthorEntry[] {
+  const roster = authors || [];
+
+  if (selectedAuthor) {
+    const id = String(selectedAuthor.author_id);
+    const match = roster.find((a) => a.author_id != null && String(a.author_id) === id);
+    const headName =
+      (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name;
+    const head: ExploreCardAuthorEntry = { name: headName, author_id: id };
+    const others = roster
+      .filter((a) => a.author_id != null && String(a.author_id) !== id)
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        author_id: String(a.author_id),
+      }))
+      .filter((e) => e.name);
+    const merged = dedupeAuthorEntries([head, ...others]);
+    return merged.length ? merged : [{ name: selectedAuthor.name, author_id: id }];
+  }
+
+  return dedupeAuthorEntries(
+    roster
+      .filter((a) => a.author_id != null)
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        author_id: String(a.author_id),
+      }))
+      .filter((e) => e.name)
+  );
+}
+
+type ExploreModalAuthorRow = {
+  name: string;
+  affiliation?: string;
+  highlight?: boolean;
+  author_id: string;
+};
+
+function getExploreModalAuthorRows(
+  authors: SearchAuthor[] | undefined,
+  selectedAuthor: { name: string; author_id: string } | null
+): ExploreModalAuthorRow[] | null {
+  const roster = (authors || []).filter((a) => a.author_id != null);
+
+  if (roster.length === 0) return null;
+
+  if (!selectedAuthor) {
+    return roster
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        affiliation: a.author_affiliation || a.affiliation,
+        author_id: String(a.author_id),
+      }))
+      .filter((r) => r.name);
+  }
+
+  const id = String(selectedAuthor.author_id);
+  const match = roster.find((a) => String(a.author_id) === id);
+  const scoped: ExploreModalAuthorRow = {
+    name: (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name,
+    affiliation: match?.author_affiliation || match?.affiliation,
+    highlight: true,
+    author_id: id,
+  };
+  const rest: ExploreModalAuthorRow[] = roster
+    .filter((a) => String(a.author_id) !== id)
+    .map((a) => ({
+      name: (a.author_name || a.name || "").trim(),
+      affiliation: a.author_affiliation || a.affiliation,
+      author_id: String(a.author_id),
+    }))
+    .filter((r) => r.name);
+
+  const rows = [scoped, ...rest].filter((r) => r.name);
+  return rows.length ? rows : [{ name: selectedAuthor.name, highlight: true, author_id: id }];
+}
+
+function ExploreCardAuthorsLine({
+  authors,
+  selectedAuthor,
+  onAuthorClick,
+}: {
+  authors: SearchAuthor[] | undefined;
+  selectedAuthor: { name: string; author_id: string } | null;
+  onAuthorClick: (scopusAuthorId: string) => void;
+}) {
+  const entries = getExploreCardAuthorEntries(authors, selectedAuthor);
+  if (entries.length === 0) return null;
+  const label = selectedAuthor ? "IIT Delhi author" : "Authors";
+  const shown = entries.slice(0, 3);
+  const more = entries.length - shown.length;
+  return (
+    <div
+      className="text-sm text-muted-foreground"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <span className="font-semibold text-primary/80 mr-1">{label}:</span>
+      {shown.map((entry, i) => (
+        <span key={`${entry.author_id}-${i}`}>
+          {i > 0 && ", "}
+          <button
+            type="button"
+            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left hover:underline underline-offset-2 decoration-primary/50 ${
+              selectedAuthor && i === 0 ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => onAuthorClick(entry.author_id)}
+          >
+            {entry.name}
+          </button>
+        </span>
+      ))}
+      {more > 0 && <span className="text-muted-foreground"> +{more} more</span>}
+    </div>
+  );
+}
 
 const Explore = () => {
   const navigate = useNavigate();
@@ -157,7 +294,8 @@ const Explore = () => {
       per_page: perPage,
       sort: sortBy,
       filters: {},
-      search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
+      // Always send explicit field list when any toggle is selected (all 5 is valid).
+      search_in: searchIn.length > 0 ? searchIn : undefined,
       mode: searchMode,
       ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
     };
@@ -181,15 +319,18 @@ const Explore = () => {
   // Author-scoped search request (fires when an author is selected)
   const authorScopedRequest = useMemo<AuthorScopedSearchRequest | null>(() => {
     if (!selectedAuthor || !submittedQuery.trim()) return null;
+    // Same contract as POST /search: main `query` is the active text; `refine_within` is the prior query when refining.
+    const activeQuery = submittedRefineQuery || submittedQuery;
     return {
-      query: submittedQuery,
+      query: activeQuery,
       author_id: selectedAuthor.author_id,
       page: authorScopedPage,
       per_page: 20,
       mode: searchMode,
-      ...(submittedRefineQuery ? { refine_within: submittedRefineQuery } : {}),
+      ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
+      ...(searchIn.length > 0 ? { search_in: searchIn } : {}),
     };
-  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode]);
+  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode, searchIn]);
 
   const { data: authorScopedData, isLoading: isAuthorScopedLoading } = useAuthorScopedSearch(authorScopedRequest);
 
@@ -321,6 +462,17 @@ const Explore = () => {
     setSelectedPeopleFaculty(directoryFaculty);
     setFacultyModalOpen(true);
   };
+
+  /** Open directory profile from a paper author line (Scopus author_id → Faculty). */
+  const handleAuthorClickByScopus = useCallback(async (scopusAuthorId: string) => {
+    try {
+      const faculty = await getFacultyByScopusId(scopusAuthorId);
+      setSelectedPeopleFaculty(faculty);
+      setFacultyModalOpen(true);
+    } catch (err) {
+      console.error("Failed to load faculty profile", err);
+    }
+  }, []);
 
   // Handle navigate to mind map
   const handleNavigateToMindMap = async (documentId: string) => {
@@ -504,11 +656,14 @@ const Explore = () => {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Search In</label>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Author matches <span className="font-medium text-foreground/80">author names</span> on the paper (basic = strict, advanced = fuzzy).
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { field: 'title' as const, label: '📝 Title' },
                         { field: 'abstract' as const, label: '📄 Abstract' },
-                        { field: 'author' as const, label: '👤 Author' },
+                        { field: 'author' as const, label: '👤 Author name' },
                         { field: 'subject_area' as const, label: '🏷️ Subject Area' },
                         { field: 'field' as const, label: '🔬 Field' },
                       ].map(({ field, label }) => (
@@ -1025,27 +1180,11 @@ const Explore = () => {
                     )}
                   </div>
                   <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                  {item.authors && item.authors.length > 0 && (() => {
-                    const allowedAffiliations = [
-                      'Indian Institute of Technology Delhi',
-                      'Indian Institute of Technology Delhi, New Delhi, India',
-                      'Indian Institute of Technology Delhi-Abu Dhabi',
-                      'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                    ];
-                    const iitdAuthors = item.authors.filter(a =>
-                      allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                    );
-                    
-                    if (iitdAuthors.length === 0) return null;
-                    
-                    return (
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-primary/80 mr-1">Authors:</span>
-                        {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                        {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
-                      </p>
-                    );
-                  })()}
+                  <ExploreCardAuthorsLine
+                    authors={item.authors}
+                    selectedAuthor={selectedAuthor}
+                    onAuthorClick={handleAuthorClickByScopus}
+                  />
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
@@ -1144,27 +1283,11 @@ const Explore = () => {
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
                             <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                            {item.authors && item.authors.length > 0 && (() => {
-                              const allowedAffiliations = [
-                                'Indian Institute of Technology Delhi',
-                                'Indian Institute of Technology Delhi, New Delhi, India',
-                                'Indian Institute of Technology Delhi-Abu Dhabi',
-                                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                              ];
-                              const iitdAuthors = item.authors.filter(a =>
-                                allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                              );
-                              
-                              if (iitdAuthors.length === 0) return null;
-                              
-                              return (
-                                <p className="text-sm text-muted-foreground">
-                                  <span className="font-semibold text-primary/80 mr-1">Authors:</span>
-                                  {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                                  {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
-                                </p>
-                              );
-                            })()}
+                            <ExploreCardAuthorsLine
+                    authors={item.authors}
+                    selectedAuthor={selectedAuthor}
+                    onAuthorClick={handleAuthorClickByScopus}
+                  />
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
@@ -1339,7 +1462,7 @@ const Explore = () => {
       {/* Document Detail Modal */}
       {selectedDocument && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4"
           onClick={() => setSelectedDocument(null)}
         >
           <div
@@ -1369,31 +1492,36 @@ const Explore = () => {
 
             {/* Modal Content */}
             <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
-              {/* Authors */}
-              {selectedDocument.authors && selectedDocument.authors.length > 0 && (() => {
-                const allowedAffiliations = [
-                  'Indian Institute of Technology Delhi',
-                  'Indian Institute of Technology Delhi, New Delhi, India',
-                  'Indian Institute of Technology Delhi-Abu Dhabi',
-                  'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                ];
-                const iitdAuthors = selectedDocument.authors.filter(a =>
-                  allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                );
-                
-                if (iitdAuthors.length === 0) return null;
-                
+              {/* Authors — when author-scoped, always show the Scopus-selected IIT Delhi author even if affiliation text is missing */}
+              {(() => {
+                const rows = getExploreModalAuthorRows(selectedDocument.authors, selectedAuthor);
+                if (!rows || rows.length === 0) return null;
                 return (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Authors</h3>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">
+                      {selectedAuthor ? "IIT Delhi author(s)" : "Authors"}
+                    </h3>
                     <div className="flex flex-wrap gap-2">
-                      {iitdAuthors.map((author, idx) => (
-                        <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
-                          <div className="font-medium text-sm">{author.author_name || author.name}</div>
-                          {(author.author_affiliation || author.affiliation) && (
-                            <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
+                      {rows.map((row, idx) => (
+                        <button
+                          key={`${row.author_id}-${idx}`}
+                          type="button"
+                          onClick={() => handleAuthorClickByScopus(row.author_id)}
+                          className={`rounded-md px-3 py-2 border text-left transition-colors hover:ring-2 hover:ring-primary/30 ${
+                            row.highlight
+                              ? "bg-primary/10 border-primary/40 ring-1 ring-primary/20"
+                              : "bg-accent-light border-accent"
+                          }`}
+                        >
+                          <div
+                            className={`text-sm ${row.highlight ? "font-semibold text-foreground" : "font-medium"}`}
+                          >
+                            {row.name}
+                          </div>
+                          {row.affiliation && (
+                            <div className="text-xs text-muted-foreground">{row.affiliation}</div>
                           )}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>

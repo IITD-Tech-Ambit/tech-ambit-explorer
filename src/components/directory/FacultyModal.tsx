@@ -37,8 +37,13 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
         .sort((a, b) => b - a);
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-3xl max-h-[85vh] p-0 overflow-hidden">
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) onClose();
+            }}
+        >
+            <DialogContent className="z-[100] max-w-3xl max-h-[85vh] p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-primary/10 to-accent/10">
                     <div className="flex items-start gap-5">
                         <div className="relative flex-shrink-0">

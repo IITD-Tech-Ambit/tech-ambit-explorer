@@ -366,6 +366,8 @@ export interface AuthorScopedSearchRequest {
     per_page?: number;
     mode?: 'basic' | 'advanced';
     refine_within?: string;
+    /** Same as main search: restrict matching to these fields (e.g. author = author names only). */
+    search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
 }
 
 export interface AuthorScopedSearchResponse {

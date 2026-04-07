@@ -15,15 +15,20 @@ export const useSearchResearch = (
     
     // Normalize query key to use primitive values for consistent caching
     // JSON.stringify ensures object comparison works correctly across remounts
-    const normalizedKey = request 
-        ? { 
-            query: request.query, 
-            page: request.page, 
-            filters: JSON.stringify(request.filters || {}), 
+    const normalizedKey = request
+        ? {
+            query: request.query,
+            page: request.page,
+            per_page: request.per_page ?? 20,
+            filters: JSON.stringify(request.filters || {}),
             sort: request.sort,
             mode: request.mode || 'advanced',
-            refine_within: request.refine_within || null
-          }
+            refine_within: request.refine_within || null,
+            // Must match server-side cache: same fields in any order → same key
+            search_in: request.search_in?.length
+                ? [...request.search_in].sort().join(',')
+                : null,
+        }
         : { empty: true };
     
     return useQuery<SearchResponse, Error>({
@@ -62,11 +67,19 @@ export const useAuthorScopedSearch = (
         && !!request.author_id;
     
     return useQuery<AuthorScopedSearchResponse, Error>({
-        queryKey: [...queryKeys.search.authorScoped(
-            request?.author_id || '',
-            request?.query || '',
-            request?.page || 1
-        ), request?.mode || 'advanced'],
+        queryKey: [
+            ...queryKeys.search.authorScoped(
+                request?.author_id || '',
+                request?.query || '',
+                request?.page || 1
+            ),
+            request?.mode || 'advanced',
+            request?.refine_within || null,
+            request?.per_page ?? 20,
+            request?.search_in?.length
+                ? [...request.search_in].sort().join(',')
+                : null,
+        ],
         queryFn: () => authorScopedSearch(request!),
         enabled: isEnabled,
         staleTime: 1000 * 60 * 5,
