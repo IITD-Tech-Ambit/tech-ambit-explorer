@@ -310,9 +310,9 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
       else if (parentNodeType === 'collection' && parentNode.data.departmentId) {
         const faculties = await fetchFaculties(parentNode.data.departmentId);
         childrenData = faculties.map((faculty: Faculty) => ({
-          label: faculty.name,
+          label: `${faculty.firstName} ${faculty.lastName}`.trim(),
           nodeType: 'professor' as NodeType,
-          professorName: faculty.name,
+          professorName: `${faculty.firstName} ${faculty.lastName}`.trim(),
           facultyId: faculty._id,
         }));
       }

@@ -10,7 +10,144 @@ import Footer from "@/components/Footer";
 import FacultyModal from "@/components/directory/FacultyModal";
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
-import type { DirectoryFaculty, AuthorScopedSearchRequest } from "@/lib/api/types";
+import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
+import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
+
+/**
+ * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
+ * Names for Explore result cards: when a faculty member is selected, they are listed first.
+ */
+type ExploreCardAuthorEntry = { name: string; author_id: string };
+
+function dedupeAuthorEntries(entries: ExploreCardAuthorEntry[]): ExploreCardAuthorEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    if (!e.author_id || seen.has(e.author_id)) return false;
+    seen.add(e.author_id);
+    return true;
+  });
+}
+
+function getExploreCardAuthorEntries(
+  authors: SearchAuthor[] | undefined,
+  selectedAuthor: { name: string; author_id: string } | null
+): ExploreCardAuthorEntry[] {
+  const roster = authors || [];
+
+  if (selectedAuthor) {
+    const id = String(selectedAuthor.author_id);
+    const match = roster.find((a) => a.author_id != null && String(a.author_id) === id);
+    const headName =
+      (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name;
+    const head: ExploreCardAuthorEntry = { name: headName, author_id: id };
+    const others = roster
+      .filter((a) => a.author_id != null && String(a.author_id) !== id)
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        author_id: String(a.author_id),
+      }))
+      .filter((e) => e.name);
+    const merged = dedupeAuthorEntries([head, ...others]);
+    return merged.length ? merged : [{ name: selectedAuthor.name, author_id: id }];
+  }
+
+  return dedupeAuthorEntries(
+    roster
+      .filter((a) => a.author_id != null)
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        author_id: String(a.author_id),
+      }))
+      .filter((e) => e.name)
+  );
+}
+
+type ExploreModalAuthorRow = {
+  name: string;
+  affiliation?: string;
+  highlight?: boolean;
+  author_id: string;
+};
+
+function getExploreModalAuthorRows(
+  authors: SearchAuthor[] | undefined,
+  selectedAuthor: { name: string; author_id: string } | null
+): ExploreModalAuthorRow[] | null {
+  const roster = (authors || []).filter((a) => a.author_id != null);
+
+  if (roster.length === 0) return null;
+
+  if (!selectedAuthor) {
+    return roster
+      .map((a) => ({
+        name: (a.author_name || a.name || "").trim(),
+        affiliation: a.author_affiliation || a.affiliation,
+        author_id: String(a.author_id),
+      }))
+      .filter((r) => r.name);
+  }
+
+  const id = String(selectedAuthor.author_id);
+  const match = roster.find((a) => String(a.author_id) === id);
+  const scoped: ExploreModalAuthorRow = {
+    name: (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name,
+    affiliation: match?.author_affiliation || match?.affiliation,
+    highlight: true,
+    author_id: id,
+  };
+  const rest: ExploreModalAuthorRow[] = roster
+    .filter((a) => String(a.author_id) !== id)
+    .map((a) => ({
+      name: (a.author_name || a.name || "").trim(),
+      affiliation: a.author_affiliation || a.affiliation,
+      author_id: String(a.author_id),
+    }))
+    .filter((r) => r.name);
+
+  const rows = [scoped, ...rest].filter((r) => r.name);
+  return rows.length ? rows : [{ name: selectedAuthor.name, highlight: true, author_id: id }];
+}
+
+function ExploreCardAuthorsLine({
+  authors,
+  selectedAuthor,
+  onAuthorClick,
+}: {
+  authors: SearchAuthor[] | undefined;
+  selectedAuthor: { name: string; author_id: string } | null;
+  onAuthorClick: (scopusAuthorId: string) => void;
+}) {
+  const entries = getExploreCardAuthorEntries(authors, selectedAuthor);
+  if (entries.length === 0) return null;
+  const label = selectedAuthor ? "IIT Delhi author" : "Authors";
+  const shown = entries.slice(0, 3);
+  const more = entries.length - shown.length;
+  return (
+    <div
+      className="text-sm text-muted-foreground"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <span className="font-semibold text-primary/80 mr-1">{label}:</span>
+      {shown.map((entry, i) => (
+        <span key={`${entry.author_id}-${i}`}>
+          {i > 0 && ", "}
+          <button
+            type="button"
+            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left hover:underline underline-offset-2 decoration-primary/50 ${
+              selectedAuthor && i === 0 ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => onAuthorClick(entry.author_id)}
+          >
+            {entry.name}
+          </button>
+        </span>
+      ))}
+      {more > 0 && <span className="text-muted-foreground"> +{more} more</span>}
+    </div>
+  );
+}
 
 const Explore = () => {
   const navigate = useNavigate();
@@ -157,7 +294,8 @@ const Explore = () => {
       per_page: perPage,
       sort: sortBy,
       filters: {},
-      search_in: searchIn.length > 0 && searchIn.length < 5 ? searchIn : undefined,
+      // Always send explicit field list when any toggle is selected (all 5 is valid).
+      search_in: searchIn.length > 0 ? searchIn : undefined,
       mode: searchMode,
       ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
     };
@@ -181,15 +319,18 @@ const Explore = () => {
   // Author-scoped search request (fires when an author is selected)
   const authorScopedRequest = useMemo<AuthorScopedSearchRequest | null>(() => {
     if (!selectedAuthor || !submittedQuery.trim()) return null;
+    // Same contract as POST /search: main `query` is the active text; `refine_within` is the prior query when refining.
+    const activeQuery = submittedRefineQuery || submittedQuery;
     return {
-      query: submittedQuery,
+      query: activeQuery,
       author_id: selectedAuthor.author_id,
       page: authorScopedPage,
       per_page: 20,
       mode: searchMode,
-      ...(submittedRefineQuery ? { refine_within: submittedRefineQuery } : {}),
+      ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
+      ...(searchIn.length > 0 ? { search_in: searchIn } : {}),
     };
-  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode]);
+  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode, searchIn]);
 
   const { data: authorScopedData, isLoading: isAuthorScopedLoading } = useAuthorScopedSearch(authorScopedRequest);
 
@@ -321,6 +462,17 @@ const Explore = () => {
     setSelectedPeopleFaculty(directoryFaculty);
     setFacultyModalOpen(true);
   };
+
+  /** Open directory profile from a paper author line (Scopus author_id → Faculty). */
+  const handleAuthorClickByScopus = useCallback(async (scopusAuthorId: string) => {
+    try {
+      const faculty = await getFacultyByScopusId(scopusAuthorId);
+      setSelectedPeopleFaculty(faculty);
+      setFacultyModalOpen(true);
+    } catch (err) {
+      console.error("Failed to load faculty profile", err);
+    }
+  }, []);
 
   // Handle navigate to mind map
   const handleNavigateToMindMap = async (documentId: string) => {
@@ -504,11 +656,14 @@ const Explore = () => {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Search In</label>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Author matches <span className="font-medium text-foreground/80">author names</span> on the paper (basic = strict, advanced = fuzzy).
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { field: 'title' as const, label: '📝 Title' },
                         { field: 'abstract' as const, label: '📄 Abstract' },
-                        { field: 'author' as const, label: '👤 Author' },
+                        { field: 'author' as const, label: '👤 Author name' },
                         { field: 'subject_area' as const, label: '🏷️ Subject Area' },
                         { field: 'field' as const, label: '🔬 Field' },
                       ].map(({ field, label }) => (
@@ -773,56 +928,9 @@ const Explore = () => {
                 </>
               );
             })() : (() => {
-              /* From Results mode - client-side */
-              const allowedAffiliations = [
-                'Indian Institute of Technology Delhi',
-                'Indian Institute of Technology Delhi, New Delhi, India',
-                'Indian Institute of Technology Delhi-Abu Dhabi',
-                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-              ];
+              /* From Results mode - uses related_faculty from search response + expert_id */
 
-              // Build author frequency + ID map from current page results (only matched faculty)
-              const authorData = new Map<string, { name: string; author_id: string; count: number }>();
-              filteredResults.forEach(item => {
-                if (item.authors) {
-                  item.authors.forEach(a => {
-                    const affiliation = a.author_affiliation || a.affiliation || '';
-                    if (allowedAffiliations.includes(affiliation) && a.matched_profile && a.author_id) {
-                      const rawName = a.author_name || a.name || '';
-                      if (!rawName) return;
-                      const formattedName = rawName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-                      
-                      // Look up precise global count for this query
-                      let preciseCount = 1; // fallback
-                      if (allFacultyData?.departments) {
-                        for (const dept of allFacultyData.departments) {
-                          const found = dept.faculty.find(f => f.author_id === a.author_id);
-                          if (found) {
-                            preciseCount = found.paper_count;
-                            break;
-                          }
-                        }
-                      }
-
-                      const existing = authorData.get(a.author_id);
-                      if (!existing) {
-                        authorData.set(a.author_id, { name: formattedName, author_id: a.author_id, count: preciseCount });
-                      }
-                    }
-                  });
-                }
-              });
-
-              // Build author_id → name for relatedFaculty lookup
-              const authorIdMap = new Map<string, string>();
-              authorData.forEach((v, k) => authorIdMap.set(v.name.toLowerCase(), k));
-
-              // Only show related faculty who have matching author_ids
-              const filteredRelatedFaculty = relatedFaculty.filter(f =>
-                authorIdMap.has((f.name || '').toLowerCase())
-              );
-
-              if (filteredRelatedFaculty.length === 0) {
+              if (relatedFaculty.length === 0) {
                 return (
                   <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
                     <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
@@ -832,15 +940,28 @@ const Explore = () => {
                 );
               }
 
+              // Enrich related_faculty with precise paper counts from allFacultyData
+              const enrichedFaculty = relatedFaculty.map(f => {
+                let preciseCount = f.paperCount;
+                if (allFacultyData?.departments) {
+                  for (const dept of allFacultyData.departments) {
+                    const found = dept.faculty.find(af => af.author_id === (f as any).expert_id);
+                    if (found) {
+                      preciseCount = found.paper_count;
+                      break;
+                    }
+                  }
+                }
+                return { ...f, paperCount: preciseCount };
+              });
+
               // Group by department with relevance-based ordering
-              const deptGroups: Record<string, { faculty: typeof filteredRelatedFaculty; totalCount: number }> = {};
-              filteredRelatedFaculty.forEach(faculty => {
+              const deptGroups: Record<string, { faculty: typeof enrichedFaculty; totalCount: number }> = {};
+              enrichedFaculty.forEach(faculty => {
                 const dept = faculty.department?.name || 'Unknown';
                 if (!deptGroups[dept]) deptGroups[dept] = { faculty: [], totalCount: 0 };
                 deptGroups[dept].faculty.push(faculty);
-                const authorId = authorIdMap.get((faculty.name || '').toLowerCase()) || '';
-                const authorInfo = authorData.get(authorId);
-                deptGroups[dept].totalCount += authorInfo?.count || 0;
+                deptGroups[dept].totalCount += faculty.paperCount;
               });
 
               // Sort departments by total paper count (relevance)
@@ -860,7 +981,7 @@ const Explore = () => {
 
               // Regroup visible items by department
               const deptOrder: string[] = [];
-              const groupedVisible: Record<string, typeof filteredRelatedFaculty> = {};
+              const groupedVisible: Record<string, typeof enrichedFaculty> = {};
               visibleItems.forEach(item => {
                 if (!groupedVisible[item.department]) {
                   groupedVisible[item.department] = [];
@@ -873,7 +994,7 @@ const Explore = () => {
                 <>
                   <div className="shrink-0 mb-4 mt-2">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{filteredRelatedFaculty.length}</span> faculty on this page{' '}
+                      Found <span className="font-semibold text-primary">{enrichedFaculty.length}</span> faculty on this page{' '}
                       <button
                         className="text-primary hover:underline font-medium text-sm"
                         onClick={() => { setShowAllFaculty(true); setPeoplePage(1); }}
@@ -893,8 +1014,7 @@ const Explore = () => {
                         </div>
                         <ul className="space-y-2 pl-4">
                           {groupedVisible[department].map((faculty) => {
-                            const facultyAuthorId = authorIdMap.get((faculty.name || '').toLowerCase()) || '';
-                            const authorInfo = authorData.get(facultyAuthorId);
+                            const facultyAuthorId = (faculty as any).expert_id || '';
                             const isSelected = selectedAuthor?.author_id === facultyAuthorId;
                             return (
                               <li key={faculty._id}>
@@ -910,9 +1030,7 @@ const Explore = () => {
                                     <span className="shrink-0 mr-2">•</span>
                                     <span>{faculty.name}</span>
                                   </div>
-                                  {authorInfo && (
-                                    <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{authorInfo.count}</span>
-                                  )}
+                                  <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paperCount}</span>
                                 </button>
                               </li>
                             );
@@ -1062,27 +1180,11 @@ const Explore = () => {
                     )}
                   </div>
                   <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                  {item.authors && item.authors.length > 0 && (() => {
-                    const allowedAffiliations = [
-                      'Indian Institute of Technology Delhi',
-                      'Indian Institute of Technology Delhi, New Delhi, India',
-                      'Indian Institute of Technology Delhi-Abu Dhabi',
-                      'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                    ];
-                    const iitdAuthors = item.authors.filter(a =>
-                      allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                    );
-                    
-                    if (iitdAuthors.length === 0) return null;
-                    
-                    return (
-                      <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-primary/80 mr-1">Authors:</span>
-                        {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                        {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
-                      </p>
-                    );
-                  })()}
+                  <ExploreCardAuthorsLine
+                    authors={item.authors}
+                    selectedAuthor={selectedAuthor}
+                    onAuthorClick={handleAuthorClickByScopus}
+                  />
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
@@ -1181,27 +1283,11 @@ const Explore = () => {
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
                             <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                            {item.authors && item.authors.length > 0 && (() => {
-                              const allowedAffiliations = [
-                                'Indian Institute of Technology Delhi',
-                                'Indian Institute of Technology Delhi, New Delhi, India',
-                                'Indian Institute of Technology Delhi-Abu Dhabi',
-                                'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                              ];
-                              const iitdAuthors = item.authors.filter(a =>
-                                allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                              );
-                              
-                              if (iitdAuthors.length === 0) return null;
-                              
-                              return (
-                                <p className="text-sm text-muted-foreground">
-                                  <span className="font-semibold text-primary/80 mr-1">Authors:</span>
-                                  {iitdAuthors.slice(0, 3).map(a => a.author_name || a.name).join(", ")}
-                                  {iitdAuthors.length > 3 && ` +${iitdAuthors.length - 3} more`}
-                                </p>
-                              );
-                            })()}
+                            <ExploreCardAuthorsLine
+                    authors={item.authors}
+                    selectedAuthor={selectedAuthor}
+                    onAuthorClick={handleAuthorClickByScopus}
+                  />
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
@@ -1380,57 +1466,63 @@ const Explore = () => {
           onClick={() => setSelectedDocument(null)}
         >
           <div
-            className="bg-background rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+            className="bg-background border border-border/50 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header - Fixed */}
-            <div className="flex items-start justify-between p-6 border-b border-border shrink-0">
-              <div className="flex-1 pr-4">
-                <h2 className="text-2xl font-bold mb-2">{selectedDocument.title}</h2>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{selectedDocument.document_type}</Badge>
+            {/* Modal Header - Glassy Gradient Fixed */}
+            <div className="relative flex items-start justify-between p-6 border-b border-white/10 overflow-hidden bg-gradient-to-br from-indigo-500/10 via-background to-primary/5 shrink-0">
+               <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,black)] pointer-events-none" />
+              <div className="relative flex-1 pr-4">
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <Badge variant="secondary" className="px-3 py-0.5 font-bold rounded-full uppercase tracking-wider text-[10px] bg-secondary/80 text-secondary-foreground">{selectedDocument.document_type}</Badge>
                   {selectedDocument.field_associated && (
-                    <Badge variant="outline">{selectedDocument.field_associated}</Badge>
+                    <Badge variant="outline" className="px-3 py-0.5 bg-background/50 backdrop-blur-sm rounded-full uppercase tracking-wider text-[10px] text-muted-foreground border-border/50">{selectedDocument.field_associated}</Badge>
                   )}
                 </div>
+                <h2 className="text-2xl font-bold text-foreground leading-tight">{selectedDocument.title}</h2>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setSelectedDocument(null)}
-                className="shrink-0"
+                className="relative shrink-0 rounded-full hover:bg-background/80"
               >
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
             {/* Modal Content */}
-            <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
+            <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-7">
               {/* Authors */}
-              {selectedDocument.authors && selectedDocument.authors.length > 0 && (() => {
-                const allowedAffiliations = [
-                  'Indian Institute of Technology Delhi',
-                  'Indian Institute of Technology Delhi, New Delhi, India',
-                  'Indian Institute of Technology Delhi-Abu Dhabi',
-                  'Indian Institute of Technology Delhi-Abu Dhabi, Abu Dhabi, United Arab Emirates'
-                ];
-                const iitdAuthors = selectedDocument.authors.filter(a =>
-                  allowedAffiliations.includes(a.author_affiliation || a.affiliation || '')
-                );
-                
-                if (iitdAuthors.length === 0) return null;
-                
+              {(() => {
+                const rows = getExploreModalAuthorRows(selectedDocument.authors, selectedAuthor);
+                if (!rows || rows.length === 0) return null;
                 return (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Authors</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {iitdAuthors.map((author, idx) => (
-                        <div key={idx} className="bg-accent-light border border-accent rounded-md px-3 py-2">
-                          <div className="font-medium text-sm">{author.author_name || author.name}</div>
-                          {(author.author_affiliation || author.affiliation) && (
-                            <div className="text-xs text-muted-foreground">{author.author_affiliation || author.affiliation}</div>
+                  <div onClick={(e) => e.stopPropagation()} className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      {selectedAuthor ? "IIT Delhi author(s)" : "Authors"}
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                      {rows.map((row, idx) => (
+                        <button
+                          key={`${row.author_id}-${idx}`}
+                          type="button"
+                          onClick={() => handleAuthorClickByScopus(row.author_id)}
+                          className={`rounded-xl px-4 py-2 border text-left transition-smooth hover:-translate-y-0.5 hover:shadow-md ${
+                            row.highlight
+                              ? "bg-primary/5 border-primary/30 ring-1 ring-primary/20 shadow-sm"
+                              : "bg-card border-border shadow-sm hover:border-primary/30"
+                          }`}
+                        >
+                          <div
+                            className={`text-sm leading-tight ${row.highlight ? "font-bold text-foreground" : "font-semibold text-foreground/90"}`}
+                          >
+                            {row.name}
+                          </div>
+                          {row.affiliation && (
+                            <div className="text-[10px] font-medium text-muted-foreground mt-1 tracking-wide uppercase line-clamp-1">{row.affiliation}</div>
                           )}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1439,32 +1531,34 @@ const Explore = () => {
 
               {/* Abstract */}
               {selectedDocument.abstract && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Abstract</h3>
-                  <p className="text-sm leading-relaxed">{selectedDocument.abstract}</p>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Abstract</h3>
+                  <div className="p-5 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-foreground/80 text-sm shadow-inner">
+                    {selectedDocument.abstract}
+                  </div>
                 </div>
               )}
 
               {/* Metadata */}
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Publication Details</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Publication Year</div>
-                    <div className="font-medium">{selectedDocument.publication_year || "N/A"}</div>
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Publication Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="flex flex-col p-4 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Publication Year</div>
+                    <div className="text-xl font-bold text-foreground leading-tight">{selectedDocument.publication_year || "N/A"}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Citations</div>
-                    <div className="font-medium">{selectedDocument.citation_count || 0}</div>
+                  <div className="flex flex-col p-4 rounded-xl bg-orange-500/5 border border-orange-500/10">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Citations</div>
+                    <div className="text-xl font-bold text-foreground leading-tight">{selectedDocument.citation_count || 0}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Document Type</div>
-                    <div className="font-medium">{selectedDocument.document_type}</div>
+                  <div className="flex flex-col p-4 rounded-xl bg-green-500/5 border border-green-500/10">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Document Type</div>
+                    <div className="text-sm font-bold text-foreground leading-tight mt-1 line-clamp-1">{selectedDocument.document_type}</div>
                   </div>
                   {selectedDocument.field_associated && (
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-1">Field</div>
-                      <div className="font-medium">{selectedDocument.field_associated}</div>
+                    <div className="flex flex-col p-4 rounded-xl bg-purple-500/5 border border-purple-500/10">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Field</div>
+                      <div className="text-sm font-bold text-foreground leading-tight mt-1 line-clamp-2">{selectedDocument.field_associated}</div>
                     </div>
                   )}
                 </div>
@@ -1472,11 +1566,13 @@ const Explore = () => {
 
               {/* Subject Areas */}
               {selectedDocument.subject_area && selectedDocument.subject_area.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-3">Subject Areas</h3>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Subject Areas</h3>
                   <div className="flex flex-wrap gap-2">
                     {selectedDocument.subject_area.map((area, idx) => (
-                      <Badge key={idx} variant="outline">{area}</Badge>
+                      <Badge key={idx} variant="secondary" className="px-3 py-1 font-medium bg-secondary/50 hover:bg-secondary border border-border/50 transition-colors">
+                        {area}
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -1484,38 +1580,41 @@ const Explore = () => {
             </div>
 
             {/* Modal Footer - Fixed at bottom */}
-            <div className="flex justify-end gap-2 p-6 border-t border-border shrink-0 bg-background">
-              <Button
-                onClick={() => handleNavigateToMindMap(selectedDocument._id)}
-                disabled={isNavigating}
-                className="gap-2"
-                variant="default"
-              >
-                {isNavigating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Navigating...
-                  </>
-                ) : (
-                  <>
-                    <Compass className="h-4 w-4" />
-                    Navigate to Mind Map
-                  </>
-                )}
-              </Button>
-              {selectedDocument.link && (
-                <Button
-                  onClick={() => window.open(selectedDocument.link, '_blank', 'noopener,noreferrer')}
-                  className="gap-2"
-                  variant="secondary"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  View Original Paper
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setSelectedDocument(null)}>
-                Close
-              </Button>
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 p-5 border-t border-border bg-background/80 backdrop-blur-md shrink-0">
+               <Button variant="outline" onClick={() => setSelectedDocument(null)} className="w-full sm:w-auto font-semibold">
+                 Close
+               </Button>
+               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                 {selectedDocument.link && (
+                   <a
+                     href={selectedDocument.link}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20"
+                   >
+                     <ExternalLink className="h-4 w-4" />
+                     View Original Paper
+                   </a>
+                 )}
+                 <Button
+                   size="lg"
+                   onClick={() => handleNavigateToMindMap(selectedDocument._id)}
+                   disabled={isNavigating}
+                   className="w-full sm:w-auto gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all font-bold"
+                 >
+                   {isNavigating ? (
+                     <>
+                       <Loader2 className="h-4 w-4 animate-spin" />
+                       Navigating...
+                     </>
+                   ) : (
+                     <>
+                       <Compass className="h-4 w-4" />
+                       Navigate to Mind Map
+                     </>
+                   )}
+                 </Button>
+               </div>
             </div>
           </div>
         </div>

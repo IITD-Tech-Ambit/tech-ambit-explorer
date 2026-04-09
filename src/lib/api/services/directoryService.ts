@@ -48,6 +48,14 @@ export const getFacultyById = async (id: string): Promise<DirectoryFaculty> => {
     return data.data;
 };
 
+/** Resolve directory profile by Scopus author id (paper authors[].author_id). */
+export const getFacultyByScopusId = async (scopusId: string): Promise<DirectoryFaculty> => {
+    const response = await fetch(`${API_BASE_URL}/by-scopus/${encodeURIComponent(scopusId)}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Failed to fetch faculty');
+    return data.data;
+};
+
 export const getFacultyCoworking = async (id: string): Promise<FacultyCoworkingResponse> => {
     const response = await fetch(`${API_BASE_URL}/coworkers/${id}`);
     const data = await response.json();

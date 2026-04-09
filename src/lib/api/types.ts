@@ -91,7 +91,8 @@ export interface DepartmentCollection {
 
 export interface Faculty {
     _id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
 }
 
 export interface PhdThesisData {
@@ -263,6 +264,9 @@ export interface DirectoryFaculty {
     scopusId?: string;
     department: DirectoryDepartment;
     tags?: string[];
+    profileImageUrl?: string | null;
+    designation?: string | null;
+    workingFromYear?: number | null;
 }
 
 export interface DirectoryPagination {
@@ -296,6 +300,9 @@ export interface GroupedDepartmentFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    profileImageUrl?: string | null;
+    designation?: string | null;
+    workingFromYear?: number | null;
 }
 
 export interface GroupedDepartment {
@@ -359,6 +366,8 @@ export interface AuthorScopedSearchRequest {
     per_page?: number;
     mode?: 'basic' | 'advanced';
     refine_within?: string;
+    /** Same as main search: restrict matching to these fields (e.g. author = author names only). */
+    search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
 }
 
 export interface AuthorScopedSearchResponse {

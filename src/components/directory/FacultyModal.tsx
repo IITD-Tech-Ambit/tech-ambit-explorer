@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Mail, BookOpen, Users, GraduationCap, Calendar, Award, ExternalLink } from "lucide-react";
+import { User, Mail, BookOpen, Users, GraduationCap, Calendar, Award, ExternalLink, Clock3, Building2 } from "lucide-react";
+import type { ElementType } from "react";
 import { useFacultyCoworking } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty } from "@/lib/api/types";
 
@@ -18,6 +19,9 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
 
     if (!faculty) return null;
 
+    const tenure = formatTenure(faculty.workingFromYear);
+    const initials = getInitials(faculty.name);
+
     const timelineData = coworkingData?.coworkersFromPapers
         ?.reduce((acc, paper) => {
             const year = paper.publication_year;
@@ -33,23 +37,55 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
         .sort((a, b) => b - a);
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-3xl max-h-[85vh] p-0 overflow-hidden">
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen) onClose();
+            }}
+        >
+            <DialogContent className="z-[100] max-w-3xl max-h-[85vh] p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-primary/10 to-accent/10">
-                    <div className="flex items-start gap-4">
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/30 to-accent/30 flex items-center justify-center flex-shrink-0">
-                            <User className="w-10 h-10 text-primary/70" />
+                    <div className="flex items-start gap-5">
+                        <div className="relative flex-shrink-0">
+                            {faculty.profileImageUrl ? (
+                                <img
+                                    src={faculty.profileImageUrl}
+                                    alt={faculty.name}
+                                    loading="lazy"
+                                    className="w-24 h-24 rounded-3xl object-cover shadow-xl border border-white/40"
+                                />
+                            ) : (
+                                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/40 to-accent/30 text-primary flex items-center justify-center text-2xl font-semibold">
+                                    {initials}
+                                </div>
+                            )}
+                            {faculty.department?.code && (
+                                <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 shadow">
+                                    {faculty.department.code.toUpperCase()}
+                                </Badge>
+                            )}
                         </div>
                         <div className="flex-1 min-w-0">
                             <DialogTitle className="text-2xl font-bold mb-1">
                                 {faculty.name}
                             </DialogTitle>
-                            <p className="text-primary font-medium">Professor</p>
-                            <p className="text-sm text-muted-foreground">{faculty.department?.name}</p>
+                            {faculty.designation && (
+                                <p className="text-primary font-semibold text-sm mb-0.5">{faculty.designation}</p>
+                            )}
+                            <p className="text-sm text-muted-foreground inline-flex items-center gap-1">
+                                <Building2 className="w-4 h-4" />
+                                {faculty.department?.name || "Faculty"}
+                            </p>
+                            {/* {tenure && (
+                                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1">
+                                    <Clock3 className="w-3.5 h-3.5" />
+                                    {tenure}
+                                </div>
+                            )} */}
                             {faculty.email && (
                                 <a
                                     href={`mailto:${faculty.email}`}
-                                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary mt-1"
+                                    className="mt-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
                                 >
                                     <Mail className="w-3.5 h-3.5" />
                                     {faculty.email}
@@ -58,26 +94,23 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-4 mt-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-background/80 rounded-lg">
-                            <Award className="w-4 h-4 text-primary" />
-                            <span className="text-sm">h-Index: <strong>{coworkingData?.hIndex ?? faculty.hIndex ?? 0}</strong></span>
-                        </div>
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-background/80 rounded-lg">
-                            <BookOpen className="w-4 h-4 text-primary" />
-                            <span className="text-sm">Citations: <strong>{coworkingData?.citationCount ?? faculty.citationCount ?? 0}</strong></span>
-                        </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
+                        <StatPill
+                            icon={Award}
+                            label="h-index"
+                            value={coworkingData?.hIndex ?? faculty.hIndex ?? 0}
+                        />
+                        <StatPill
+                            icon={BookOpen}
+                            label="citations"
+                            value={coworkingData?.citationCount ?? faculty.citationCount ?? 0}
+                        />
                         {coworkingData?.stats && (
-                            <>
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-background/80 rounded-lg">
-                                    <Users className="w-4 h-4 text-primary" />
-                                    <span className="text-sm">Co-authors: <strong>{coworkingData.stats.uniqueCoauthors}</strong></span>
-                                </div>
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-background/80 rounded-lg">
-                                    <GraduationCap className="w-4 h-4 text-primary" />
-                                    <span className="text-sm">Students: <strong>{coworkingData.stats.totalStudentsSupervised}</strong></span>
-                                </div>
-                            </>
+                            <StatPill
+                                icon={Users}
+                                label="co-authors"
+                                value={coworkingData.stats.uniqueCoauthors}
+                            />
                         )}
                     </div>
                 </DialogHeader>
@@ -225,3 +258,31 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
 };
 
 export default FacultyModal;
+
+const getInitials = (name: string) =>
+    name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("") || "IITD";
+
+const formatTenure = (year?: number | null) => {
+    if (!year) return null;
+    const currentYear = new Date().getFullYear();
+    if (year >= currentYear) return "Joined this year";
+    const diff = currentYear - year;
+    return diff === 1 ? "1 year at IIT Delhi" : `${diff} years at IIT Delhi`;
+};
+
+const StatPill = ({ icon: Icon, label, value }: { icon: ElementType; label: string; value: number }) => (
+    <div className="flex items-center gap-2 rounded-xl bg-background/80 px-3 py-2 shadow-sm">
+        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Icon className="w-4 h-4 text-primary" />
+        </div>
+        <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="text-sm font-semibold text-foreground">{value}</p>
+        </div>
+    </div>
+);
