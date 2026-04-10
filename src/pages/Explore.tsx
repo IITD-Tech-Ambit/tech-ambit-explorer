@@ -12,18 +12,46 @@ import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type Searc
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
 import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
 import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
+import { formatAbstract } from "@/lib/utils";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
  * Names for Explore result cards: when a faculty member is selected, they are listed first.
+ *
+ * NOTE: People sidebar uses `expert_id` while paper authors carry Scopus `author_id`.
+ * Matching must fall back to name comparison when IDs don't match across systems.
  */
 type ExploreCardAuthorEntry = { name: string; author_id: string };
 
-function dedupeAuthorEntries(entries: ExploreCardAuthorEntry[]): ExploreCardAuthorEntry[] {
-  const seen = new Set<string>();
+const TITLE_PREFIXES = /^(prof\.?\s+|dr\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)/i;
+function normalizeName(raw: string): string {
+  return raw.replace(TITLE_PREFIXES, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function findAuthorMatch(
+  roster: SearchAuthor[],
+  selectedAuthor: { name: string; author_id: string }
+): SearchAuthor | undefined {
+  const id = String(selectedAuthor.author_id);
+  const byId = roster.find((a) => a.author_id != null && String(a.author_id) === id);
+  if (byId) return byId;
+  const norm = normalizeName(selectedAuthor.name);
+  if (!norm) return undefined;
+  return roster.find((a) => {
+    const n = normalizeName((a.author_name || a.name || "").trim());
+    return n && n === norm;
+  });
+}
+
+function dedupeByNormalizedName<T extends { name: string; author_id: string }>(entries: T[]): T[] {
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
   return entries.filter((e) => {
-    if (!e.author_id || seen.has(e.author_id)) return false;
-    seen.add(e.author_id);
+    if (seenIds.has(e.author_id)) return false;
+    const norm = normalizeName(e.name);
+    if (seenNames.has(norm)) return false;
+    seenIds.add(e.author_id);
+    if (norm) seenNames.add(norm);
     return true;
   });
 }
@@ -35,23 +63,29 @@ function getExploreCardAuthorEntries(
   const roster = authors || [];
 
   if (selectedAuthor) {
-    const id = String(selectedAuthor.author_id);
-    const match = roster.find((a) => a.author_id != null && String(a.author_id) === id);
+    const match = findAuthorMatch(roster, selectedAuthor);
+    const matchId = match ? String(match.author_id) : String(selectedAuthor.author_id);
     const headName =
       (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name;
-    const head: ExploreCardAuthorEntry = { name: headName, author_id: id };
+    const head: ExploreCardAuthorEntry = { name: headName, author_id: matchId };
+    const headNorm = normalizeName(headName);
     const others = roster
-      .filter((a) => a.author_id != null && String(a.author_id) !== id)
+      .filter((a) => {
+        if (a.author_id == null) return false;
+        if (String(a.author_id) === matchId) return false;
+        const n = normalizeName((a.author_name || a.name || "").trim());
+        return n !== headNorm;
+      })
       .map((a) => ({
         name: (a.author_name || a.name || "").trim(),
         author_id: String(a.author_id),
       }))
       .filter((e) => e.name);
-    const merged = dedupeAuthorEntries([head, ...others]);
-    return merged.length ? merged : [{ name: selectedAuthor.name, author_id: id }];
+    const merged = dedupeByNormalizedName([head, ...others]);
+    return merged.length ? merged : [{ name: selectedAuthor.name, author_id: matchId }];
   }
 
-  return dedupeAuthorEntries(
+  return dedupeByNormalizedName(
     roster
       .filter((a) => a.author_id != null)
       .map((a) => ({
@@ -78,25 +112,32 @@ function getExploreModalAuthorRows(
   if (roster.length === 0) return null;
 
   if (!selectedAuthor) {
-    return roster
-      .map((a) => ({
-        name: (a.author_name || a.name || "").trim(),
-        affiliation: a.author_affiliation || a.affiliation,
-        author_id: String(a.author_id),
-      }))
-      .filter((r) => r.name);
+    return dedupeByNormalizedName(
+      roster
+        .map((a) => ({
+          name: (a.author_name || a.name || "").trim(),
+          affiliation: a.author_affiliation || a.affiliation,
+          author_id: String(a.author_id),
+        }))
+        .filter((r) => r.name)
+    );
   }
 
-  const id = String(selectedAuthor.author_id);
-  const match = roster.find((a) => String(a.author_id) === id);
+  const match = findAuthorMatch(roster, selectedAuthor);
+  const matchId = match ? String(match.author_id) : String(selectedAuthor.author_id);
   const scoped: ExploreModalAuthorRow = {
     name: (match?.author_name || match?.name || selectedAuthor.name).trim() || selectedAuthor.name,
     affiliation: match?.author_affiliation || match?.affiliation,
     highlight: true,
-    author_id: id,
+    author_id: matchId,
   };
+  const scopedNorm = normalizeName(scoped.name);
   const rest: ExploreModalAuthorRow[] = roster
-    .filter((a) => String(a.author_id) !== id)
+    .filter((a) => {
+      if (String(a.author_id) === matchId) return false;
+      const n = normalizeName((a.author_name || a.name || "").trim());
+      return n !== scopedNorm;
+    })
     .map((a) => ({
       name: (a.author_name || a.name || "").trim(),
       affiliation: a.author_affiliation || a.affiliation,
@@ -104,8 +145,8 @@ function getExploreModalAuthorRows(
     }))
     .filter((r) => r.name);
 
-  const rows = [scoped, ...rest].filter((r) => r.name);
-  return rows.length ? rows : [{ name: selectedAuthor.name, highlight: true, author_id: id }];
+  const rows = dedupeByNormalizedName([scoped, ...rest]).filter((r) => r.name);
+  return rows.length ? rows : [{ name: selectedAuthor.name, highlight: true, author_id: matchId }];
 }
 
 function ExploreCardAuthorsLine({
@@ -119,7 +160,7 @@ function ExploreCardAuthorsLine({
 }) {
   const entries = getExploreCardAuthorEntries(authors, selectedAuthor);
   if (entries.length === 0) return null;
-  const label = selectedAuthor ? "IIT Delhi author" : "Authors";
+  const label = "Authors";
   const shown = entries.slice(0, 3);
   const more = entries.length - shown.length;
   return (
@@ -186,8 +227,18 @@ const Explore = () => {
     localStorage.setItem('explore-group-by-dept', String(groupByDepartment));
   }, [groupByDepartment]);
 
-  // Client-side sort state
-  const [clientSort, setClientSort] = useState<'relevance' | 'citations'>('relevance');
+  // Search mode: basic (BM25 only) or advanced (hybrid BM25 + k-NN)
+  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic');
+
+  // Client-side sort state — basic mode defaults to citations, advanced to relevance
+  const [clientSort, setClientSort] = useState<'relevance' | 'citations'>(
+    () => searchMode === 'basic' ? 'citations' : 'relevance'
+  );
+
+  // Sync default client sort when mode changes
+  useEffect(() => {
+    setClientSort(searchMode === 'basic' ? 'citations' : 'relevance');
+  }, [searchMode]);
 
   // Collapsible department sections state (by default all expanded)
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
@@ -198,9 +249,6 @@ const Explore = () => {
   const [isPeopleLoadingMore, setIsPeopleLoadingMore] = useState(false);
   const [peoplePage, setPeoplePage] = useState(1);
   const PEOPLE_PER_PAGE = 20;
-
-  // Search mode: basic (BM25 only) or advanced (hybrid BM25 + k-NN)
-  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic');
 
   // Search-on-Search (refine within results)
   const [refineQuery, setRefineQuery] = useState('');
@@ -332,13 +380,19 @@ const Explore = () => {
     };
   }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode, searchIn]);
 
-  const { data: authorScopedData, isLoading: isAuthorScopedLoading } = useAuthorScopedSearch(authorScopedRequest);
+  const { data: authorScopedData, isLoading: isAuthorScopedLoading, isFetching: isAuthorScopedFetching } = useAuthorScopedSearch(authorScopedRequest);
 
-  // All faculty for query (fetches precise counts based on the active mode)
+  // All faculty for query — same body shape as POST /search (active query, refine_within anchor, search_in)
+  const facultyForQueryText = submittedRefineQuery?.trim() ? submittedRefineQuery : submittedQuery;
+  const facultyForQueryRefineWithin = submittedRefineQuery?.trim() ? submittedQuery : undefined;
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
-    submittedQuery,
+    facultyForQueryText,
     searchMode,
-    { enabled: !!submittedQuery.trim() }
+    {
+      enabled: !!submittedQuery.trim(),
+      search_in: searchIn.length > 0 ? searchIn : undefined,
+      refine_within: facultyForQueryRefineWithin,
+    }
   );
 
   // IntersectionObserver for infinite scroll in People sidebar
@@ -697,10 +751,14 @@ const Explore = () => {
               <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">
-                    Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"
+                    {selectedAuthor ? (
+                      <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                    ) : (
+                      <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                    )}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {pagination?.total || 0} refined results found
+                    {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
                   </p>
                 </div>
                 <Button
@@ -721,7 +779,7 @@ const Explore = () => {
                 <Search className="w-4 h-4 text-muted-foreground ml-2" />
                 <Input
                   type="text"
-                  placeholder={`Search within these ${pagination?.total || 0} results...`}
+                  placeholder={`Search within these ${selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total || 0} results...`}
                   className="border-0 focus-visible:ring-0 shadow-none h-9 text-sm bg-transparent"
                   value={refineQuery}
                   onChange={(e) => setRefineQuery(e.target.value)}
@@ -790,7 +848,7 @@ const Explore = () => {
         )}
 
         {/* Results Layout Grid */}
-        {hasSearched && !isLoading && (filteredResults.length > 0 || relatedFaculty.length > 0) && (
+        {hasSearched && !isLoading && (filteredResults.length > 0 || relatedFaculty.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
           <div 
             ref={containerRef}
             className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
@@ -822,8 +880,8 @@ const Explore = () => {
           </div>
           <div className={`flex flex-col flex-1 min-h-0 transition-all duration-300 overflow-hidden pr-4 ${isPeopleSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
           <>
-            {/* Show All mode - server-side */}
-            {showAllFaculty ? (() => {
+            {/* Show All mode - server-side; also used as auto-fallback when current page has no IITD faculty */}
+            {(showAllFaculty || relatedFaculty.length === 0) ? (() => {
               if (isAllFacultyLoading) {
                 return (
                   <div className="flex flex-col items-center justify-center py-12">
@@ -867,12 +925,14 @@ const Explore = () => {
                   <div className="shrink-0 mb-4 mt-2">
                     <p className="text-muted-foreground">
                       Found <span className="font-semibold text-primary">{allFacultyData.total_faculty}</span> faculty across all results{' '}
-                      <button
-                        className="text-primary hover:underline font-medium text-sm"
-                        onClick={() => { setShowAllFaculty(false); setPeoplePage(1); }}
-                      >
-                        (Show results from this page)
-                      </button>
+                      {relatedFaculty.length > 0 && (
+                        <button
+                          className="text-primary hover:underline font-medium text-sm"
+                          onClick={() => { setShowAllFaculty(false); setPeoplePage(1); }}
+                        >
+                          (Show results from this page)
+                        </button>
+                      )}
                     </p>
                   </div>
                   <div className="flex-1 min-h-0 space-y-4 pr-1 scrollbar-thin overflow-y-auto">
@@ -1085,11 +1145,15 @@ const Explore = () => {
                 <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 animate-slide-up">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-foreground">
-                      Showing results for "<span className="text-primary">{submittedQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">(in {searchMode} mode)</span>
+                      {submittedRefineQuery ? (
+                        <>Showing <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers matching "<span className="text-primary">{submittedRefineQuery}</span>" within "<span className="text-primary">{submittedQuery}</span>" <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                      ) : (
+                        <>Showing results for "<span className="text-primary">{submittedQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                      )}
                     </p>
                     {authorScopedData && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {authorScopedData.author.total_papers} total papers by this author · {authorScopedData.results.length} relevant to your query
+                        {authorScopedData.author.total_papers} total papers by this author · {authorScopedData.pagination?.total ?? 0} relevant to your query
                       </p>
                     )}
                   </div>
@@ -1106,10 +1170,12 @@ const Explore = () => {
               )}
 
               {/* Author-scoped loading state */}
-              {selectedAuthor && isAuthorScopedLoading && (
+              {selectedAuthor && (isAuthorScopedLoading || isAuthorScopedFetching) && (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                  <p className="text-sm text-muted-foreground">Searching {selectedAuthor.name}'s papers...</p>
+                  <p className="text-sm text-muted-foreground">
+                    {submittedRefineQuery ? `Refining within ${selectedAuthor.name}'s papers...` : `Searching ${selectedAuthor.name}'s papers...`}
+                  </p>
                 </div>
               )}
               
@@ -1118,7 +1184,7 @@ const Explore = () => {
                 <div className="flex items-center justify-between">
                   <p className="text-muted-foreground">
                     {selectedAuthor && authorScopedData ? (
-                      <>Found <span className="font-semibold text-primary">{authorScopedData.pagination.total}</span> matching papers</>
+                      <>Found <span className="font-semibold text-primary">{authorScopedData.pagination?.total ?? 0}</span> matching papers</>
                     ) : pagination ? (
                       <>Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results</>
                     ) : null}
@@ -1151,12 +1217,12 @@ const Explore = () => {
               )}
 
               {/* No results for author-scoped search */}
-              {selectedAuthor && authorScopedData && authorScopedData.results.length === 0 && !isAuthorScopedLoading && (
+              {selectedAuthor && authorScopedData && authorScopedData.results.length === 0 && !isAuthorScopedLoading && !isAuthorScopedFetching && (
                 <div className="text-center py-12 bg-accent-light border border-accent rounded-lg">
                   <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
                   <h3 className="text-lg font-semibold mb-1">No Matching Papers</h3>
                   <p className="text-sm text-muted-foreground px-4">
-                    {selectedAuthor.name} has {authorScopedData.author.total_papers} papers, but none closely match "{submittedQuery}"
+                    {selectedAuthor.name} has {authorScopedData.author.total_papers} papers, but none closely match "{submittedRefineQuery || submittedQuery}"
                   </p>
                 </div>
               )}
@@ -1188,7 +1254,7 @@ const Explore = () => {
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
-                    <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                    <p className="text-muted-foreground mb-4 line-clamp-3">{formatAbstract(item.abstract)}</p>
                   )}
 
                   <div className="flex items-center justify-between pt-4 border-t border-border">
@@ -1291,7 +1357,7 @@ const Explore = () => {
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
-                              <p className="text-muted-foreground mb-4 line-clamp-3">{item.abstract}</p>
+                              <p className="text-muted-foreground mb-4 line-clamp-3">{formatAbstract(item.abstract)}</p>
                             )}
 
                             <div className="flex items-center justify-between pt-4 border-t border-border">
@@ -1395,7 +1461,7 @@ const Explore = () => {
         )}
 
         {/* Pagination - author-scoped search */}
-        {selectedAuthor && authorScopedData && authorScopedData.pagination.total_pages > 1 && (
+        {selectedAuthor && authorScopedData && (authorScopedData.pagination?.total_pages ?? 0) > 1 && (
           <div className="flex justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
@@ -1413,11 +1479,12 @@ const Explore = () => {
             </Button>
 
             {Array.from(
-              { length: Math.min(5, authorScopedData.pagination.total_pages) },
+              { length: Math.min(5, authorScopedData.pagination?.total_pages ?? 0) },
               (_, i) => {
                 const startPage = Math.max(1, authorScopedPage - 2);
                 const pageNum = startPage + i;
-                if (pageNum <= authorScopedData.pagination.total_pages) {
+                const scopedTotalPages = authorScopedData.pagination?.total_pages ?? 0;
+                if (pageNum <= scopedTotalPages) {
                   return (
                     <Button
                       key={pageNum}
@@ -1435,20 +1502,20 @@ const Explore = () => {
             <Button
               variant="outline"
               onClick={() => setAuthorScopedPage(p => p + 1)}
-              disabled={authorScopedPage === authorScopedData.pagination.total_pages}
+              disabled={authorScopedPage === (authorScopedData.pagination?.total_pages ?? 0)}
             >
               Next ›
             </Button>
             <Button
               variant="outline"
-              onClick={() => setAuthorScopedPage(authorScopedData.pagination.total_pages)}
-              disabled={authorScopedPage === authorScopedData.pagination.total_pages}
+              onClick={() => setAuthorScopedPage(authorScopedData.pagination?.total_pages ?? 1)}
+              disabled={authorScopedPage === (authorScopedData.pagination?.total_pages ?? 0)}
             >
               Last
             </Button>
 
             <span className="text-sm text-muted-foreground ml-4 hidden sm:inline-block">
-              Page {authorScopedPage} of {authorScopedData.pagination.total_pages}
+              Page {authorScopedPage} of {authorScopedData.pagination?.total_pages ?? 0}
             </span>
           </div>
         )}
@@ -1500,7 +1567,7 @@ const Explore = () => {
                 return (
                   <div onClick={(e) => e.stopPropagation()} className="space-y-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      {selectedAuthor ? "IIT Delhi author(s)" : "Authors"}
+                      Author(s)
                     </h3>
                     <div className="flex flex-wrap gap-3">
                       {rows.map((row, idx) => (
@@ -1534,7 +1601,7 @@ const Explore = () => {
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Abstract</h3>
                   <div className="p-5 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-foreground/80 text-sm shadow-inner">
-                    {selectedDocument.abstract}
+                    {formatAbstract(selectedDocument.abstract)}
                   </div>
                 </div>
               )}

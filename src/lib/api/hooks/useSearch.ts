@@ -90,19 +90,31 @@ export const useAuthorScopedSearch = (
 
 /**
  * Hook for fetching all faculty matching a query.
- * Lazy: only fires when `enabled` is true (user clicks "Show All")
+ * Fetches when `enabled` is true (Explore keeps this on whenever a search is active so counts align with main search).
  */
 export const useAllFacultyForQuery = (
     query: string,
     mode: string = 'advanced',
-    options?: { enabled?: boolean }
+    options?: { enabled?: boolean; search_in?: string[]; refine_within?: string | null }
 ) => {
     const isEnabled = options?.enabled === true && !!query.trim();
-    
+    const searchInKey = options?.search_in?.length
+        ? [...options.search_in].sort().join(',')
+        : '';
+    const refineKey = options?.refine_within?.trim() || '';
+
     return useQuery<AllFacultyForQueryResponse, Error>({
-        // Include mode in queryKey so basic/advanced searches cache separately
-        queryKey: [...queryKeys.search.facultyForQuery(query), mode],
-        queryFn: () => getAllFacultyForQuery(query, mode),
+        queryKey: [
+            ...queryKeys.search.facultyForQuery(query),
+            mode,
+            searchInKey,
+            refineKey,
+        ],
+        queryFn: () =>
+            getAllFacultyForQuery(query, mode, {
+                search_in: options?.search_in,
+                refine_within: options?.refine_within,
+            }),
         enabled: isEnabled,
         staleTime: 1000 * 60 * 10,  // Cache for 10 minutes (heavy query)
         gcTime: 1000 * 60 * 15,
