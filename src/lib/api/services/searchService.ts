@@ -94,12 +94,25 @@ export async function checkSearchHealth(): Promise<{
 }
 
 /**
- * Get all faculty matching a query (OpenSearch aggregation, no documents)
+ * Get all faculty matching a query (OpenSearch aggregation, no documents).
+ * Pass the same search_in / refine_within as POST /search so the People sidebar matches the main search.
  */
-export async function getAllFacultyForQuery(query: string, mode: string = 'advanced'): Promise<AllFacultyForQueryResponse> {
-  const response = await fetch(
-    `${SEARCH_API_BASE_URL}/search/faculty-for-query?query=${encodeURIComponent(query)}&mode=${mode}`
-  );
+export async function getAllFacultyForQuery(
+  query: string,
+  mode: string = 'advanced',
+  options?: { search_in?: string[]; refine_within?: string | null }
+): Promise<AllFacultyForQueryResponse> {
+  const params = new URLSearchParams();
+  params.set('query', query);
+  params.set('mode', mode);
+  if (options?.search_in?.length) {
+    params.set('search_in', options.search_in.join(','));
+  }
+  if (options?.refine_within?.trim()) {
+    params.set('refine_within', options.refine_within.trim());
+  }
+
+  const response = await fetch(`${SEARCH_API_BASE_URL}/search/faculty-for-query?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error(`Faculty for query failed: ${response.statusText}`);

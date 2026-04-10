@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ResearchData } from '@/lib/api';
+import { formatAbstract } from '@/lib/utils';
 
 interface ResearchCardProps {
   research: ResearchData;
@@ -59,7 +60,7 @@ const ResearchCard = ({ research, onClose }: ResearchCardProps) => {
                   <h3 className="text-xs font-bold uppercase tracking-wider">Abstract</h3>
                 </div>
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-muted-foreground text-sm">
-                  {research.abstract}
+                  {formatAbstract(research.abstract)}
                 </div>
               </div>
             )}
