@@ -228,7 +228,10 @@ const Explore = () => {
   }, [groupByDepartment]);
 
   // Search mode: basic (BM25 only) or advanced (hybrid BM25 + k-NN)
-  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>('basic');
+  const [searchMode, setSearchMode] = useState<'basic' | 'advanced'>(() => {
+    const mode = searchParams.get('mode');
+    return mode === 'advanced' ? 'advanced' : 'basic';
+  });
 
   // Client-side sort state — basic mode defaults to citations, advanced to relevance
   const [clientSort, setClientSort] = useState<'relevance' | 'citations'>(
@@ -253,6 +256,33 @@ const Explore = () => {
   // Search-on-Search (refine within results)
   const [refineQuery, setRefineQuery] = useState('');
   const [submittedRefineQuery, setSubmittedRefineQuery] = useState('');
+
+  // Sync state from URL when the user navigates with browser back/forward
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const q = searchParams.get('q') || '';
+    const page = searchParams.get('page');
+    const filter = searchParams.get('filter') || 'All';
+    const sort = searchParams.get('sort');
+    const mode = searchParams.get('mode');
+    const si = searchParams.get('search_in');
+
+    setSearchQuery(q);
+    setSubmittedQuery(q);
+    setCurrentPage(page ? parseInt(page, 10) : 1);
+    setActiveFilter(filter);
+    setSortBy(sort === 'date' || sort === 'citations' ? sort : 'relevance');
+    setSearchMode(mode === 'advanced' ? 'advanced' : 'basic');
+    setSearchIn(si === 'author' ? ['author'] : si === 'all' ? [] : []);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
   const isResizing = useRef(false);
   const [isResizingState, setIsResizingState] = useState(false);
@@ -322,7 +352,11 @@ const Explore = () => {
     return (sort === 'date' || sort === 'citations') ? sort : 'relevance';
   });
   const [perPage, setPerPage] = useState(20);
-  const [searchIn, setSearchIn] = useState<Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>>([]);
+  const [searchIn, setSearchIn] = useState<Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>>(() => {
+    const si = searchParams.get('search_in');
+    if (si === 'author') return ['author'];
+    return [];
+  });
 
   const filters = [
     "All",
@@ -439,9 +473,11 @@ const Explore = () => {
     const newParams = new URLSearchParams();
     newParams.set('q', searchQuery);
     newParams.set('page', String(page));
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
     if (activeFilter !== 'All') newParams.set('filter', activeFilter);
     if (sortBy !== 'relevance') newParams.set('sort', sortBy);
-    setSearchParams(newParams, { replace: true });
+    setSearchParams(newParams);
   };
 
   // Handle search on Enter key
@@ -593,18 +629,26 @@ const Explore = () => {
           </p>
 
           {/* Search and Filters Container */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start animate-slide-up max-w-[800px]">
-            {/* Search Bar and Mode Toggle Row */}
-            <div className="flex-1 w-full flex flex-col sm:flex-row gap-3 items-center">
+          <div className="flex flex-col gap-3 items-start animate-slide-up max-w-[800px]">
+            {/* Search Bar Row */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               {/* Search Bar */}
               <div className="relative flex-1 w-full">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                  <Search className="w-5 h-5 text-foreground/60" />
+                  {searchIn.length === 1 && searchIn[0] === 'author'
+                    ? <Users className="w-5 h-5 text-primary/70" />
+                    : <Search className="w-5 h-5 text-foreground/60" />}
                 </div>
                 <Input
                   type="text"
-                  placeholder="Search by department, project, faculty, or keywords..."
-                  className="pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
+                  placeholder={
+                    searchIn.length === 1 && searchIn[0] === 'author'
+                      ? "Search by author name (e.g. Rajesh Khanna)..."
+                      : "Search by department, project, faculty, or keywords..."
+                  }
+                  className={`pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm ${
+                    searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
+                  }`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={handleKeyPress}
@@ -654,93 +698,121 @@ const Explore = () => {
                   </button>
                 </div>
               </div>
-            </div>
-            <div className="relative w-full sm:w-auto">
-              <Button
-                variant={showFilters ? "default" : "outline"}
-                onClick={() => setShowFilters(!showFilters)}
-                className="gap-2 h-14 px-6 w-full sm:w-auto rounded-xl border-2"
-              >
-                <Filter className="h-5 w-5" />
-                <span className="font-medium text-base">Filters</span>
-                <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-              </Button>
 
-              {/* Floating Filters Modal */}
-              {showFilters && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] sm:w-[520px] bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-slide-up">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Year From</label>
-                      <Input
-                        type="number"
-                        placeholder="2020"
-                        value={yearFrom}
-                        onChange={(e) => setYearFrom(e.target.value)}
-                        min="1900"
-                        max="2025"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Year To</label>
-                      <Input
-                        type="number"
-                        placeholder="2024"
-                        value={yearTo}
-                        onChange={(e) => setYearTo(e.target.value)}
-                        min="1900"
-                        max="2025"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Per Page</label>
-                      <select
-                        className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
-                        value={perPage}
-                        onChange={(e) => setPerPage(parseInt(e.target.value))}
-                      >
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                      </select>
-                    </div>
-                  </div>
+              {/* Filters button */}
+              <div className="relative w-full sm:w-auto">
+                <Button
+                  variant={showFilters ? "default" : "outline"}
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="gap-2 h-14 px-6 w-full sm:w-auto rounded-xl border-2 relative"
+                >
+                  <Filter className="h-5 w-5" />
+                  <span className="font-medium text-base">Filters</span>
+                  {(() => {
+                    const count = (yearFrom ? 1 : 0) + (yearTo ? 1 : 0) + (activeFilter !== 'All' ? 1 : 0) + (perPage !== 20 ? 1 : 0);
+                    return count > 0 ? (
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">{count}</span>
+                    ) : null;
+                  })()}
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                </Button>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Search In</label>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      Author matches <span className="font-medium text-foreground/80">author names</span> on the paper (basic = strict, advanced = fuzzy).
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { field: 'title' as const, label: '📝 Title' },
-                        { field: 'abstract' as const, label: '📄 Abstract' },
-                        { field: 'author' as const, label: '👤 Author name' },
-                        { field: 'subject_area' as const, label: '🏷️ Subject Area' },
-                        { field: 'field' as const, label: '🔬 Field' },
-                      ].map(({ field, label }) => (
-                        <Button
-                          key={field}
-                          variant={searchIn.includes(field) ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => toggleSearchIn(field)}
-                          className="rounded-full text-xs h-7"
+                {/* Floating Filters Modal */}
+                {showFilters && (
+                  <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] sm:w-[420px] bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-slide-up">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Year From</label>
+                        <Input
+                          type="number"
+                          placeholder="2020"
+                          value={yearFrom}
+                          onChange={(e) => setYearFrom(e.target.value)}
+                          min="1900"
+                          max="2025"
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Year To</label>
+                        <Input
+                          type="number"
+                          placeholder="2024"
+                          value={yearTo}
+                          onChange={(e) => setYearTo(e.target.value)}
+                          min="1900"
+                          max="2025"
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Per Page</label>
+                        <select
+                          className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
+                          value={perPage}
+                          onChange={(e) => setPerPage(parseInt(e.target.value))}
                         >
-                          {label}
-                        </Button>
-                      ))}
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <Button onClick={() => { applyFilters(); setShowFilters(false); }} size="sm">Apply</Button>
+                      <Button variant="outline" onClick={clearFilters} size="sm">Clear</Button>
                     </div>
                   </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <Button onClick={() => { applyFilters(); setShowFilters(false); }} size="sm">Apply</Button>
-                    <Button variant="outline" onClick={clearFilters} size="sm">Clear</Button>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+
+            {/* Search In: Author toggle — always visible below the search bar */}
+            <div className="flex items-center gap-2 w-full">
+              <span className="text-xs font-medium text-muted-foreground shrink-0">Search in:</span>
+              {(() => {
+                const isAuthor = searchIn.includes('author') && searchIn.length === 1;
+                return (
+                  <button
+                    onClick={() => setSearchIn(isAuthor ? [] : ['author'])}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 border ${
+                      isAuthor
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Author
+                    {isAuthor && <X className="w-3 h-3 ml-0.5 opacity-70" />}
+                  </button>
+                );
+              })()}
+              <span className="text-[11px] text-muted-foreground">
+                {searchIn.includes('author') && searchIn.length === 1
+                  ? 'Searching by author name only'
+                  : 'Searching all fields'}
+              </span>
+            </div>
+
+            {/* Active filters summary chips */}
+            {(activeFilter !== 'All' || yearFrom || yearTo) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground mr-0.5">Active:</span>
+                {activeFilter !== 'All' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary text-secondary-foreground border border-border">
+                    {activeFilter}
+                    <button onClick={() => setActiveFilter('All')} className="hover:text-destructive"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+                {(yearFrom || yearTo) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary text-secondary-foreground border border-border">
+                    {yearFrom || '...'} – {yearTo || '...'}
+                    <button onClick={() => { setYearFrom(''); setYearTo(''); }} className="hover:text-destructive"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
