@@ -655,7 +655,14 @@ const Explore = () => {
                 />
                 {searchQuery && (
                   <button
-                    onClick={() => setSearchQuery("")}
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSubmittedQuery("");
+                      setSelectedAuthor(null);
+                      setRefineQuery("");
+                      setSubmittedRefineQuery("");
+                      setSearchParams(new URLSearchParams());
+                    }}
                     className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
                   >
                     <X className="w-4 h-4 text-muted-foreground" />
@@ -1072,14 +1079,17 @@ const Explore = () => {
                 );
               }
 
-              // Enrich related_faculty with precise paper counts from allFacultyData
+              // Enrich related_faculty with precise paper counts from allFacultyData.
+              // Use the higher of (From Results) vs (Show All) count — the "From Results"
+              // count is kerberos-aware (MongoDB hydrated) while "Show All" relies on
+              // OpenSearch aggregations which may not have kerberos indexed yet.
               const enrichedFaculty = relatedFaculty.map(f => {
                 let preciseCount = f.paperCount;
                 if (allFacultyData?.departments) {
                   for (const dept of allFacultyData.departments) {
                     const found = dept.faculty.find(af => af.author_id === (f as any).expert_id);
                     if (found) {
-                      preciseCount = found.paper_count;
+                      preciseCount = Math.max(preciseCount, found.paper_count);
                       break;
                     }
                   }
