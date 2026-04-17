@@ -18,6 +18,7 @@ import CustomNode, { CustomNodeData, NodeType } from './CustomNode';
 import ThesisCard from './ThesisCard';
 import PhdThesisCard from './PhdThesisCard';
 import ResearchCard from './ResearchCard';
+import FacultyModal from './directory/FacultyModal';
 import {
   fetchCategories,
   fetchDepartments,
@@ -37,6 +38,8 @@ import {
   Faculty,
   OpenPathResponse,
 } from '@/lib/api';
+import { getFacultyByScopusId } from '@/lib/api/services/directoryService';
+import type { DirectoryFaculty } from '@/lib/api/types';
 
 // Top-level configurable constants
 const NODE_WIDTH = 180;  // Must match NODE_WIDTH in CustomNode.tsx
@@ -89,7 +92,20 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
   const [selectedThesis, setSelectedThesis] = useState<ThesisData | null>(null);
   const [selectedPhdThesis, setSelectedPhdThesis] = useState<PhdThesisData | null>(null);
   const [selectedResearch, setSelectedResearch] = useState<ResearchData | null>(null);
+  const [selectedFaculty, setSelectedFaculty] = useState<DirectoryFaculty | null>(null);
+  const [isFacultyModalOpen, setIsFacultyModalOpen] = useState(false);
   const expandedNodes = useRef<Set<string>>(new Set());
+
+  const handleOpenFacultyByScopusId = useCallback(async (scopusId: string) => {
+    if (!scopusId) return;
+    try {
+      const faculty = await getFacultyByScopusId(scopusId);
+      setSelectedFaculty(faculty);
+      setIsFacultyModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load IITD faculty profile', err);
+    }
+  }, []);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Pagination state
@@ -1340,8 +1356,19 @@ const MindMapContent = ({ navigationPath, onNavigationComplete }: MindMapContent
         <ResearchCard 
           research={selectedResearch} 
           onClose={() => setSelectedResearch(null)} 
+          onAuthorClick={handleOpenFacultyByScopusId}
         />
       )}
+
+      {/* Faculty Profile Modal opened from Research Paper authors */}
+      <FacultyModal
+        faculty={selectedFaculty}
+        open={isFacultyModalOpen}
+        onClose={() => {
+          setIsFacultyModalOpen(false);
+          setSelectedFaculty(null);
+        }}
+      />
     </div>
   );
 };

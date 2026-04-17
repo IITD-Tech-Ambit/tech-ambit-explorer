@@ -1,16 +1,105 @@
-import { X, FileText, Users, Calendar, Quote, BookMarked, Tag, ExternalLink, AlignLeft } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, FileText, Users, Calendar, Quote, BookMarked, Tag, ExternalLink, AlignLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ResearchData } from '@/lib/api';
+import type { DirectoryFaculty } from '@/lib/api/types';
 import { formatAbstract } from '@/lib/utils';
+import { resolveFacultiesByScopusIds } from '@/lib/api/services/directoryService';
 
 interface ResearchCardProps {
   research: ResearchData;
   onClose: () => void;
+  /** Click an IITD author chip → open their FacultyModal. */
+  onAuthorClick?: (scopusAuthorId: string) => void;
 }
 
-const ResearchCard = ({ research, onClose }: ResearchCardProps) => {
+/**
+ * Build a public Scopus URL for the paper.
+ * `research.link` stored in the DB is the Scopus *API* endpoint
+ * (`https://www.scopus.com/api/documents/<EID>`) which returns JSON, not the paper
+ * page — so prefer the public publication URL built from `document_scopus_id`
+ * (or EID as a fallback). Only use the stored link if it's already a non-API URL.
+ */
+const getPublicScopusUrl = (research: ResearchData): string | null => {
+  if (research.document_scopus_id) {
+    return `https://www.scopus.com/pages/publications/${research.document_scopus_id}?origin=resultslist`;
+  }
+  if (research.document_eid) {
+    return `https://www.scopus.com/record/display.uri?eid=${encodeURIComponent(
+      research.document_eid
+    )}&origin=resultslist`;
+  }
+  if (research.link && !/\/api\/documents\//i.test(research.link)) {
+    return research.link;
+  }
+  return null;
+};
+
+const ResearchCard = ({ research, onClose, onAuthorClick }: ResearchCardProps) => {
+  const sourceUrl = getPublicScopusUrl(research);
+
+  // Batch-resolve which authors are IITD Faculty, then show only those — mirroring
+  // the Explore modal's IIT Delhi roster filter.
+  const scopusIds = useMemo(
+    () =>
+      (research.authors || [])
+        .map((a) => (a?.author_id == null ? '' : String(a.author_id).trim()))
+        .filter((v) => v.length > 0),
+    [research.authors]
+  );
+
+  const [iitdMatches, setIitdMatches] = useState<Record<string, DirectoryFaculty>>({});
+  const [authorsLoading, setAuthorsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (scopusIds.length === 0) {
+      setIitdMatches({});
+      return;
+    }
+    setAuthorsLoading(true);
+    resolveFacultiesByScopusIds(scopusIds)
+      .then((m) => {
+        if (!cancelled) setIitdMatches(m);
+      })
+      .catch((err) => {
+        console.error('Failed to resolve IITD authors for paper', err);
+        if (!cancelled) setIitdMatches({});
+      })
+      .finally(() => {
+        if (!cancelled) setAuthorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scopusIds]);
+
+  const iitdAuthors = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: Array<{
+      scopusId: string;
+      name: string;
+      departmentName?: string | null;
+      designation?: string | null;
+    }> = [];
+    for (const a of research.authors || []) {
+      const sid = a?.author_id ? String(a.author_id).trim() : '';
+      if (!sid) continue;
+      const faculty = iitdMatches[sid];
+      if (!faculty) continue;
+      if (seen.has(sid)) continue;
+      seen.add(sid);
+      rows.push({
+        scopusId: sid,
+        name: faculty.name || a.author_name || 'Unknown',
+        departmentName: faculty.department?.name,
+        designation: faculty.designation,
+      });
+    }
+    return rows;
+  }, [research.authors, iitdMatches]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -65,25 +154,44 @@ const ResearchCard = ({ research, onClose }: ResearchCardProps) => {
               </div>
             )}
 
-            {/* Authors */}
-            {research.authors && research.authors.length > 0 && (
+            {/* IITD Authors only (mirrors Explore modal: paper authors filtered to the IITD Faculty roster) */}
+            {(authorsLoading || iitdAuthors.length > 0) && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-foreground/80">
-                  <Users className="h-4 w-4" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Authors</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-foreground/80">
+                    <Users className="h-4 w-4" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Author(s)</h3>
+                  </div>
+                  {authorsLoading && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-1">
-                  {research.authors.map((author, index) => (
-                    <div key={author._id || index} className="flex flex-col p-2.5 rounded-lg bg-card border border-border shadow-sm">
-                      <span className="text-sm font-semibold text-foreground leading-tight">{author.author_name}</span>
-                      {author.author_affiliation && (
-                        <span className="text-xs text-muted-foreground mt-0.5 line-clamp-1" title={author.author_affiliation}>
-                          {author.author_affiliation}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {iitdAuthors.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {iitdAuthors.map((row) => (
+                      <button
+                        key={row.scopusId}
+                        type="button"
+                        onClick={() => onAuthorClick?.(row.scopusId)}
+                        disabled={!onAuthorClick}
+                        className="group rounded-xl px-4 py-2 border text-left transition-smooth bg-card border-border shadow-sm hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-md disabled:hover:translate-y-0 disabled:hover:shadow-sm disabled:cursor-default"
+                      >
+                        <div className="text-sm font-semibold text-foreground leading-tight group-hover:text-primary transition-colors">
+                          {row.name}
+                        </div>
+                        <div className="text-[10px] font-medium text-muted-foreground mt-1 tracking-wide uppercase line-clamp-1">
+                          {row.departmentName || row.designation || 'IIT Delhi'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  !authorsLoading && (
+                    <p className="text-xs text-muted-foreground italic pl-1">
+                      No IIT Delhi authors matched for this paper.
+                    </p>
+                  )
+                )}
               </div>
             )}
 
@@ -152,19 +260,20 @@ const ResearchCard = ({ research, onClose }: ResearchCardProps) => {
 
         {/* Footer / Action */}
         <div className="p-4 border-t border-border bg-background flex flex-col sm:flex-row items-center justify-between gap-3">
-          {research.link ? (
+          {sourceUrl ? (
             <>
               <div className="flex items-center gap-2 text-muted-foreground mr-auto">
                 <ExternalLink className="w-4 h-4" />
                 <span className="text-sm font-medium">Source Link</span>
               </div>
               <a
-                href={research.link}
+                href={sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium rounded-md transition-all shadow-sm"
               >
-                Open Paper
+                <ExternalLink className="w-4 h-4" />
+                Open on Scopus
               </a>
             </>
           ) : (

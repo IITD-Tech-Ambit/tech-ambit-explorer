@@ -21,6 +21,10 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
 
     const tenure = formatTenure(faculty.workingFromYear);
     const initials = getInitials(faculty.name);
+    const dept = faculty.department;
+    const deptName = dept?.name?.trim();
+    const deptCode = dept?.code?.trim();
+    const deptCategory = dept?.category?.trim();
 
     const timelineData = coworkingData?.coworkersFromPapers
         ?.reduce((acc, paper) => {
@@ -59,9 +63,9 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                                     {initials}
                                 </div>
                             )}
-                            {faculty.department?.code && (
-                                <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 shadow">
-                                    {faculty.department.code.toUpperCase()}
+                            {deptCode && (
+                                <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 shadow border border-primary/20 bg-primary text-primary-foreground">
+                                    {deptCode.toUpperCase()}
                                 </Badge>
                             )}
                         </div>
@@ -72,10 +76,39 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                             {faculty.designation && (
                                 <p className="text-primary font-semibold text-sm mb-0.5">{faculty.designation}</p>
                             )}
-                            <p className="text-sm text-muted-foreground inline-flex items-center gap-1">
-                                <Building2 className="w-4 h-4" />
-                                {faculty.department?.name || "Faculty"}
-                            </p>
+                            {deptName ? (
+                                <div className="mt-3 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.08] via-background/80 to-accent/[0.06] p-3 shadow-sm">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                                        Department
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/20">
+                                            <Building2 className="h-4 w-4" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-base font-semibold text-foreground leading-snug">
+                                                {deptName}
+                                            </p>
+                                            {deptCategory && (
+                                                <p className="text-xs text-muted-foreground mt-0.5">{deptCategory}</p>
+                                            )}
+                                        </div>
+                                        {deptCode && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="shrink-0 font-mono text-[11px] px-2.5 py-0.5 bg-background/90 border border-border/80"
+                                            >
+                                                {deptCode.toUpperCase()}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground inline-flex items-center gap-2 mt-1 rounded-lg border border-dashed border-border/80 bg-muted/30 px-3 py-2">
+                                    <Building2 className="w-4 h-4 shrink-0 opacity-60" />
+                                    <span>Department not listed</span>
+                                </p>
+                            )}
                             {/* {tenure && (
                                 <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1">
                                     <Clock3 className="w-3.5 h-3.5" />

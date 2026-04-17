@@ -65,12 +65,17 @@ const Directory = () => {
         }
     }, [groupedData]);
 
-    const handleCardClick = (faculty: DirectoryFaculty | GroupedDepartmentFaculty, dept?: { _id: string; name: string; code: string }) => {
-        // Convert GroupedDepartmentFaculty to DirectoryFaculty format for modal
+    const handleCardClick = (
+        faculty: DirectoryFaculty | GroupedDepartmentFaculty,
+        dept?: { _id: string; name: string; code: string; category?: string }
+    ) => {
+        // Preserve faculty.department (already populated by the API for "All" and search responses).
+        // `dept` is only provided from the grouped accordion where faculty items omit the department field.
+        const existingDepartment = (faculty as Partial<DirectoryFaculty>).department ?? null;
         const fullFaculty: DirectoryFaculty = {
-            ...faculty,
-            department: dept || { _id: '', name: '', code: '' }
-        } as DirectoryFaculty;
+            ...(faculty as DirectoryFaculty),
+            department: dept ?? existingDepartment,
+        };
         setSelectedFaculty(fullFaculty);
         setModalOpen(true);
     };

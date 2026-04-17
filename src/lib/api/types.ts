@@ -188,6 +188,7 @@ export interface SearchDocument {
     citation_count?: number;
     subject_area?: string[];
     link?: string;
+    document_scopus_id?: string;
 }
 
 export interface SearchFacets {
@@ -262,7 +263,7 @@ export interface DirectoryFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
-    department: DirectoryDepartment;
+    department: DirectoryDepartment | null;
     tags?: string[];
     profileImageUrl?: string | null;
     designation?: string | null;

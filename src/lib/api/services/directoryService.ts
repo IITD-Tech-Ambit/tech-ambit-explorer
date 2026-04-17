@@ -56,6 +56,26 @@ export const getFacultyByScopusId = async (scopusId: string): Promise<DirectoryF
     return data.data;
 };
 
+/**
+ * Batch-resolve Scopus author ids → IITD Faculty. Only ids matching an IITD
+ * Faculty profile are present in the returned map; missing ids indicate a
+ * non-IITD (external) author.
+ */
+export const resolveFacultiesByScopusIds = async (
+    scopusIds: string[]
+): Promise<Record<string, DirectoryFaculty>> => {
+    const ids = [...new Set((scopusIds || []).filter((id) => typeof id === 'string' && id.trim().length > 0))];
+    if (ids.length === 0) return {};
+    const response = await fetch(`${API_BASE_URL}/by-scopus/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scopusIds: ids }),
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Failed to resolve IITD faculty');
+    return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
+};
+
 export const getFacultyCoworking = async (id: string): Promise<FacultyCoworkingResponse> => {
     const response = await fetch(`${API_BASE_URL}/coworkers/${id}`);
     const data = await response.json();

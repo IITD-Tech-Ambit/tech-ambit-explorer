@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight, UserCircle } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import FacultyModal from "@/components/directory/FacultyModal";
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
 import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
-import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
+import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import { formatAbstract } from "@/lib/utils";
 
 /**
@@ -534,35 +534,51 @@ const Explore = () => {
   // Check if department is expanded (default true)
   const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
 
-  // Handle faculty click in People tab - convert to DirectoryFaculty format
-  const handleFacultyClick = (faculty: RelatedFaculty) => {
-    const directoryFaculty: DirectoryFaculty = {
-      _id: faculty._id,
-      name: faculty.name,
-      email: faculty.email,
-      citationCount: 0, // Will be fetched by modal
-      hIndex: 0,        // Will be fetched by modal
-      research_areas: [],
-      department: {
-        _id: faculty.department?._id || '',
-        name: faculty.department?.name || 'Unknown',
-        code: ''
-      }
-    };
-    setSelectedPeopleFaculty(directoryFaculty);
-    setFacultyModalOpen(true);
+  /** People sidebar: open directory modal with full department (from research-ambit API). */
+  const openRelatedFacultyProfile = async (faculty: RelatedFaculty) => {
+    try {
+      const full = await getFacultyById(faculty._id);
+      setSelectedPeopleFaculty(full);
+      setFacultyModalOpen(true);
+    } catch {
+      const directoryFaculty: DirectoryFaculty = {
+        _id: faculty._id,
+        name: faculty.name,
+        email: faculty.email,
+        citationCount: 0,
+        hIndex: 0,
+        research_areas: [],
+        department: faculty.department
+          ? {
+              _id: faculty.department._id,
+              name: faculty.department.name,
+              code: "",
+            }
+          : null,
+      };
+      setSelectedPeopleFaculty(directoryFaculty);
+      setFacultyModalOpen(true);
+    }
   };
 
-  /** Open directory profile from a paper author line (Scopus author_id → Faculty). */
-  const handleAuthorClickByScopus = useCallback(async (scopusAuthorId: string) => {
+  /** Show-all faculty list only has Scopus author_id — resolve profile the same way as paper author links. */
+  const openAggregatedFacultyProfile = async (scopusAuthorId: string) => {
     try {
-      const faculty = await getFacultyByScopusId(scopusAuthorId);
-      setSelectedPeopleFaculty(faculty);
+      const full = await getFacultyByScopusId(scopusAuthorId);
+      setSelectedPeopleFaculty(full);
       setFacultyModalOpen(true);
     } catch (err) {
       console.error("Failed to load faculty profile", err);
     }
-  }, []);
+  };
+
+  /** Open directory profile from a paper author line (Scopus author_id → Faculty). */
+  const handleAuthorClickByScopus = useCallback(
+    async (scopusAuthorId: string) => {
+      await openAggregatedFacultyProfile(scopusAuthorId);
+    },
+    []
+  );
 
   // Handle navigate to mind map
   const handleNavigateToMindMap = async (documentId: string) => {
@@ -578,7 +594,10 @@ const Explore = () => {
       navigate('/mindmap', { state: { navigationPath: pathResponse } });
     } catch (error) {
       console.error('Error navigating to mind map:', error);
-      alert('Failed to navigate to mind map. Please ensure the research paper has a matched IIT Delhi faculty profile.');
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Could not open the mind map for this paper.';
+      alert(`Failed to navigate to mind map. ${message}`);
     } finally {
       setIsNavigating(false);
     }
@@ -1027,20 +1046,30 @@ const Explore = () => {
                           {groupedVisible[department].items.map((faculty) => {
                             const isSelected = selectedAuthor?.author_id === faculty.author_id;
                             return (
-                              <li key={faculty.author_id}>
+                              <li key={faculty.author_id} className="flex items-stretch gap-1">
                                 <button
+                                  type="button"
                                   onClick={() => { setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id }); setAuthorScopedPage(1); }}
-                                  className={`text-sm text-left flex items-start justify-between w-full transition-colors ${
+                                  className={`text-sm text-left flex flex-1 min-w-0 items-start justify-between transition-colors rounded-md px-1 -mx-1 ${
                                     isSelected
                                       ? "text-primary font-semibold"
                                       : "text-muted-foreground hover:text-primary"
                                   }`}
                                 >
-                                  <div className="flex items-start">
+                                  <div className="flex items-start min-w-0">
                                     <span className="shrink-0 mr-2 mt-[2px]">•</span>
-                                    <span>{faculty.name}</span>
+                                    <span className="truncate">{faculty.name}</span>
                                   </div>
-                                  <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paper_count}</span>
+                                  <span className={`text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paper_count}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  title="View profile"
+                                  aria-label={`View profile for ${faculty.name}`}
+                                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id)}
+                                >
+                                  <UserCircle className="h-4 w-4" />
                                 </button>
                               </li>
                             );
@@ -1156,23 +1185,33 @@ const Explore = () => {
                         </div>
                         <ul className="space-y-2 pl-4">
                           {groupedVisible[department].map((faculty) => {
-                            const facultyAuthorId = (faculty as any).expert_id || '';
+                            const facultyAuthorId = (faculty as RelatedFaculty & { expert_id?: string }).expert_id || '';
                             const isSelected = selectedAuthor?.author_id === facultyAuthorId;
                             return (
-                              <li key={faculty._id}>
+                              <li key={faculty._id} className="flex items-stretch gap-1">
                                 <button
+                                  type="button"
                                   onClick={() => { setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: facultyAuthorId }); setAuthorScopedPage(1); }}
-                                  className={`text-sm text-left flex items-start justify-between w-full transition-colors ${
+                                  className={`text-sm text-left flex flex-1 min-w-0 items-start justify-between transition-colors rounded-md px-1 -mx-1 ${
                                     isSelected
                                       ? "text-primary font-semibold"
                                       : "text-muted-foreground hover:text-primary"
                                   }`}
                                 >
-                                  <div className="flex items-start">
+                                  <div className="flex items-start min-w-0">
                                     <span className="shrink-0 mr-2">•</span>
-                                    <span>{faculty.name}</span>
+                                    <span className="truncate">{faculty.name}</span>
                                   </div>
-                                  <span className={`text-xs ml-2 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paperCount}</span>
+                                  <span className={`text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paperCount}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  title="View profile"
+                                  aria-label={`View profile for ${faculty.name}`}
+                                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  onClick={() => void openRelatedFacultyProfile(faculty)}
+                                >
+                                  <UserCircle className="h-4 w-4" />
                                 </button>
                               </li>
                             );
@@ -1734,9 +1773,9 @@ const Explore = () => {
                  Close
                </Button>
                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                 {selectedDocument.link && (
+                 {selectedDocument.document_scopus_id && (
                    <a
-                     href={selectedDocument.link}
+                     href={`https://www.scopus.com/pages/publications/${selectedDocument.document_scopus_id}?origin=resultslist`}
                      target="_blank"
                      rel="noopener noreferrer"
                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20"
