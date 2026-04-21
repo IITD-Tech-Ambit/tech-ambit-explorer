@@ -195,8 +195,10 @@ const Explore = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Initialize search state from URL params for persistence across navigation
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || "");
+  // Initialize search state from URL params for persistence across navigation.
+  // Input stays empty even if a topic is already active — so the user can immediately
+  // type a deep-search query against it.
+  const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState(() => searchParams.get('q') || "");
   const [isNavigating, setIsNavigating] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
@@ -275,7 +277,8 @@ const Explore = () => {
     const mode = searchParams.get('mode');
     const si = searchParams.get('search_in');
 
-    setSearchQuery(q);
+    // Always reset the input to empty — if a topic is active, the next query becomes a deep search.
+    setSearchQuery("");
     setSubmittedQuery(q);
     setCurrentPage(page ? parseInt(page, 10) : 1);
     setActiveFilter(filter);
@@ -503,35 +506,54 @@ const Explore = () => {
     });
   }, [refineQuery, searchMode, searchIn, submittedQuery, addSearchLog]);
 
-  // Perform search - update query and reset page, sync to URL
+  // Perform search — first submission sets the topic; subsequent submissions while a
+  // topic is active run as a deep search (refine) within the current results. The
+  // input is cleared in both cases so the user can immediately queue the next query.
   const performSearch = (page: number = 1) => {
-    if (!searchQuery.trim()) return;
-    console.log('performSearch called:', { searchQuery, page });
-    setSubmittedQuery(searchQuery);
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // If a topic is already active, treat this submission as a deep search (refine).
+    if (submittedQuery.trim()) {
+      setRefineQuery(query);
+      setSubmittedRefineQuery(query);
+      setSearchQuery("");
+      addSearchLog({
+        query,
+        mode: searchMode,
+        searchIn: searchIn,
+        refineWithin: submittedQuery,
+      });
+      return;
+    }
+
+    // Otherwise, this is the initial (topic) search.
+    console.log('performSearch called:', { query, page });
+    setSubmittedQuery(query);
     setCurrentPage(page);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
-    // Clear any active refinement when submitting a new base query
     setRefineQuery('');
     setSubmittedRefineQuery('');
 
-    // Log the search in client-side history
     addSearchLog({
-      query: searchQuery,
+      query,
       mode: searchMode,
       searchIn: searchIn,
     });
 
-    
     // Sync to URL params for persistence across navigation
     const newParams = new URLSearchParams();
-    newParams.set('q', searchQuery);
+    newParams.set('q', query);
     newParams.set('page', String(page));
     newParams.set('mode', searchMode);
     newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
     if (activeFilter !== 'All') newParams.set('filter', activeFilter);
     if (sortBy !== 'relevance') newParams.set('sort', sortBy);
     setSearchParams(newParams);
+
+    // Clear the input so the next submission becomes a deep search.
+    setSearchQuery("");
   };
 
   // Handle search on Enter key
@@ -703,8 +725,7 @@ const Explore = () => {
 
           {/* Search and Filters Container */}
           <div className="flex flex-col gap-3 items-start animate-slide-up max-w-[800px]">
-            {/* Search Bar Row — only before the first search. Once a topic is active, the refine bar below becomes the single "deep search" input. */}
-            {!submittedQuery && (
+            {/* Search Bar Row — always visible so users can refine queries, switch modes, or adjust filters after a search. */}
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               {/* Search Bar */}
               <div className="relative flex-1 w-full">
@@ -718,7 +739,9 @@ const Explore = () => {
                   placeholder={
                     searchIn.length === 1 && searchIn[0] === 'author'
                       ? "Search by author name (e.g. Rajesh Khanna)..."
-                      : "Search by department, project, faculty, or keywords..."
+                      : submittedQuery
+                        ? `Deep search within "${submittedQuery}"...`
+                        : "Search by department, project, faculty, or keywords..."
                   }
                   className={`pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm ${
                     searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
@@ -729,8 +752,9 @@ const Explore = () => {
                 />
                 {searchQuery && (
                   <button
-                    onClick={clearActiveTopic}
+                    onClick={() => setSearchQuery("")}
                     className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
+                    aria-label="Clear input"
                   >
                     <X className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -841,7 +865,6 @@ const Explore = () => {
                 )}
               </div>
             </div>
-            )}
 
             {/* Search In: Author toggle — hidden after a search so only the deep search remains active */}
             {!submittedQuery && (
@@ -949,7 +972,7 @@ const Explore = () => {
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
                   Topic:
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-red-600 text-white shadow-sm">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
                   <Search className="w-3.5 h-3.5" />
                   {submittedQuery}
                   <button
@@ -966,7 +989,7 @@ const Explore = () => {
                     <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
                       Refine:
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-red-600 text-white shadow-sm">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
                       <Search className="w-3.5 h-3.5" />
                       {submittedRefineQuery}
                       <button
@@ -1004,71 +1027,35 @@ const Explore = () => {
           </div>
         </div>
 
-        {/* Search-on-Search (Refine Results) Area */}
-        {hasSearched && !isLoading && (
+        {/* Active refinement banner (only shown if a refine query was previously submitted) */}
+        {hasSearched && !isLoading && submittedRefineQuery && (
           <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
-            {submittedRefineQuery ? (
-              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {selectedAuthor ? (
-                      <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                    ) : (
-                      <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setRefineQuery('');
-                    setSubmittedRefineQuery('');
-                  }}
-                  className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear refinement
-                </Button>
+            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {selectedAuthor ? (
+                    <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                  ) : (
+                    <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
+                </p>
               </div>
-            ) : (
-              <div className="flex gap-2 items-center bg-card border-2 border-border rounded-xl p-2 shadow-sm focus-within:border-primary transition-colors">
-                <Search className="w-5 h-5 text-primary/70 ml-2" />
-                <Input
-                  type="text"
-                  placeholder={`Deep search within these ${selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total || 0} results...`}
-                  className="border-0 focus-visible:ring-0 shadow-none h-11 text-base bg-transparent"
-                  value={refineQuery}
-                  onChange={(e) => setRefineQuery(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      submitRefine();
-                    }
-                  }}
-                  autoFocus
-                />
-                {refineQuery && (
-                  <button
-                    onClick={() => setRefineQuery("")}
-                    className="p-1.5 rounded-full hover:bg-muted transition-colors mr-1"
-                    aria-label="Clear deep search"
-                  >
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                )}
-                <Button
-                  size="sm"
-                  className="h-10 px-4"
-                  onClick={submitRefine}
-                  disabled={!refineQuery.trim()}
-                >
-                  Deep Search
-                </Button>
-              </div>
-            )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRefineQuery('');
+                  setSubmittedRefineQuery('');
+                }}
+                className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear refinement
+              </Button>
+            </div>
           </div>
         )}
       </section>

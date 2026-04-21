@@ -18,13 +18,23 @@ function readStorage(): SearchLog[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const valid = parsed.filter(
       (e): e is SearchLog =>
         !!e &&
         typeof e === 'object' &&
         typeof e.query === 'string' &&
         typeof e.timestamp === 'number'
     );
+    // Dedupe any legacy duplicates (e.g. same query logged as both a top-level
+    // search and a deep-search refinement). Keep the first occurrence since the
+    // list is ordered newest-first.
+    const seen = new Set<string>();
+    return valid.filter((e) => {
+      const key = dedupeKey(e);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   } catch {
     return [];
   }
@@ -39,8 +49,11 @@ function writeStorage(entries: SearchLog[]) {
   }
 }
 
-function dedupeKey(entry: Pick<SearchLog, 'query' | 'refineWithin'>): string {
-  return `${entry.query.trim().toLowerCase()}|${(entry.refineWithin || '').trim().toLowerCase()}`;
+function dedupeKey(entry: Pick<SearchLog, 'query'>): string {
+  // Dedupe purely by the query text — re-searching the same keyword should move
+  // the existing entry to the front regardless of whether it was a top-level
+  // search or a deep-search refinement.
+  return entry.query.trim().toLowerCase();
 }
 
 export function useSearchHistory() {
