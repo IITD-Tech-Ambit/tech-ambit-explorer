@@ -506,6 +506,21 @@ const Explore = () => {
     });
   }, [refineQuery, searchMode, searchIn, submittedQuery, addSearchLog]);
 
+  // Navigate to a specific page of the ALREADY-submitted search.
+  // This is what the First / Prev / numbered / Next / Last buttons call.
+  // It deliberately does NOT read from `searchQuery` (the input box), which is
+  // cleared after each submission so the user can immediately type a deep-search
+  // query. `submittedQuery` holds the active search; `currentPage` drives the
+  // useSearchResearch fetch via the `searchRequest` useMemo (line ~377).
+  const goToPage = (page: number) => {
+    if (!submittedQuery.trim()) return;
+    const totalPages = pagination?.total_pages ?? 1;
+    const clamped = Math.min(Math.max(1, page), Math.max(1, totalPages));
+    if (clamped === currentPage) return;
+    setCurrentPage(clamped);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* jsdom */ }
+  };
+
   // Perform search — first submission sets the topic; subsequent submissions while a
   // topic is active run as a deep search (refine) within the current results. The
   // input is cleared in both cases so the user can immediately queue the next query.
@@ -1674,14 +1689,14 @@ const Explore = () => {
           <div className="flex justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
-              onClick={() => performSearch(1)}
+              onClick={() => goToPage(1)}
               disabled={currentPage === 1}
             >
               First
             </Button>
             <Button
               variant="outline"
-              onClick={() => performSearch(currentPage - 1)}
+              onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
             >
               ‹ Prev
@@ -1698,7 +1713,7 @@ const Explore = () => {
                     <Button
                       key={pageNum}
                       variant={pageNum === currentPage ? "default" : "outline"}
-                      onClick={() => performSearch(pageNum)}
+                      onClick={() => goToPage(pageNum)}
                     >
                       {pageNum}
                     </Button>
@@ -1710,14 +1725,14 @@ const Explore = () => {
 
             <Button
               variant="outline"
-              onClick={() => performSearch(currentPage + 1)}
+              onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === pagination.total_pages}
             >
               Next ›
             </Button>
             <Button
               variant="outline"
-              onClick={() => performSearch(pagination.total_pages)}
+              onClick={() => goToPage(pagination.total_pages)}
               disabled={currentPage === pagination.total_pages}
             >
               Last
