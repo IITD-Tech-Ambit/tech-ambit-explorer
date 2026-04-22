@@ -12,7 +12,8 @@ import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type Searc
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
 import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
-import { formatAbstract } from "@/lib/utils";
+import { formatAbstract, highlightTerms } from "@/lib/utils";
+import { useSearchHistory } from "@/hooks/use-search-history";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
@@ -194,8 +195,10 @@ const Explore = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Initialize search state from URL params for persistence across navigation
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || "");
+  // Initialize search state from URL params for persistence across navigation.
+  // Input stays empty even if a topic is already active — so the user can immediately
+  // type a deep-search query against it.
+  const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState(() => searchParams.get('q') || "");
   const [isNavigating, setIsNavigating] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
@@ -257,6 +260,9 @@ const Explore = () => {
   const [refineQuery, setRefineQuery] = useState('');
   const [submittedRefineQuery, setSubmittedRefineQuery] = useState('');
 
+  // Persistent client-side search log (localStorage)
+  const { history: searchHistory, addEntry: addSearchLog, removeEntry: removeSearchLog, clear: clearSearchLog } = useSearchHistory();
+
   // Sync state from URL when the user navigates with browser back/forward
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -271,7 +277,8 @@ const Explore = () => {
     const mode = searchParams.get('mode');
     const si = searchParams.get('search_in');
 
-    setSearchQuery(q);
+    // Always reset the input to empty — if a topic is active, the next query becomes a deep search.
+    setSearchQuery("");
     setSubmittedQuery(q);
     setCurrentPage(page ? parseInt(page, 10) : 1);
     setActiveFilter(filter);
@@ -456,28 +463,112 @@ const Explore = () => {
   const relatedFaculty = searchData?.related_faculty || [];
   const hasSearched = !!submittedQuery.trim();
 
-  // Perform search - update query and reset page, sync to URL
+  // Tokens to highlight in result titles / abstracts — drawn from the active query + refine text
+  const highlightTokens = useMemo(() => {
+    const src = `${submittedQuery} ${submittedRefineQuery}`.trim();
+    if (!src) return [] as string[];
+    return Array.from(
+      new Set(
+        src
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((t) => t.length >= 2)
+      )
+    );
+  }, [submittedQuery, submittedRefineQuery]);
+
+  // Clear the active topic/refine chips and reset the search state (shared with input X button)
+  const clearActiveTopic = useCallback(() => {
+    setSearchQuery("");
+    setSubmittedQuery("");
+    setSelectedAuthor(null);
+    setRefineQuery("");
+    setSubmittedRefineQuery("");
+    setSearchParams(new URLSearchParams());
+  }, [setSearchParams]);
+
+  // Clear only the refine chip, keep the base topic search active
+  const clearRefineOnly = useCallback(() => {
+    setRefineQuery("");
+    setSubmittedRefineQuery("");
+  }, []);
+
+  // Submit the refine query and log it as a search event
+  const submitRefine = useCallback(() => {
+    const trimmed = refineQuery.trim();
+    if (!trimmed) return;
+    setSubmittedRefineQuery(refineQuery);
+    addSearchLog({
+      query: trimmed,
+      mode: searchMode,
+      searchIn: searchIn,
+      refineWithin: submittedQuery,
+    });
+  }, [refineQuery, searchMode, searchIn, submittedQuery, addSearchLog]);
+
+  // Navigate to a specific page of the ALREADY-submitted search.
+  // This is what the First / Prev / numbered / Next / Last buttons call.
+  // It deliberately does NOT read from `searchQuery` (the input box), which is
+  // cleared after each submission so the user can immediately type a deep-search
+  // query. `submittedQuery` holds the active search; `currentPage` drives the
+  // useSearchResearch fetch via the `searchRequest` useMemo (line ~377).
+  const goToPage = (page: number) => {
+    if (!submittedQuery.trim()) return;
+    const totalPages = pagination?.total_pages ?? 1;
+    const clamped = Math.min(Math.max(1, page), Math.max(1, totalPages));
+    if (clamped === currentPage) return;
+    setCurrentPage(clamped);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* jsdom */ }
+  };
+
+  // Perform search — first submission sets the topic; subsequent submissions while a
+  // topic is active run as a deep search (refine) within the current results. The
+  // input is cleared in both cases so the user can immediately queue the next query.
   const performSearch = (page: number = 1) => {
-    if (!searchQuery.trim()) return;
-    console.log('performSearch called:', { searchQuery, page });
-    setSubmittedQuery(searchQuery);
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // If a topic is already active, treat this submission as a deep search (refine).
+    if (submittedQuery.trim()) {
+      setRefineQuery(query);
+      setSubmittedRefineQuery(query);
+      setSearchQuery("");
+      addSearchLog({
+        query,
+        mode: searchMode,
+        searchIn: searchIn,
+        refineWithin: submittedQuery,
+      });
+      return;
+    }
+
+    // Otherwise, this is the initial (topic) search.
+    console.log('performSearch called:', { query, page });
+    setSubmittedQuery(query);
     setCurrentPage(page);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
-    // Clear any active refinement when submitting a new base query
     setRefineQuery('');
     setSubmittedRefineQuery('');
 
-    
+    addSearchLog({
+      query,
+      mode: searchMode,
+      searchIn: searchIn,
+    });
+
     // Sync to URL params for persistence across navigation
     const newParams = new URLSearchParams();
-    newParams.set('q', searchQuery);
+    newParams.set('q', query);
     newParams.set('page', String(page));
     newParams.set('mode', searchMode);
     newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
     if (activeFilter !== 'All') newParams.set('filter', activeFilter);
     if (sortBy !== 'relevance') newParams.set('sort', sortBy);
     setSearchParams(newParams);
+
+    // Clear the input so the next submission becomes a deep search.
+    setSearchQuery("");
   };
 
   // Handle search on Enter key
@@ -649,7 +740,7 @@ const Explore = () => {
 
           {/* Search and Filters Container */}
           <div className="flex flex-col gap-3 items-start animate-slide-up max-w-[800px]">
-            {/* Search Bar Row */}
+            {/* Search Bar Row — always visible so users can refine queries, switch modes, or adjust filters after a search. */}
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               {/* Search Bar */}
               <div className="relative flex-1 w-full">
@@ -663,7 +754,9 @@ const Explore = () => {
                   placeholder={
                     searchIn.length === 1 && searchIn[0] === 'author'
                       ? "Search by author name (e.g. Rajesh Khanna)..."
-                      : "Search by department, project, faculty, or keywords..."
+                      : submittedQuery
+                        ? `Deep search within "${submittedQuery}"...`
+                        : "Search by department, project, faculty, or keywords..."
                   }
                   className={`pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm ${
                     searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
@@ -674,15 +767,9 @@ const Explore = () => {
                 />
                 {searchQuery && (
                   <button
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSubmittedQuery("");
-                      setSelectedAuthor(null);
-                      setRefineQuery("");
-                      setSubmittedRefineQuery("");
-                      setSearchParams(new URLSearchParams());
-                    }}
+                    onClick={() => setSearchQuery("")}
                     className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
+                    aria-label="Clear input"
                   >
                     <X className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -794,7 +881,8 @@ const Explore = () => {
               </div>
             </div>
 
-            {/* Search In: Author toggle — always visible below the search bar */}
+            {/* Search In: Author toggle — hidden after a search so only the deep search remains active */}
+            {!submittedQuery && (
             <div className="flex items-center gap-2 w-full">
               <span className="text-xs font-medium text-muted-foreground shrink-0">Search in:</span>
               {(() => {
@@ -820,6 +908,118 @@ const Explore = () => {
                   : 'Searching all fields'}
               </span>
             </div>
+            )}
+
+            {/* Recent searches strip (localStorage log) — only visible when no active search */}
+            {!submittedQuery && searchHistory.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
+                  Recent:
+                </span>
+                {searchHistory.slice(0, 5).map((entry) => (
+                  <button
+                    key={entry.timestamp}
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery(entry.query);
+                      setSubmittedQuery(entry.query);
+                      setCurrentPage(1);
+                      setSelectedAuthor(null);
+                      setAuthorScopedPage(1);
+                      setRefineQuery('');
+                      setSubmittedRefineQuery('');
+                      setSearchMode(entry.mode);
+                      setSearchIn(
+                        (entry.searchIn || []).filter((f): f is 'title' | 'abstract' | 'author' | 'subject_area' | 'field' =>
+                          ['title', 'abstract', 'author', 'subject_area', 'field'].includes(f)
+                        )
+                      );
+                      const newParams = new URLSearchParams();
+                      newParams.set('q', entry.query);
+                      newParams.set('page', '1');
+                      newParams.set('mode', entry.mode);
+                      newParams.set(
+                        'search_in',
+                        entry.searchIn.length === 1 && entry.searchIn[0] === 'author' ? 'author' : 'all'
+                      );
+                      setSearchParams(newParams);
+                      addSearchLog({
+                        query: entry.query,
+                        mode: entry.mode,
+                        searchIn: entry.searchIn,
+                      });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    title={
+                      entry.refineWithin
+                        ? `Refined "${entry.refineWithin}" to match "${entry.query}"`
+                        : `Search "${entry.query}"`
+                    }
+                  >
+                    <Search className="w-3 h-3 text-muted-foreground" />
+                    <span className="truncate max-w-[180px]">{entry.query}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSearchLog(entry.timestamp);
+                      }}
+                      aria-label={`Remove "${entry.query}" from recent searches`}
+                      className="ml-0.5 rounded-full p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={clearSearchLog}
+                  className="text-[11px] text-muted-foreground hover:text-destructive underline-offset-2 hover:underline transition-colors"
+                >
+                  Clear history
+                </button>
+              </div>
+            )}
+
+            {/* Active topic chip (image-1 style): shows submitted query as a red removable pill */}
+            {submittedQuery && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
+                  Topic:
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
+                  <Search className="w-3.5 h-3.5" />
+                  {submittedQuery}
+                  <button
+                    type="button"
+                    onClick={clearActiveTopic}
+                    aria-label="Clear topic"
+                    className="ml-1 rounded-full hover:bg-white/20 p-0.5 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+                {submittedRefineQuery && (
+                  <>
+                    <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
+                      Refine:
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
+                      <Search className="w-3.5 h-3.5" />
+                      {submittedRefineQuery}
+                      <button
+                        type="button"
+                        onClick={clearRefineOnly}
+                        aria-label="Clear refine"
+                        className="ml-1 rounded-full hover:bg-white/20 p-0.5 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Active filters summary chips */}
             {(activeFilter !== 'All' || yearFrom || yearTo) && (
@@ -842,72 +1042,35 @@ const Explore = () => {
           </div>
         </div>
 
-        {/* Search-on-Search (Refine Results) Area */}
-        {hasSearched && !isLoading && (
+        {/* Active refinement banner (only shown if a refine query was previously submitted) */}
+        {hasSearched && !isLoading && submittedRefineQuery && (
           <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
-            {submittedRefineQuery ? (
-              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {selectedAuthor ? (
-                      <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                    ) : (
-                      <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setRefineQuery('');
-                    setSubmittedRefineQuery('');
-                  }}
-                  className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear refinement
-                </Button>
+            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {selectedAuthor ? (
+                    <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                  ) : (
+                    <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
+                </p>
               </div>
-            ) : (
-              <div className="flex gap-2 items-center bg-card border border-border rounded-lg p-2 shadow-sm">
-                <Search className="w-4 h-4 text-muted-foreground ml-2" />
-                <Input
-                  type="text"
-                  placeholder={`Search within these ${selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total || 0} results...`}
-                  className="border-0 focus-visible:ring-0 shadow-none h-9 text-sm bg-transparent"
-                  value={refineQuery}
-                  onChange={(e) => setRefineQuery(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && refineQuery.trim()) {
-                      setSubmittedRefineQuery(refineQuery);
-                    }
-                  }}
-                />
-                {refineQuery && (
-                  <button
-                    onClick={() => setRefineQuery("")}
-                    className="p-1.5 rounded-full hover:bg-muted transition-colors mr-1"
-                  >
-                    <X className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                )}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 px-3"
-                  onClick={() => {
-                    if (refineQuery.trim()) setSubmittedRefineQuery(refineQuery);
-                  }}
-                  disabled={!refineQuery.trim()}
-                >
-                  Refine
-                </Button>
-              </div>
-            )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRefineQuery('');
+                  setSubmittedRefineQuery('');
+                }}
+                className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear refinement
+              </Button>
+            </div>
           </div>
         )}
       </section>
@@ -1366,7 +1529,7 @@ const Explore = () => {
                       </Badge>
                     )}
                   </div>
-                  <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                  <CardTitle className="text-xl mb-2">{highlightTerms(item.title, highlightTokens)}</CardTitle>
                   <ExploreCardAuthorsLine
                     authors={item.authors}
                     selectedAuthor={selectedAuthor}
@@ -1375,7 +1538,7 @@ const Explore = () => {
                 </CardHeader>
                 <CardContent>
                   {item.abstract && (
-                    <p className="text-muted-foreground mb-4 line-clamp-3">{formatAbstract(item.abstract)}</p>
+                    <p className="text-muted-foreground mb-4 line-clamp-3">{highlightTerms(formatAbstract(item.abstract), highlightTokens)}</p>
                   )}
 
                   <div className="flex items-center justify-between pt-4 border-t border-border">
@@ -1469,7 +1632,7 @@ const Explore = () => {
                             <div className="flex items-start justify-between mb-2">
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
-                            <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
+                            <CardTitle className="text-xl mb-2">{highlightTerms(item.title, highlightTokens)}</CardTitle>
                             <ExploreCardAuthorsLine
                     authors={item.authors}
                     selectedAuthor={selectedAuthor}
@@ -1478,7 +1641,7 @@ const Explore = () => {
                           </CardHeader>
                           <CardContent>
                             {item.abstract && (
-                              <p className="text-muted-foreground mb-4 line-clamp-3">{formatAbstract(item.abstract)}</p>
+                              <p className="text-muted-foreground mb-4 line-clamp-3">{highlightTerms(formatAbstract(item.abstract), highlightTokens)}</p>
                             )}
 
                             <div className="flex items-center justify-between pt-4 border-t border-border">
@@ -1526,14 +1689,14 @@ const Explore = () => {
           <div className="flex justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
-              onClick={() => performSearch(1)}
+              onClick={() => goToPage(1)}
               disabled={currentPage === 1}
             >
               First
             </Button>
             <Button
               variant="outline"
-              onClick={() => performSearch(currentPage - 1)}
+              onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
             >
               ‹ Prev
@@ -1550,7 +1713,7 @@ const Explore = () => {
                     <Button
                       key={pageNum}
                       variant={pageNum === currentPage ? "default" : "outline"}
-                      onClick={() => performSearch(pageNum)}
+                      onClick={() => goToPage(pageNum)}
                     >
                       {pageNum}
                     </Button>
@@ -1562,14 +1725,14 @@ const Explore = () => {
 
             <Button
               variant="outline"
-              onClick={() => performSearch(currentPage + 1)}
+              onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === pagination.total_pages}
             >
               Next ›
             </Button>
             <Button
               variant="outline"
-              onClick={() => performSearch(pagination.total_pages)}
+              onClick={() => goToPage(pagination.total_pages)}
               disabled={currentPage === pagination.total_pages}
             >
               Last
@@ -1667,7 +1830,7 @@ const Explore = () => {
                     <Badge variant="outline" className="px-3 py-0.5 bg-background/50 backdrop-blur-sm rounded-full uppercase tracking-wider text-[10px] text-muted-foreground border-border/50">{selectedDocument.field_associated}</Badge>
                   )}
                 </div>
-                <h2 className="text-2xl font-bold text-foreground leading-tight">{selectedDocument.title}</h2>
+                <h2 className="text-2xl font-bold text-foreground leading-tight">{highlightTerms(selectedDocument.title, highlightTokens)}</h2>
               </div>
               <Button
                 variant="ghost"
@@ -1722,7 +1885,7 @@ const Explore = () => {
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Abstract</h3>
                   <div className="p-5 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-foreground/80 text-sm shadow-inner">
-                    {formatAbstract(selectedDocument.abstract)}
+                    {highlightTerms(formatAbstract(selectedDocument.abstract), highlightTokens)}
                   </div>
                 </div>
               )}
