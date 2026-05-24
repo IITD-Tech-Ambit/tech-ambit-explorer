@@ -1,7 +1,7 @@
 import { useQuery, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
-import { getFaculties, getFacultyCoworking, getGroupedFaculties, searchFaculties } from '../services/directoryService';
-import type { DirectoryResponse, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
+import { getFaculties, getFacultyById, getFacultyCoworking, getGroupedFaculties, searchFaculties } from '../services/directoryService';
+import type { DirectoryFaculty, DirectoryResponse, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
 
 export const useDirectorySearch = (
     query: string,
@@ -39,6 +39,19 @@ export const useGroupedFaculties = (
     return useQuery<GroupedDepartmentsResponse, Error>({
         queryKey: queryKeys.directory.grouped(category),
         queryFn: () => getGroupedFaculties(category),
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+};
+
+export const useFacultyById = (
+    id: string,
+    options?: Omit<UseQueryOptions<DirectoryFaculty, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<DirectoryFaculty, Error> => {
+    return useQuery<DirectoryFaculty, Error>({
+        queryKey: queryKeys.directory.detail(id),
+        queryFn: () => getFacultyById(id),
+        enabled: !!id,
         staleTime: 5 * 60 * 1000,
         ...options,
     });
