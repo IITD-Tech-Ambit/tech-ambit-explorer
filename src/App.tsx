@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Directory from "./pages/Directory";
+import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
@@ -39,6 +40,7 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/directory" element={<Directory />} />
+          <Route path="/faculty/:slug" element={<FacultyProfile />} />
           <Route path="/magazines" element={<Magazines />} />
           <Route path="/magazines/:id" element={<MagazineDetail />} />
           <Route path="/mindmap" element={<Mindmap />} />

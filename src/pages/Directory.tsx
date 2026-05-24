@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, Microscope, GraduationCap, Search, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import FacultyCard from "@/components/directory/FacultyCard";
-import FacultyModal from "@/components/directory/FacultyModal";
 import { useFaculties, useGroupedFaculties, useDirectorySearch } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty, GroupedDepartmentFaculty } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -28,9 +28,8 @@ const categoryConfig: { key: CategoryFilter; label: string; icon: React.ElementT
 ];
 
 const Directory = () => {
+    const navigate = useNavigate();
     const [page, setPage] = useState(1);
-    const [selectedFaculty, setSelectedFaculty] = useState<DirectoryFaculty | null>(null);
-    const [modalOpen, setModalOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
     const [openAccordions, setOpenAccordions] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -67,22 +66,8 @@ const Directory = () => {
 
     const handleCardClick = (
         faculty: DirectoryFaculty | GroupedDepartmentFaculty,
-        dept?: { _id: string; name: string; code: string; category?: string }
     ) => {
-        // Preserve faculty.department (already populated by the API for "All" and search responses).
-        // `dept` is only provided from the grouped accordion where faculty items omit the department field.
-        const existingDepartment = (faculty as Partial<DirectoryFaculty>).department ?? null;
-        const fullFaculty: DirectoryFaculty = {
-            ...(faculty as DirectoryFaculty),
-            department: dept ?? existingDepartment,
-        };
-        setSelectedFaculty(fullFaculty);
-        setModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setModalOpen(false);
-        setSelectedFaculty(null);
+        navigate(`/faculty/${toSlug(faculty.name)}`, { state: { facultyId: faculty._id } });
     };
 
     const handleCategoryChange = (category: CategoryFilter) => {
@@ -316,7 +301,7 @@ const Directory = () => {
                                                         ...faculty,
                                                         department: deptGroup.department
                                                     } as DirectoryFaculty}
-                                                    onClick={() => handleCardClick(faculty, deptGroup.department)}
+                                                    onClick={() => handleCardClick(faculty)}
                                                 />
                                             ))}
                                         </div>
@@ -341,15 +326,15 @@ const Directory = () => {
                 )}
             </section>
 
-            <FacultyModal
-                faculty={selectedFaculty}
-                open={modalOpen}
-                onClose={handleCloseModal}
-            />
-
             <Footer />
         </div>
     );
 };
 
 export default Directory;
+
+const toSlug = (name: string) =>
+    name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");

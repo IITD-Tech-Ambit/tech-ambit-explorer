@@ -26,17 +26,36 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
 
-    const timelineData = coworkingData?.coworkersFromPapers
-        ?.reduce((acc, paper) => {
+    // Build deduplicated publications timeline grouped by year
+    type DeduplicatedPaper = {
+        title: string;
+        publication_year: number;
+        document_type: string;
+        coauthorNames: string[];
+    };
+
+    const timelineByYear = coworkingData?.coworkersFromPapers?.reduce(
+        (acc, paper) => {
             const year = paper.publication_year;
-            if (year) {
-                if (!acc[year]) acc[year] = [];
-                acc[year].push(paper);
+            if (!year) return acc;
+            if (!acc[year]) acc[year] = new Map<string, DeduplicatedPaper>();
+            const existing = acc[year].get(paper.title);
+            if (existing) {
+                existing.coauthorNames.push(paper.name);
+            } else {
+                acc[year].set(paper.title, {
+                    title: paper.title,
+                    publication_year: year,
+                    document_type: paper.document_type,
+                    coauthorNames: [paper.name],
+                });
             }
             return acc;
-        }, {} as Record<number, typeof coworkingData.coworkersFromPapers>) || {};
+        },
+        {} as Record<number, Map<string, DeduplicatedPaper>>
+    ) ?? {};
 
-    const sortedYears = Object.keys(timelineData)
+    const sortedYears = Object.keys(timelineByYear)
         .map(Number)
         .sort((a, b) => b - a);
 
@@ -236,34 +255,37 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                                             Publication Timeline
                                         </h4>
                                         <div className="relative pl-4 border-l-2 border-primary/20 space-y-4">
-                                            {sortedYears.slice(0, 6).map((year) => (
-                                                <div key={year} className="relative">
-                                                    <div className="absolute -left-[1.35rem] w-3 h-3 rounded-full bg-primary/80 border-2 border-background"></div>
-                                                    <div className="ml-2">
-                                                        <span className="text-sm font-semibold text-primary">{year}</span>
-                                                        <div className="mt-1 space-y-1">
-                                                            {timelineData[year].slice(0, 2).map((paper, idx) => (
-                                                                <div
-                                                                    key={idx}
-                                                                    className="text-xs text-muted-foreground p-2 bg-muted/30 rounded"
-                                                                >
-                                                                    <p className="line-clamp-1 font-medium text-foreground/80">
-                                                                        {paper.title}
+                                            {sortedYears.slice(0, 6).map((year) => {
+                                                const papers = Array.from(timelineByYear[year].values());
+                                                return (
+                                                    <div key={year} className="relative">
+                                                        <div className="absolute -left-[1.35rem] w-3 h-3 rounded-full bg-primary/80 border-2 border-background"></div>
+                                                        <div className="ml-2">
+                                                            <span className="text-sm font-semibold text-primary">{year}</span>
+                                                            <div className="mt-1 space-y-1">
+                                                                {papers.slice(0, 2).map((paper, idx) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        className="text-xs text-muted-foreground p-2 bg-muted/30 rounded"
+                                                                    >
+                                                                        <p className="line-clamp-1 font-medium text-foreground/80">
+                                                                            {paper.title}
+                                                                        </p>
+                                                                        <p className="text-[10px] mt-0.5">
+                                                                            with {paper.coauthorNames.join(", ")} • {paper.document_type}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                                {papers.length > 2 && (
+                                                                    <p className="text-[10px] text-muted-foreground pl-2">
+                                                                        +{papers.length - 2} more publications
                                                                     </p>
-                                                                    <p className="text-[10px] mt-0.5">
-                                                                        with {paper.name} • {paper.document_type}
-                                                                    </p>
-                                                                </div>
-                                                            ))}
-                                                            {timelineData[year].length > 2 && (
-                                                                <p className="text-[10px] text-muted-foreground pl-2">
-                                                                    +{timelineData[year].length - 2} more publications
-                                                                </p>
-                                                            )}
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
