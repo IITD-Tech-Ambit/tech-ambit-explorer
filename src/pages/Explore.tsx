@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight, UserCircle } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import FacultyModal from "@/components/directory/FacultyModal";
+
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
-import type { DirectoryFaculty, AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
+import type { AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
@@ -210,10 +210,6 @@ const Explore = () => {
   // State for filtering papers by author (now includes author_id for API call)
   const [selectedAuthor, setSelectedAuthor] = useState<{ name: string; author_id: string } | null>(null);
   const [authorScopedPage, setAuthorScopedPage] = useState(1);
-
-  // Faculty modal state for People tab
-  const [selectedPeopleFaculty, setSelectedPeopleFaculty] = useState<DirectoryFaculty | null>(null);
-  const [facultyModalOpen, setFacultyModalOpen] = useState(false);
 
   // Filter state - initialize from URL params
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get('filter') || "All");
@@ -625,45 +621,28 @@ const Explore = () => {
   // Check if department is expanded (default true)
   const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
 
-  /** People sidebar: open directory modal with full department (from research-ambit API). */
+  /** People sidebar: navigate to faculty profile page (resolved by _id). */
   const openRelatedFacultyProfile = async (faculty: RelatedFaculty) => {
     try {
       const full = await getFacultyById(faculty._id);
-      setSelectedPeopleFaculty(full);
-      setFacultyModalOpen(true);
+      navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
     } catch {
-      const directoryFaculty: DirectoryFaculty = {
-        _id: faculty._id,
-        name: faculty.name,
-        email: faculty.email,
-        citationCount: 0,
-        hIndex: 0,
-        research_areas: [],
-        department: faculty.department
-          ? {
-              _id: faculty.department._id,
-              name: faculty.department.name,
-              code: "",
-            }
-          : null,
-      };
-      setSelectedPeopleFaculty(directoryFaculty);
-      setFacultyModalOpen(true);
+      // Fallback: navigate by name slug only (FacultyProfile will search by name)
+      navigate(`/faculty/${toSlug(faculty.name)}`);
     }
   };
 
-  /** Show-all faculty list only has Scopus author_id — resolve profile the same way as paper author links. */
+  /** Show-all faculty list only has Scopus author_id — resolve then navigate. */
   const openAggregatedFacultyProfile = async (scopusAuthorId: string) => {
     try {
       const full = await getFacultyByScopusId(scopusAuthorId);
-      setSelectedPeopleFaculty(full);
-      setFacultyModalOpen(true);
+      navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
     } catch (err) {
       console.error("Failed to load faculty profile", err);
     }
   };
 
-  /** Open directory profile from a paper author line (Scopus author_id → Faculty). */
+  /** Open faculty profile from a paper author line (Scopus author_id → Faculty). */
   const handleAuthorClickByScopus = useCallback(
     async (scopusAuthorId: string) => {
       await openAggregatedFacultyProfile(scopusAuthorId);
@@ -1971,19 +1950,15 @@ const Explore = () => {
         </div>
       )}
 
-      {/* Faculty Detail Modal for People Tab */}
-      <FacultyModal
-        faculty={selectedPeopleFaculty}
-        open={facultyModalOpen}
-        onClose={() => {
-          setFacultyModalOpen(false);
-          setSelectedPeopleFaculty(null);
-        }}
-      />
-
       <Footer />
     </div>
   );
 };
 
 export default Explore;
+
+const toSlug = (name: string) =>
+    name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
