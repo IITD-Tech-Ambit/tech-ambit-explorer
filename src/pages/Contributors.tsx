@@ -78,6 +78,13 @@ const phaseContributors: TeamMember[] = [
     email: "ch7221476@iitd.ac.in",
   },
   {
+    name: "Dhruv Upadhyay",
+    role: "Operations",
+    entryNumber: "ch7221484@iitd.ac.in",
+    linkedin: "https://www.linkedin.com/in/dhruv-upadhyay-8a35a3252?utm_source=share_via&utm_content=profile&utm_medium=member_android",
+    email: "ch7221484@iitd.ac.in",
+  },
+  {
     name: "Nikhil Gupta",
     role: "Journalism",
     entryNumber: "ch1221016@iitd.ac.in",
