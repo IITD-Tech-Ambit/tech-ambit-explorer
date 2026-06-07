@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import { Menu, X, Moon, Sun } from "lucide-react";
@@ -7,10 +8,15 @@ import { cn } from "@/lib/utils";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,9 +27,10 @@ const Navigation = () => {
   }, []);
 
   const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle("dark");
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
+
+  const isDark = mounted && resolvedTheme === "dark";
 
   const navItems = [
     { name: "Explore", path: "/explore" },

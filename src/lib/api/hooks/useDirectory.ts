@@ -1,7 +1,7 @@
 import { useQuery, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
-import { getFaculties, getFacultyById, getFacultyCoworking, getGroupedFaculties, searchFaculties } from '../services/directoryService';
-import type { DirectoryFaculty, DirectoryResponse, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
+import { getFaculties, getFacultyById, getFacultyCoworking, getGroupedFaculties, getDepartmentGroupsSummary, getDepartmentGroupFaculties, searchFaculties } from '../services/directoryService';
+import type { DirectoryFaculty, DirectoryResponse, FacultyCoworkingResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
 
 export const useDirectorySearch = (
     query: string,
@@ -39,6 +39,32 @@ export const useGroupedFaculties = (
     return useQuery<GroupedDepartmentsResponse, Error>({
         queryKey: queryKeys.directory.grouped(category),
         queryFn: () => getGroupedFaculties(category),
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+};
+
+export const useDepartmentGroupsSummary = (
+    category: string = 'departments',
+    options?: Omit<UseQueryOptions<GroupedDepartmentsResponse, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<GroupedDepartmentsResponse, Error> => {
+    return useQuery<GroupedDepartmentsResponse, Error>({
+        queryKey: queryKeys.directory.groupSummary(category),
+        queryFn: () => getDepartmentGroupsSummary(category),
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+};
+
+export const useDepartmentGroupFaculties = (
+    category: string,
+    departmentId: string,
+    options?: Omit<UseQueryOptions<DepartmentGroupFacultiesResponse, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<DepartmentGroupFacultiesResponse, Error> => {
+    return useQuery<DepartmentGroupFacultiesResponse, Error>({
+        queryKey: queryKeys.directory.groupFaculties(category, departmentId),
+        queryFn: () => getDepartmentGroupFaculties(category, departmentId),
+        enabled: !!category && !!departmentId,
         staleTime: 5 * 60 * 1000,
         ...options,
     });

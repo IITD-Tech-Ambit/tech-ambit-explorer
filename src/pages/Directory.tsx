@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,13 @@ import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, Mi
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import FacultyCard from "@/components/directory/FacultyCard";
-import { useFaculties, useGroupedFaculties, useDirectorySearch } from "@/lib/api/hooks/useDirectory";
+import DepartmentGroupAccordionItem from "@/components/directory/DepartmentGroupAccordionItem";
+import { useFaculties, useDepartmentGroupsSummary, useDirectorySearch } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty, GroupedDepartmentFaculty } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
     Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
 } from "@/components/ui/accordion";
 
 type CategoryFilter = 'all' | 'departments' | 'schools' | 'centres' | 'researchlabs';
@@ -49,7 +47,7 @@ const Directory = () => {
         { enabled: activeCategory === 'all' && !isSearching }
     );
 
-    const { data: groupedData, isLoading: isGroupedLoading, isError: isGroupedError } = useGroupedFaculties(
+    const { data: groupedData, isLoading: isGroupedLoading, isError: isGroupedError } = useDepartmentGroupsSummary(
         activeCategory,
         { enabled: activeCategory !== 'all' && !isSearching }
     );
@@ -57,12 +55,7 @@ const Directory = () => {
     const isLoading = isSearching ? isSearchLoading : (activeCategory === 'all' ? isPaginatedLoading : isGroupedLoading);
     const isError = !isSearching && (activeCategory === 'all' ? isPaginatedError : isGroupedError);
 
-    // Open all department accordions by default when grouped data changes
-    useEffect(() => {
-        if (groupedData?.departments && groupedData.departments.length > 0) {
-            setOpenAccordions(groupedData.departments.map(d => d.department.name));
-        }
-    }, [groupedData]);
+    const activeCategoryIcon = categoryConfig.find(c => c.key === activeCategory)?.icon ?? GraduationCap;
 
     const handleCardClick = (
         faculty: DirectoryFaculty | GroupedDepartmentFaculty,
@@ -73,6 +66,7 @@ const Directory = () => {
     const handleCategoryChange = (category: CategoryFilter) => {
         setActiveCategory(category);
         setPage(1);
+        setOpenAccordions([]);
         setSearchQuery(''); // Clear search when changing category
     };
 
@@ -274,39 +268,14 @@ const Directory = () => {
                             className="space-y-4"
                         >
                             {groupedData.departments.map((deptGroup) => (
-                                <AccordionItem
+                                <DepartmentGroupAccordionItem
                                     key={deptGroup._id}
-                                    value={deptGroup.department.name}
-                                    className="border border-border rounded-xl overflow-hidden bg-card/50 backdrop-blur-sm"
-                                >
-                                    <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                <GraduationCap className="w-5 h-5 text-primary" />
-                                            </div>
-                                            <div className="text-left">
-                                                <h3 className="font-semibold text-base">{deptGroup.department.name}</h3>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {deptGroup.stats.totalFaculty} faculty member{deptGroup.stats.totalFaculty !== 1 ? 's' : ''}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="px-6 pb-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
-                                            {deptGroup.faculties.map((faculty) => (
-                                                <FacultyCard
-                                                    key={faculty._id}
-                                                    faculty={{
-                                                        ...faculty,
-                                                        department: deptGroup.department
-                                                    } as DirectoryFaculty}
-                                                    onClick={() => handleCardClick(faculty)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </AccordionContent>
-                                </AccordionItem>
+                                    category={activeCategory}
+                                    deptGroup={deptGroup}
+                                    isOpen={openAccordions.includes(deptGroup.department.name)}
+                                    icon={activeCategoryIcon}
+                                    onFacultyClick={(faculty) => handleCardClick(faculty)}
+                                />
                             ))}
                         </Accordion>
                     ) : (

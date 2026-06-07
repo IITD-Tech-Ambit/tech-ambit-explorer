@@ -32,6 +32,9 @@ export const queryKeys = {
         coworking: (id: string) => [...queryKeys.directory.all, 'coworking', id] as const,
         search: (query: string) => [...queryKeys.directory.all, 'search', query] as const,
         grouped: (category: string) => [...queryKeys.directory.all, 'grouped', category] as const,
+        groupSummary: (category: string) => [...queryKeys.directory.all, 'groupSummary', category] as const,
+        groupFaculties: (category: string, departmentId: string) =>
+            [...queryKeys.directory.all, 'groupFaculties', category, departmentId] as const,
     },
 
     // Search query keys

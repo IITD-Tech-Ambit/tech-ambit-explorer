@@ -309,10 +309,10 @@ export interface GroupedDepartmentFaculty {
 export interface GroupedDepartment {
     _id: string;
     department: DirectoryDepartment;
-    faculties: GroupedDepartmentFaculty[];
+    faculties?: GroupedDepartmentFaculty[];
     stats: {
         totalFaculty: number;
-        avgHIndex: number;
+        avgHIndex?: number;
     };
 }
 
@@ -320,6 +320,10 @@ export interface GroupedDepartmentsResponse {
     departments: GroupedDepartment[];
     totalDepartments: number;
     totalFaculty: number;
+}
+
+export interface DepartmentGroupFacultiesResponse {
+    faculties: GroupedDepartmentFaculty[];
 }
 
 export interface Coworker {
