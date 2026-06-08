@@ -3,8 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { User, Mail, BookOpen, Users, GraduationCap, Calendar, Award, ExternalLink, Clock3, Building2 } from "lucide-react";
 import type { ElementType } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFacultyCoworking } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty } from "@/lib/api/types";
+
+const toSlug = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 interface FacultyModalProps {
     faculty: DirectoryFaculty | null;
@@ -12,7 +16,22 @@ interface FacultyModalProps {
     onClose: () => void;
 }
 
+type CoauthorEntry = {
+    name: string;
+    facultyId: string | null;
+    authorId: string;
+};
+
+type DeduplicatedPaper = {
+    title: string;
+    publication_year: number;
+    document_type: string;
+    coauthors: CoauthorEntry[];
+    paperUrl: string | null;
+};
+
 const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
+    const navigate = useNavigate();
     const { data: coworkingData, isLoading } = useFacultyCoworking(faculty?._id || "", {
         enabled: open && !!faculty?._id,
     });
@@ -26,28 +45,34 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
 
-    // Build deduplicated publications timeline grouped by year
-    type DeduplicatedPaper = {
-        title: string;
-        publication_year: number;
-        document_type: string;
-        coauthorNames: string[];
-    };
-
     const timelineByYear = coworkingData?.coworkersFromPapers?.reduce(
-        (acc, paper) => {
-            const year = paper.publication_year;
+        (acc, entry) => {
+            const year = entry.publication_year;
             if (!year) return acc;
             if (!acc[year]) acc[year] = new Map<string, DeduplicatedPaper>();
-            const existing = acc[year].get(paper.title);
+            const existing = acc[year].get(entry.title);
+            const coauthor: CoauthorEntry = {
+                name: entry.name,
+                facultyId: entry.matched_profile ?? null,
+                authorId: entry.author_id ?? "",
+            };
             if (existing) {
-                existing.coauthorNames.push(paper.name);
+                existing.coauthors.push(coauthor);
             } else {
-                acc[year].set(paper.title, {
-                    title: paper.title,
+                let paperUrl: string | null = null;
+                if (entry.link && entry.link.includes('scholar.google.com')) {
+                    paperUrl = entry.link;
+                } else if (!entry.document_scopus_id?.startsWith('scholar_') && entry.document_scopus_id) {
+                    paperUrl = `https://www.scopus.com/pages/publications/${entry.document_scopus_id}?origin=resultslist`;
+                } else if (entry.link && !/\/api\/documents\//i.test(entry.link)) {
+                    paperUrl = entry.link;
+                }
+                acc[year].set(entry.title, {
+                    title: entry.title,
                     publication_year: year,
-                    document_type: paper.document_type,
-                    coauthorNames: [paper.name],
+                    document_type: entry.document_type,
+                    coauthors: [coauthor],
+                    paperUrl,
                 });
             }
             return acc;
@@ -268,11 +293,47 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                                                                         key={idx}
                                                                         className="text-xs text-muted-foreground p-2 bg-muted/30 rounded"
                                                                     >
-                                                                        <p className="line-clamp-1 font-medium text-foreground/80">
-                                                                            {paper.title}
-                                                                        </p>
-                                                                        <p className="text-[10px] mt-0.5">
-                                                                            with {paper.coauthorNames.join(", ")} • {paper.document_type}
+                                                                        {paper.paperUrl ? (
+                                                                            <a
+                                                                                href={paper.paperUrl}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="line-clamp-1 font-medium text-primary hover:underline underline-offset-2 flex items-center gap-1 group"
+                                                                            >
+                                                                                <span className="line-clamp-1">{paper.title}</span>
+                                                                                <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
+                                                                            </a>
+                                                                        ) : (
+                                                                            <p className="line-clamp-1 font-medium text-foreground/80">
+                                                                                {paper.title}
+                                                                            </p>
+                                                                        )}
+                                                                        <p className="text-[10px] mt-0.5 flex flex-wrap gap-x-1">
+                                                                            {paper.coauthors.length > 0 && (
+                                                                                <span>
+                                                                                    with{" "}
+                                                                                    {paper.coauthors.map((ca, caIdx) => (
+                                                                                        <span key={caIdx}>
+                                                                                            {caIdx > 0 && ", "}
+                                                                                            {ca.facultyId ? (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    className="underline underline-offset-1 decoration-primary/50 hover:decoration-primary text-primary/80 hover:text-primary transition-colors cursor-pointer bg-transparent border-0 p-0 text-[10px]"
+                                                                                                    onClick={() => {
+                                                                                                        onClose();
+                                                                                                        navigate(`/faculty/${toSlug(ca.name)}`, { state: { facultyId: ca.facultyId } });
+                                                                                                    }}
+                                                                                                >
+                                                                                                    {ca.name}
+                                                                                                </button>
+                                                                                            ) : (
+                                                                                                <span>{ca.name}</span>
+                                                                                            )}
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </span>
+                                                                            )}
+                                                                            <span>• {paper.document_type}</span>
                                                                         </p>
                                                                     </div>
                                                                 ))}

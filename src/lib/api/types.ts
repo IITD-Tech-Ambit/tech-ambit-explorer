@@ -189,6 +189,8 @@ export interface SearchDocument {
     subject_area?: string[];
     link?: string;
     document_scopus_id?: string;
+    document_eid?: string;
+    open_search_id?: string;
 }
 
 export interface SearchFacets {
@@ -370,6 +372,9 @@ export interface Coworker {
     affiliation: string;
     author_id: string;
     matched_profile: string | null;
+    /** Direct link stored in the DB (may be Google Scholar or Scopus API URL). */
+    link?: string | null;
+    document_scopus_id?: string | null;
 }
 
 export interface SupervisedStudent {

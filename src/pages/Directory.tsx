@@ -55,11 +55,8 @@ const Directory = () => {
     const isLoading = isSearching ? isSearchLoading : (activeCategory === 'all' ? isPaginatedLoading : isGroupedLoading);
     const isError = !isSearching && (activeCategory === 'all' ? isPaginatedError : isGroupedError);
 
-<<<<<<< Updated upstream
     const activeCategoryIcon = categoryConfig.find(c => c.key === activeCategory)?.icon ?? GraduationCap;
 
-=======
->>>>>>> Stashed changes
     const handleCardClick = (
         faculty: DirectoryFaculty | GroupedDepartmentFaculty,
     ) => {

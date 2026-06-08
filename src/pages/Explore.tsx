@@ -16,6 +16,7 @@ import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directo
 import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
 import { SearchSuggestions, type SearchSuggestionsHandle } from "@/components/SearchSuggestions";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
@@ -159,7 +160,7 @@ function ExploreCardAuthorsLine({
 }: {
   authors: SearchAuthor[] | undefined;
   selectedAuthor: { name: string; author_id: string } | null;
-  onAuthorClick: (scopusAuthorId: string) => void;
+  onAuthorClick: (scopusAuthorId: string, name: string) => void;
 }) {
   const entries = getExploreCardAuthorEntries(authors, selectedAuthor);
   if (entries.length === 0) return null;
@@ -179,10 +180,10 @@ function ExploreCardAuthorsLine({
           {i > 0 && ", "}
           <button
             type="button"
-            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left hover:underline underline-offset-2 decoration-primary/50 ${
-              selectedAuthor && i === 0 ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"
+            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left underline underline-offset-2 decoration-primary/60 hover:decoration-primary transition-colors ${
+              selectedAuthor && i === 0 ? "font-semibold text-primary" : "text-primary/80 hover:text-primary"
             }`}
-            onClick={() => onAuthorClick(entry.author_id)}
+            onClick={() => onAuthorClick(entry.author_id, entry.name)}
           >
             {entry.name}
           </button>
@@ -195,6 +196,7 @@ function ExploreCardAuthorsLine({
 
 const Explore = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Initialize search state from URL params for persistence across navigation.
@@ -733,21 +735,36 @@ const Explore = () => {
   };
 
   /** Show-all faculty list only has Scopus author_id — resolve then navigate. */
-  const openAggregatedFacultyProfile = async (scopusAuthorId: string) => {
+  const openAggregatedFacultyProfile = async (scopusAuthorId: string, fallbackName?: string) => {
     try {
       const full = await getFacultyByScopusId(scopusAuthorId);
       navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
-    } catch (err) {
-      console.error("Failed to load faculty profile", err);
+    } catch {
+      if (fallbackName) {
+        navigate(`/faculty/${toSlug(fallbackName)}`);
+      }
     }
   };
 
-  /** Open faculty profile from a paper author line (Scopus author_id → Faculty). */
+  /**
+   * Open faculty profile from a paper author line (Scopus author_id → Faculty).
+   * Falls back to name-based slug navigation when the Scopus ID isn't in the
+   * Faculty collection — FacultyProfile resolves it via directory search.
+   */
   const handleAuthorClickByScopus = useCallback(
-    async (scopusAuthorId: string) => {
-      await openAggregatedFacultyProfile(scopusAuthorId);
+    async (scopusAuthorId: string, authorName: string) => {
+      try {
+        const full = await getFacultyByScopusId(scopusAuthorId);
+        navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
+      } catch {
+        // Scopus ID not found in Faculty collection — navigate by name slug.
+        // FacultyProfile will resolve the actual _id via useDirectorySearch.
+        if (authorName) {
+          navigate(`/faculty/${toSlug(authorName)}`);
+        }
+      }
     },
-    []
+    [navigate]
   );
 
   // Handle navigate to mind map
@@ -1330,7 +1347,7 @@ const Explore = () => {
                                   title="View profile"
                                   aria-label={`View profile for ${faculty.name}`}
                                   className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id)}
+                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
                                 >
                                   <UserCircle className="h-4 w-4" />
                                 </button>
@@ -1958,7 +1975,7 @@ const Explore = () => {
                         <button
                           key={`${row.author_id}-${idx}`}
                           type="button"
-                          onClick={() => handleAuthorClickByScopus(row.author_id)}
+                          onClick={() => handleAuthorClickByScopus(row.author_id, row.name)}
                           className={`rounded-xl px-4 py-2 border text-left transition-smooth hover:-translate-y-0.5 hover:shadow-md ${
                             row.highlight
                               ? "bg-primary/5 border-primary/30 ring-1 ring-primary/20 shadow-sm"
@@ -2036,17 +2053,62 @@ const Explore = () => {
                  Close
                </Button>
                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                 {selectedDocument.document_scopus_id && (
-                   <a
-                     href={`https://www.scopus.com/pages/publications/${selectedDocument.document_scopus_id}?origin=resultslist`}
-                     target="_blank"
-                     rel="noopener noreferrer"
-                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20"
-                   >
-                     <ExternalLink className="h-4 w-4" />
-                     View Original Paper
-                   </a>
-                 )}
+                 {(() => {
+                   const link = selectedDocument.link ?? '';
+                   const scopusId = selectedDocument.document_scopus_id ?? '';
+                   const eid = selectedDocument.document_eid ?? '';
+
+                   // Scholar-origin papers use a synthetic "scholar_<hash>" as both IDs.
+                   const isScholarId = (id: string) => id.startsWith('scholar_');
+
+                   // 1. Google Scholar link from DB — always correct for GS papers
+                   if (link.includes('scholar.google.com')) {
+                     return (
+                       <a href={link} target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View on Google Scholar
+                       </a>
+                     );
+                   }
+
+                   // 2. Real Scopus ID → public paper page
+                   if (scopusId && !isScholarId(scopusId)) {
+                     return (
+                       <a href={`https://www.scopus.com/pages/publications/${scopusId}?origin=resultslist`}
+                         target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   // 3. Fallback: EID-based Scopus URL (also real Scopus papers)
+                   if (eid && !isScholarId(eid)) {
+                     return (
+                       <a href={`https://www.scopus.com/record/display.uri?eid=${encodeURIComponent(eid)}&origin=resultslist`}
+                         target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   // 4. Any other non-API link stored in DB
+                   if (link && !/\/api\/documents\//i.test(link)) {
+                     return (
+                       <a href={link} target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   return null;
+                 })()}
                  <Button
                    size="lg"
                    onClick={() => handleNavigateToMindMap(selectedDocument._id)}

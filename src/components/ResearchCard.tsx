@@ -14,14 +14,33 @@ interface ResearchCardProps {
   onAuthorClick?: (scopusAuthorId: string) => void;
 }
 
+const isGoogleScholarLink = (link?: string | null): boolean =>
+  !!link && link.includes('scholar.google.com');
+
 /**
- * Build a public Scopus URL for the paper.
- * `research.link` stored in the DB is the Scopus *API* endpoint
- * (`https://www.scopus.com/api/documents/<EID>`) which returns JSON, not the paper
- * page — so prefer the public publication URL built from `document_scopus_id`
- * (or EID as a fallback). Only use the stored link if it's already a non-API URL.
+ * Scholar papers persisted from Google Scholar have document_scopus_id/document_eid
+ * prefixed with "scholar_" (e.g. "scholar_<md5>"). Detect them so we never build
+ * a bogus Scopus URL like scopus.com/…/scholar_abcdef….
  */
-const getPublicScopusUrl = (research: ResearchData): string | null => {
+const isScholarOriginId = (id?: string | null): boolean =>
+  !!id && id.startsWith('scholar_');
+
+/**
+ * Build the best public URL for a paper:
+ * - Google Scholar papers: use the `link` field from the DB (Google Scholar URL).
+ * - Scopus papers: build the public page URL from `document_scopus_id` / EID
+ *   (the raw `link` stored in the DB is a Scopus *API* endpoint that returns JSON).
+ */
+const getPaperUrl = (research: ResearchData): string | null => {
+  // 1. Google Scholar link stored in DB — always preferred for Scholar papers
+  if (isGoogleScholarLink(research.link)) return research.link!;
+
+  // 2. Scholar-origin paper but link field is empty — no usable URL
+  if (isScholarOriginId(research.document_scopus_id) || isScholarOriginId(research.document_eid)) {
+    return null;
+  }
+
+  // 3. Real Scopus paper — build a public page URL
   if (research.document_scopus_id) {
     return `https://www.scopus.com/pages/publications/${research.document_scopus_id}?origin=resultslist`;
   }
@@ -30,6 +49,7 @@ const getPublicScopusUrl = (research: ResearchData): string | null => {
       research.document_eid
     )}&origin=resultslist`;
   }
+  // Last resort: any non-API link stored in the DB
   if (research.link && !/\/api\/documents\//i.test(research.link)) {
     return research.link;
   }
@@ -37,7 +57,8 @@ const getPublicScopusUrl = (research: ResearchData): string | null => {
 };
 
 const ResearchCard = ({ research, onClose, onAuthorClick }: ResearchCardProps) => {
-  const sourceUrl = getPublicScopusUrl(research);
+  const sourceUrl = getPaperUrl(research);
+  const isGoogleScholar = isGoogleScholarLink(research.link);
 
   // Batch-resolve which authors are IITD Faculty, then show only those — mirroring
   // the Explore modal's IIT Delhi roster filter.
@@ -273,7 +294,7 @@ const ResearchCard = ({ research, onClose, onAuthorClick }: ResearchCardProps) =
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium rounded-md transition-all shadow-sm"
               >
                 <ExternalLink className="w-4 h-4" />
-                Open on Scopus
+                {isGoogleScholar ? 'Open on Google Scholar' : 'Open on Scopus'}
               </a>
             </>
           ) : (

@@ -12,11 +12,21 @@ import Footer from "@/components/Footer";
 import { useFacultyById, useFacultyCoworking } from "@/lib/api/hooks/useDirectory";
 import { useDirectorySearch } from "@/lib/api/hooks/useDirectory";
 
+type CoauthorEntry = {
+    name: string;
+    /** Faculty _id if matched to IIT Delhi faculty, else null. */
+    facultyId: string | null;
+    /** Scopus author_id (may be empty string for Scholar-only authors). */
+    authorId: string;
+};
+
 type DeduplicatedPaper = {
     title: string;
     publication_year: number;
     document_type: string;
-    coauthorNames: string[];
+    coauthors: CoauthorEntry[];
+    /** Correct paper URL from DB (Google Scholar or Scopus public page). */
+    paperUrl: string | null;
 };
 
 const FacultyProfile = () => {
@@ -90,21 +100,41 @@ const FacultyProfile = () => {
     const coauthorCount = coworkingData?.stats?.uniqueCoauthors ?? 0;
     const totalPapers = coworkingData?.stats?.totalPapers ?? 0;
 
-    // Deduplicate publications timeline grouped by year
+    // Deduplicate publications timeline grouped by year.
+    // Each coworkersFromPapers entry represents a unique co-author on a paper;
+    // entries with the same title+year are aggregated into one DeduplicatedPaper.
     const timelineByYear = coworkingData?.coworkersFromPapers?.reduce(
-        (acc, paper) => {
-            const year = paper.publication_year;
+        (acc, entry) => {
+            const year = entry.publication_year;
             if (!year) return acc;
             if (!acc[year]) acc[year] = new Map<string, DeduplicatedPaper>();
-            const existing = acc[year].get(paper.title);
+            const existing = acc[year].get(entry.title);
+            const coauthor: CoauthorEntry = {
+                name: entry.name,
+                facultyId: entry.matched_profile ?? null,
+                authorId: entry.author_id ?? "",
+            };
             if (existing) {
-                existing.coauthorNames.push(paper.name);
+                existing.coauthors.push(coauthor);
             } else {
-                acc[year].set(paper.title, {
-                    title: paper.title,
+                // Determine the best URL:
+                // 1. Use Google Scholar link directly when present.
+                // 2. Skip Scopus URL for Scholar-origin papers (id starts with "scholar_").
+                // 3. Build Scopus public page URL for real Scopus papers.
+                let paperUrl: string | null = null;
+                if (entry.link && entry.link.includes('scholar.google.com')) {
+                    paperUrl = entry.link;
+                } else if (!entry.document_scopus_id?.startsWith('scholar_') && entry.document_scopus_id) {
+                    paperUrl = `https://www.scopus.com/pages/publications/${entry.document_scopus_id}?origin=resultslist`;
+                } else if (entry.link && !/\/api\/documents\//i.test(entry.link)) {
+                    paperUrl = entry.link;
+                }
+                acc[year].set(entry.title, {
+                    title: entry.title,
                     publication_year: year,
-                    document_type: paper.document_type,
-                    coauthorNames: [paper.name],
+                    document_type: entry.document_type,
+                    coauthors: [coauthor],
+                    paperUrl,
                 });
             }
             return acc;
@@ -314,20 +344,28 @@ const FacultyProfile = () => {
                                     <SectionCard icon={Users} title={`Co-Authors (${coworkingData.stats.uniqueCoauthors})`}>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                                             {coworkingData.coworkersFromPapers.slice(0, 9).map((coworker, idx) => (
-                                                <div
+                                                <button
                                                     key={idx}
-                                                    className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40 hover:bg-muted/70 border border-transparent hover:border-border/50 transition-all"
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (coworker.matched_profile) {
+                                                            navigate(`/faculty/${toSlug(coworker.name)}`, { state: { facultyId: coworker.matched_profile } });
+                                                        } else {
+                                                            navigate(`/faculty/${toSlug(coworker.name)}`);
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40 hover:bg-primary/10 border border-transparent hover:border-primary/30 transition-all text-left cursor-pointer group"
                                                 >
-                                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary">
+                                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary group-hover:from-primary/30 group-hover:to-accent/25 transition-all">
                                                         {getInitials(coworker.name)}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="text-xs font-semibold text-foreground truncate leading-tight">{coworker.name}</p>
+                                                        <p className="text-xs font-semibold text-foreground group-hover:text-primary truncate leading-tight transition-colors">{coworker.name}</p>
                                                         <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                                                             {coworker.affiliation || "—"}
                                                         </p>
                                                     </div>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     </SectionCard>
@@ -363,13 +401,52 @@ const FacultyProfile = () => {
                                                                         key={idx}
                                                                         className="rounded-xl border border-border/50 bg-background/60 backdrop-blur p-3 hover:border-primary/30 hover:bg-primary/[0.02] transition-all shadow-sm"
                                                                     >
-                                                                        <p className="text-sm font-medium text-foreground/90 line-clamp-2 leading-snug">
-                                                                            {paper.title}
-                                                                        </p>
-                                                                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                                                            <span className="text-[11px] text-muted-foreground">
-                                                                                with {paper.coauthorNames.join(", ")}
-                                                                            </span>
+                                                                        {paper.paperUrl ? (
+                                                                            <a
+                                                                                href={paper.paperUrl}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-sm font-medium text-primary hover:underline underline-offset-2 line-clamp-2 leading-snug flex items-start gap-1 group"
+                                                                            >
+                                                                                {paper.title}
+                                                                                <ExternalLink className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
+                                                                            </a>
+                                                                        ) : (
+                                                                            <p className="text-sm font-medium text-foreground/90 line-clamp-2 leading-snug">
+                                                                                {paper.title}
+                                                                            </p>
+                                                                        )}
+                                                                        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mt-1.5">
+                                                                            {paper.coauthors.length > 0 && (
+                                                                                <span className="text-[11px] text-muted-foreground">
+                                                                                    with{" "}
+                                                                                    {paper.coauthors.map((ca, caIdx) => {
+                                                                                        const canNavigate = !!(ca.facultyId || ca.authorId);
+                                                                                        return (
+                                                                                            <span key={caIdx}>
+                                                                                                {caIdx > 0 && ", "}
+                                                                                                {canNavigate ? (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        className="underline underline-offset-2 decoration-primary/50 hover:decoration-primary text-primary/80 hover:text-primary transition-colors cursor-pointer bg-transparent border-0 p-0 text-[11px]"
+                                                                                                        onClick={() => {
+                                                                                                            if (ca.facultyId) {
+                                                                                                                navigate(`/faculty/${toSlug(ca.name)}`, { state: { facultyId: ca.facultyId } });
+                                                                                                            } else if (ca.authorId) {
+                                                                                                                navigate(`/faculty/${toSlug(ca.name)}`);
+                                                                                                            }
+                                                                                                        }}
+                                                                                                    >
+                                                                                                        {ca.name}
+                                                                                                    </button>
+                                                                                                ) : (
+                                                                                                    <span>{ca.name}</span>
+                                                                                                )}
+                                                                                            </span>
+                                                                                        );
+                                                                                    })}
+                                                                                </span>
+                                                                            )}
                                                                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal border-border/60">
                                                                                 {paper.document_type}
                                                                             </Badge>
@@ -403,6 +480,9 @@ const FacultyProfile = () => {
 export default FacultyProfile;
 
 /* ── Helpers ── */
+
+const toSlug = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const getInitials = (name: string) =>
     name
