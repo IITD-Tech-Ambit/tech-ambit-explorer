@@ -296,6 +296,7 @@ export interface DirectoryFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    googleScholarId?: string;
     department: DirectoryDepartment | null;
     tags?: string[];
     profileImageUrl?: string | null;
@@ -334,6 +335,7 @@ export interface GroupedDepartmentFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    googleScholarId?: string;
     profileImageUrl?: string | null;
     designation?: string | null;
     workingFromYear?: number | null;
@@ -383,17 +385,46 @@ export interface FacultyCoworkingStats {
     totalStudentsSupervised: number;
 }
 
+// Normalized analytics, shared by Scopus and Google Scholar responses.
+// Additive/optional: the existing UI renders from coworkersFromPapers + stats,
+// these fields are available for future use without changing current rendering.
+export interface NormalizedPaper {
+    title: string;
+    year: number | null;
+    citations: number;
+    type: string;
+    venue: string;
+    authors: string[];
+}
+
+export interface NormalizedCoAuthor {
+    name: string;
+    affiliation: string;
+    scholarId: string;
+}
+
+export interface PublicationTimelinePoint {
+    year: number;
+    count: number;
+}
+
 export interface FacultyCoworkingResponse {
     faculty: {
         name: string;
         _id: string;
     };
+    /** Which data source produced this payload. */
+    source?: 'scopus' | 'scholar';
     hIndex: number;
     citationCount: number;
     scopusId?: string;
     coworkersFromPapers: Coworker[];
     studentsSupervised: SupervisedStudent[];
     stats: FacultyCoworkingStats;
+    // Normalized, source-agnostic analytics (optional/additive).
+    papers?: NormalizedPaper[];
+    coAuthors?: NormalizedCoAuthor[];
+    publicationTimeline?: PublicationTimelinePoint[];
 }
 
 // Author-Scoped Search Types

@@ -114,6 +114,7 @@ const FacultyProfile = () => {
 
     const sortedYears = Object.keys(timelineByYear).map(Number).sort((a, b) => b - a);
     const scopusId = coworkingData?.scopusId || faculty.scopusId;
+    const googleScholarId = faculty.googleScholarId;
 
     return (
         <div className="min-h-screen page-bg">
@@ -236,20 +237,38 @@ const FacultyProfile = () => {
                             </SectionCard>
                         )}
 
-                        {/* Scopus CTA */}
-                        {scopusId && (
-                            <a
-                                href={`https://www.scopus.com/authid/detail.uri?authorId=${scopusId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between w-full rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
-                            >
-                                <div>
-                                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
-                                    <p className="text-sm font-semibold text-primary">View on Scopus</p>
-                                </div>
-                                <ExternalLink className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
-                            </a>
+                        {/* External Profile Links */}
+                        {(scopusId || googleScholarId) && (
+                            <div className="space-y-2">
+                                {scopusId && (
+                                    <a
+                                        href={`https://www.scopus.com/authid/detail.uri?authorId=${scopusId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-between w-full rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
+                                    >
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
+                                            <p className="text-sm font-semibold text-primary">View on Scopus</p>
+                                        </div>
+                                        <ExternalLink className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
+                                    </a>
+                                )}
+                                {googleScholarId && (
+                                    <a
+                                        href={`https://scholar.google.com/citations?user=${googleScholarId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-between w-full rounded-2xl border border-blue-200/60 bg-gradient-to-r from-blue-50/50 to-sky-50/50 dark:from-blue-950/20 dark:to-sky-950/20 dark:border-blue-800/30 p-4 shadow-sm hover:shadow-md hover:border-blue-400/60 transition-all group"
+                                    >
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
+                                            <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">View on Google Scholar</p>
+                                        </div>
+                                        <ExternalLink className="w-5 h-5 text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                                    </a>
+                                )}
+                            </div>
                         )}
 
                         {/* PhD Students */}
