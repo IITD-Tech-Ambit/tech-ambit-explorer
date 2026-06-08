@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import FacultyCard from "@/components/directory/FacultyCard";
 import {
     AccordionContent,
@@ -7,6 +7,26 @@ import {
 } from "@/components/ui/accordion";
 import { useDepartmentGroupFaculties } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty, GroupedDepartment, GroupedDepartmentFaculty } from "@/lib/api/types";
+
+/** Official IIT Delhi department/school/centre website URLs, keyed by department name. */
+const DEPT_URLS: Record<string, string> = {
+    "Applied Mechanics":                           "https://am.iitd.ac.in/",
+    "Biochemical Engineering & Biotechnology":     "https://beb.iitd.ac.in/",
+    "Chemical Engineering":                        "https://chemical.iitd.ac.in/",
+    "Chemistry Department":                        "https://chemistry.iitd.ac.in/",
+    "Civil Engineering":                           "https://civil.iitd.ac.in/",
+    "Computer Science & Engineering":              "https://homecse.iitd.ac.in/",
+    "Department of Design":                        "https://design.iitd.ac.in/",
+    "Department of Energy Science & Engineering":  "https://dese.iitd.ac.in/",
+    "Department of Management Studies":            "https://dms.iitd.ac.in/",
+    "Electrical Engineering":                      "https://ee.iitd.ac.in/",
+    "Humanities & Social Sciences":                "https://hss.iitd.ac.in/",
+    "Materials Science & Engineering":             "https://mse.iitd.ac.in/",
+    "Mathematics Department":                      "https://maths.iitd.ac.in/",
+    "Mechanical Engineering":                      "https://mech.iitd.ac.in/",
+    "Physics Department":                          "https://physics.iitd.ac.in/",
+    "Textile & Fibre Engineering":                 "https://textile.iitd.ac.in/",
+};
 
 interface DepartmentGroupAccordionItemProps {
     category: string;
@@ -27,18 +47,35 @@ const DepartmentGroupAccordionItem = ({
         enabled: isOpen,
     });
 
+    const deptUrl = DEPT_URLS[deptGroup.department.name];
+
     return (
         <AccordionItem
             value={deptGroup.department.name}
             className="border border-border rounded-xl overflow-hidden bg-card/50 backdrop-blur-sm"
         >
             <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Icon className="w-5 h-5 text-primary" />
                     </div>
-                    <div className="text-left">
-                        <h3 className="font-semibold text-base">{deptGroup.department.name}</h3>
+                    <div className="text-left min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-base">{deptGroup.department.name}</h3>
+                            {deptUrl && (
+                                <a
+                                    href={deptUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={`Visit ${deptGroup.department.name} website`}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary/70 hover:text-primary bg-primary/8 hover:bg-primary/15 border border-primary/20 hover:border-primary/40 rounded-full px-2 py-0.5 transition-all whitespace-nowrap"
+                                >
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                    Website
+                                </a>
+                            )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                             {deptGroup.stats.totalFaculty} faculty member{deptGroup.stats.totalFaculty !== 1 ? "s" : ""}
                         </p>
