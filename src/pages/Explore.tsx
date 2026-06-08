@@ -10,10 +10,12 @@ import Footer from "@/components/Footer";
 
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
-import type { AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
+import { useSuggest } from "@/lib/api/hooks/useSuggest";
+import type { AuthorScopedSearchRequest, SearchAuthor, SuggestAuthor, SuggestPaper } from "@/lib/api/types";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
+import { SearchSuggestions, type SearchSuggestionsHandle } from "@/components/SearchSuggestions";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
@@ -207,6 +209,11 @@ const Explore = () => {
   });
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
 
+  // Typeahead suggestions (blended authors + papers)
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<SearchSuggestionsHandle>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
   // State for filtering papers by author (now includes author_id for API call)
   const [selectedAuthor, setSelectedAuthor] = useState<{ name: string; author_id: string } | null>(null);
   const [authorScopedPage, setAuthorScopedPage] = useState(1);
@@ -258,6 +265,12 @@ const Explore = () => {
 
   // Persistent client-side search log (localStorage)
   const { history: searchHistory, addEntry: addSearchLog, removeEntry: removeSearchLog, clear: clearSearchLog } = useSearchHistory();
+
+  // Blended typeahead — debounced + abortable inside the hook. Reflects the input box text.
+  const { data: suggestData, isFetching: isSuggestFetching } = useSuggest(searchQuery, {
+    enabled: showSuggestions,
+  });
+  const recentQueries = useMemo(() => searchHistory.map((h) => h.query), [searchHistory]);
 
   // Sync state from URL when the user navigates with browser back/forward
   const isFirstRender = useRef(true);
@@ -567,12 +580,99 @@ const Explore = () => {
     setSearchQuery("");
   };
 
-  // Handle search on Enter key
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Key handling for the search box: let the suggestions dropdown consume
+  // Arrow/Enter/Esc first; otherwise Enter runs the normal search.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestionsRef.current?.handleKeyDown(e)) return;
     if (e.key === "Enter") {
+      setShowSuggestions(false);
       performSearch(1);
     }
   };
+
+  // Close the suggestions dropdown on outside click.
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const handler = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSuggestions]);
+
+  // Run an author-name search through the existing pipeline (no active topic case).
+  const runAuthorNameSearch = useCallback((name: string) => {
+    const nextSearchIn: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'> = ['author'];
+    setSearchIn(nextSearchIn);
+    setSubmittedQuery(name);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: name, mode: searchMode, searchIn: nextSearchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', name);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', 'author');
+    setSearchParams(newParams);
+  }, [searchMode, addSearchLog, setSearchParams]);
+
+  // Selecting an author from typeahead → existing author flow.
+  // With an active topic: scope within it (author-scope). Otherwise: author-name search.
+  const selectAuthorSuggestion = useCallback((author: SuggestAuthor) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    if (submittedQuery.trim() && author.scopus_id) {
+      setSelectedAuthor({ name: author.name, author_id: author.scopus_id });
+      setAuthorScopedPage(1);
+      return;
+    }
+    runAuthorNameSearch(author.name);
+  }, [submittedQuery, runAuthorNameSearch]);
+
+  // Selecting a paper from typeahead → run a normal search on its title.
+  const selectPaperSuggestion = useCallback((paper: SuggestPaper) => {
+    const title = paper.title.trim();
+    if (!title) return;
+    setShowSuggestions(false);
+    setSearchQuery('');
+    setSubmittedQuery(title);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: title, mode: searchMode, searchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', title);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
+    setSearchParams(newParams);
+  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
+
+  // Selecting a recent query → re-run that search.
+  const selectRecentSuggestion = useCallback((q: string) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    setSubmittedQuery(q);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: q, mode: searchMode, searchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', q);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
+    setSearchParams(newParams);
+  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
 
   // Handle filter change
   const handleFilterChange = (filter: string) => {
@@ -722,7 +822,7 @@ const Explore = () => {
             {/* Search Bar Row — always visible so users can refine queries, switch modes, or adjust filters after a search. */}
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               {/* Search Bar */}
-              <div className="relative flex-1 w-full">
+              <div className="relative flex-1 w-full" ref={searchBoxRef}>
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
                   {searchIn.length === 1 && searchIn[0] === 'author'
                     ? <Users className="w-5 h-5 text-primary/70" />
@@ -741,8 +841,12 @@ const Explore = () => {
                     searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
                   }`}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={handleSearchKeyDown}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={showSuggestions}
                 />
                 {searchQuery && (
                   <button
@@ -754,13 +858,30 @@ const Explore = () => {
                   </button>
                 )}
                 <Button
-                  onClick={() => performSearch(1)}
+                  onClick={() => { setShowSuggestions(false); performSearch(1); }}
                   className="absolute right-2 top-1/2 -translate-y-1/2"
                   disabled={isLoading}
                   size="icon"
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
+
+                {/* Blended typeahead dropdown */}
+                {showSuggestions && (
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50">
+                    <SearchSuggestions
+                      ref={suggestionsRef}
+                      query={searchQuery}
+                      data={suggestData}
+                      isLoading={isSuggestFetching}
+                      recent={recentQueries}
+                      onSelectAuthor={selectAuthorSuggestion}
+                      onSelectPaper={selectPaperSuggestion}
+                      onSelectRecent={selectRecentSuggestion}
+                      onClose={() => setShowSuggestions(false)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Basic vs Advanced Search Mode Toggle */}

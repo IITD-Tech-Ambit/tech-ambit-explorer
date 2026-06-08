@@ -246,6 +246,39 @@ export interface SearchRequest {
     refine_within?: string;
 }
 
+// Suggest / Typeahead Types
+export interface SuggestAuthor {
+    id: string;
+    scopus_id: string;
+    name: string;
+    department: string;
+    image_url: string;
+    score: number;
+}
+
+export interface SuggestPaper {
+    id: string;
+    title: string;
+    year: number;
+    lead_author: string;
+    score: number;
+}
+
+export type SuggestIntent = 'author' | 'paper' | 'mixed';
+
+export interface SuggestResponse {
+    intent: SuggestIntent;
+    confidence: number;
+    groups: {
+        authors: SuggestAuthor[];
+        papers: SuggestPaper[];
+    };
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+}
+
 // Directory/Faculty Types
 export interface DirectoryDepartment {
     _id: string;
