@@ -1,4 +1,5 @@
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, UserCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import FacultyCard from "@/components/directory/FacultyCard";
 import {
     AccordionContent,
@@ -28,6 +29,29 @@ const DEPT_URLS: Record<string, string> = {
     "Textile & Fibre Engineering":                 "https://textile.iitd.ac.in/",
 };
 
+/** Current Heads of Department (HOD), keyed by department name. */
+const DEPT_HODS: Record<string, string> = {
+    "Applied Mechanics":                           "Sawan S. Sinha",
+    "Biochemical Engineering & Biotechnology":     "Preeti Srivastava",
+    "Chemical Engineering":                        "Anurag S. Rathore",
+    "Chemistry Department":                        "S. Nagendran",
+    "Civil Engineering":                           "Vasant Matsagar",
+    "Computer Science & Engineering":              "Naveen Garg",
+    "Department of Design":                        "Sumer Singh",
+    "Department of Energy Science & Engineering":  "Ramesh Narayanan",
+    "Department of Management Studies":            "Surya Prakash Singh",
+    "Electrical Engineering":                      "Shankar Prakriya",
+    "Humanities & Social Sciences":                "Abhijit Banerji",
+    "Materials Science & Engineering":             "Leena Nebhani",
+    "Mathematics Department":                      "Mani Mehra",
+    "Mechanical Engineering":                      "Subbarao P M V",
+    "Physics Department":                          "Sujeet Chaudhary",
+    "Textile & Fibre Engineering":                 "Deepti Gupta",
+};
+
+const toSlug = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
 interface DepartmentGroupAccordionItemProps {
     category: string;
     deptGroup: GroupedDepartment;
@@ -43,11 +67,13 @@ const DepartmentGroupAccordionItem = ({
     icon: Icon,
     onFacultyClick,
 }: DepartmentGroupAccordionItemProps) => {
+    const navigate = useNavigate();
     const { data, isLoading, isError } = useDepartmentGroupFaculties(category, deptGroup._id, {
         enabled: isOpen,
     });
 
     const deptUrl = DEPT_URLS[deptGroup.department.name];
+    const hodName = DEPT_HODS[deptGroup.department.name];
 
     return (
         <AccordionItem
@@ -60,6 +86,7 @@ const DepartmentGroupAccordionItem = ({
                         <Icon className="w-5 h-5 text-primary" />
                     </div>
                     <div className="text-left min-w-0 flex-1">
+                        {/* Department name + Website pill */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-base">{deptGroup.department.name}</h3>
                             {deptUrl && (
@@ -76,9 +103,27 @@ const DepartmentGroupAccordionItem = ({
                                 </a>
                             )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                            {deptGroup.stats.totalFaculty} faculty member{deptGroup.stats.totalFaculty !== 1 ? "s" : ""}
-                        </p>
+
+                        {/* Faculty count + HOD chip */}
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <p className="text-xs text-muted-foreground">
+                                {deptGroup.stats.totalFaculty} faculty member{deptGroup.stats.totalFaculty !== 1 ? "s" : ""}
+                            </p>
+                            {hodName && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/faculty/${toSlug(hodName)}`);
+                                    }}
+                                    title={`View profile of HOD: ${hodName}`}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/70 hover:text-primary bg-muted/60 hover:bg-primary/10 border border-border/60 hover:border-primary/30 rounded-full px-2 py-0.5 transition-all whitespace-nowrap"
+                                >
+                                    <UserCircle className="w-2.5 h-2.5" />
+                                    HOD: {hodName}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </AccordionTrigger>
