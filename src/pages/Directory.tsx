@@ -60,7 +60,10 @@ const Directory = () => {
     const handleCardClick = (
         faculty: DirectoryFaculty | GroupedDepartmentFaculty,
     ) => {
-        navigate(`/faculty/${toSlug(faculty.name)}`, { state: { facultyId: faculty._id } });
+        const k = faculty.email?.split("@")[0]?.toLowerCase();
+        if (k) {
+            navigate(`/faculty/${k}`);
+        }
     };
 
     const handleCategoryChange = (category: CategoryFilter) => {
@@ -301,9 +304,3 @@ const Directory = () => {
 };
 
 export default Directory;
-
-const toSlug = (name: string) =>
-    name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");

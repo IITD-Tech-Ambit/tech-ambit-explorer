@@ -1,4 +1,4 @@
-import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
+import type { DirectoryResponse, DirectoryFaculty, FacultyResearchSummary, YearPublicationsResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/directory`;
 
@@ -69,6 +69,13 @@ export const getFacultyById = async (id: string): Promise<DirectoryFaculty> => {
     return data.data;
 };
 
+export const getFacultyByKerberos = async (kerberos: string): Promise<DirectoryFaculty> => {
+    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/profile`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Failed to fetch faculty');
+    return data.data;
+};
+
 /** Resolve directory profile by Scopus author id (paper authors[].author_id). */
 export const getFacultyByScopusId = async (scopusId: string): Promise<DirectoryFaculty> => {
     const response = await fetch(`${API_BASE_URL}/by-scopus/${encodeURIComponent(scopusId)}`);
@@ -97,9 +104,27 @@ export const resolveFacultiesByScopusIds = async (
     return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
 };
 
-export const getFacultyCoworking = async (id: string): Promise<FacultyCoworkingResponse> => {
-    const response = await fetch(`${API_BASE_URL}/coworkers/${id}`);
+export const getFacultyResearchSummary = async (
+    kerberos: string,
+    yearOffset: number = 0,
+    yearLimit: number = 5
+): Promise<FacultyResearchSummary> => {
+    const params = new URLSearchParams({ yearOffset: String(yearOffset), yearLimit: String(yearLimit) });
+    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/research-summary?${params}`);
     const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch faculty coworking data');
+    if (!data.success) throw new Error('Failed to fetch research summary');
+    return data.data;
+};
+
+export const getFacultyYearPublications = async (
+    kerberos: string,
+    year: number,
+    skip: number = 0,
+    limit: number = 20
+): Promise<YearPublicationsResponse> => {
+    const params = new URLSearchParams({ year: String(year), skip: String(skip), limit: String(limit) });
+    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/publications?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Failed to fetch year publications');
     return data.data;
 };

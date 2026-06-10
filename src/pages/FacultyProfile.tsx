@@ -1,60 +1,29 @@
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    User, Mail, BookOpen, Users, GraduationCap, Calendar,
-    Award, ExternalLink, Building2, ArrowLeft, Loader2,
+    User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
     FileText, TrendingUp,
 } from "lucide-react";
 import type { ElementType } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { useFacultyById, useFacultyCoworking } from "@/lib/api/hooks/useDirectory";
-import { useDirectorySearch } from "@/lib/api/hooks/useDirectory";
+import { useFacultyByKerberos, useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
+import PublicationTimeline from "@/components/PublicationTimeline";
 
-type CoauthorEntry = {
-    name: string;
-    /** Faculty _id if matched to IIT Delhi faculty, else null. */
-    facultyId: string | null;
-    /** Scopus author_id (may be empty string for Scholar-only authors). */
-    authorId: string;
-};
-
-type DeduplicatedPaper = {
-    title: string;
-    publication_year: number;
-    document_type: string;
-    coauthors: CoauthorEntry[];
-    /** Correct paper URL from DB (Google Scholar or Scopus public page). */
-    paperUrl: string | null;
-};
+const kerberosFromEmail = (email?: string) =>
+    email ? email.split("@")[0]?.toLowerCase() : "";
 
 const FacultyProfile = () => {
-    const { slug } = useParams<{ slug: string }>();
+    const { kerberos: urlKerberos } = useParams<{ kerberos: string }>();
     const navigate = useNavigate();
-    const location = useLocation();
 
-    // ID passed via router state (normal click from Directory)
-    const stateId: string | undefined = (location.state as { facultyId?: string } | null)?.facultyId;
+    const kerberos = urlKerberos?.trim().toLowerCase() ?? "";
 
-    // Fallback: search by name when someone opens the URL directly (bookmark / share)
-    const nameQuery = slug?.replace(/-/g, " ") ?? "";
-    const { data: searchData, isLoading: isSearchLoading } = useDirectorySearch(nameQuery, 1, {
-        enabled: !stateId && nameQuery.length >= 2,
-    });
+    const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyByKerberos(kerberos);
+    const { data: summaryData, isLoading: isSummaryLoading } = useFacultyResearchSummary(kerberos);
 
-    const resolvedId = stateId || searchData?.faculties?.[0]?._id || "";
-
-    const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyById(resolvedId, {
-        enabled: !!resolvedId,
-    });
-    const { data: coworkingData, isLoading: isCoworkingLoading } = useFacultyCoworking(resolvedId, {
-        enabled: !!resolvedId,
-    });
-
-    const isLoading = (!stateId && isSearchLoading) || (!!resolvedId && isFacultyLoading);
-
-    if (isLoading) {
+    if (isFacultyLoading) {
         return (
             <div className="min-h-screen page-bg">
                 <Navigation />
@@ -95,70 +64,50 @@ const FacultyProfile = () => {
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
 
-    const hIndex = coworkingData?.hIndex ?? faculty.hIndex ?? 0;
-    const citations = coworkingData?.citationCount ?? faculty.citationCount ?? 0;
-    const coauthorCount = coworkingData?.stats?.uniqueCoauthors ?? 0;
-    const totalPapers = coworkingData?.stats?.totalPapers ?? 0;
+    const hIndex = summaryData?.hIndex ?? faculty.hIndex ?? 0;
+    const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
+    const totalPapers = summaryData?.stats?.totalPapers ?? 0;
 
-    // Deduplicate publications timeline grouped by year.
-    // Each coworkersFromPapers entry represents a unique co-author on a paper;
-    // entries with the same title+year are aggregated into one DeduplicatedPaper.
-    const timelineByYear = coworkingData?.coworkersFromPapers?.reduce(
-        (acc, entry) => {
-            const year = entry.publication_year;
-            if (!year) return acc;
-            if (!acc[year]) acc[year] = new Map<string, DeduplicatedPaper>();
-            const existing = acc[year].get(entry.title);
-            const coauthor: CoauthorEntry = {
-                name: entry.name,
-                facultyId: entry.matched_profile ?? null,
-                authorId: entry.author_id ?? "",
-            };
-            if (existing) {
-                existing.coauthors.push(coauthor);
-            } else {
-                // Determine the best URL:
-                // 1. Use Google Scholar link directly when present.
-                // 2. Skip Scopus URL for Scholar-origin papers (id starts with "scholar_").
-                // 3. Build Scopus public page URL for real Scopus papers.
-                let paperUrl: string | null = null;
-                if (entry.link && entry.link.includes('scholar.google.com')) {
-                    paperUrl = entry.link;
-                } else if (!entry.document_scopus_id?.startsWith('scholar_') && entry.document_scopus_id) {
-                    paperUrl = `https://www.scopus.com/pages/publications/${entry.document_scopus_id}?origin=resultslist`;
-                } else if (entry.link && !/\/api\/documents\//i.test(entry.link)) {
-                    paperUrl = entry.link;
-                }
-                acc[year].set(entry.title, {
-                    title: entry.title,
-                    publication_year: year,
-                    document_type: entry.document_type,
-                    coauthors: [coauthor],
-                    paperUrl,
-                });
-            }
-            return acc;
-        },
-        {} as Record<number, Map<string, DeduplicatedPaper>>
-    ) ?? {};
-
-    const sortedYears = Object.keys(timelineByYear).map(Number).sort((a, b) => b - a);
-    const scopusId = coworkingData?.scopusId || faculty.scopusId;
+    const scopusId = summaryData?.scopusId || faculty.scopusId;
     const googleScholarId = faculty.googleScholarId;
+
+    const handleNavigateAuthor = (authorId: string, matchedProfile: string | null, name: string) => {
+        if (matchedProfile) {
+            resolveAndNavigate(matchedProfile);
+        } else if (authorId) {
+            resolveAndNavigateByScopus(authorId, name);
+        }
+    };
+
+    const resolveAndNavigate = async (facultyId: string) => {
+        try {
+            const { getFacultyById } = await import("@/lib/api/services/directoryService");
+            const f = await getFacultyById(facultyId);
+            const k = kerberosFromEmail(f.email);
+            if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+        } catch { /* ignore */ }
+    };
+
+    const resolveAndNavigateByScopus = async (scopusAuthorId: string, _name: string) => {
+        try {
+            const { getFacultyByScopusId } = await import("@/lib/api/services/directoryService");
+            const f = await getFacultyByScopusId(scopusAuthorId);
+            const k = kerberosFromEmail(f.email);
+            if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+        } catch { /* ignore */ }
+    };
 
     return (
         <div className="min-h-screen page-bg">
             <Navigation />
 
-            {/* ── Hero Banner ── */}
+            {/* Hero Banner */}
             <div className="relative overflow-hidden">
-                {/* Mesh gradient backdrop */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10 pointer-events-none" />
                 <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-12 -left-12 w-72 h-72 rounded-full bg-accent/5 blur-3xl pointer-events-none" />
 
                 <div className="relative container mx-auto px-4 pt-10 pb-12">
-                    {/* Back button */}
                     <Button
                         variant="ghost"
                         size="sm"
@@ -170,10 +119,8 @@ const FacultyProfile = () => {
                     </Button>
 
                     <div className="flex flex-col lg:flex-row items-start gap-8">
-                        {/* Avatar column */}
                         <div className="flex-shrink-0">
                             <div className="relative">
-                                {/* Glow ring */}
                                 <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-primary/30 to-accent/20 blur-md opacity-60" />
                                 {faculty.profileImageUrl ? (
                                     <img
@@ -195,7 +142,6 @@ const FacultyProfile = () => {
                             </div>
                         </div>
 
-                        {/* Info column */}
                         <div className="flex-1 min-w-0 pt-1">
                             <h1 className="text-4xl font-bold tracking-tight mb-1">{faculty.name}</h1>
                             {faculty.designation && (
@@ -227,15 +173,11 @@ const FacultyProfile = () => {
                                 )}
                             </div>
 
-                            {/* Stats strip */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl">
                                 <BigStatCard icon={Award} label="H-Index" value={hIndex} color="primary" />
                                 <BigStatCard icon={BookOpen} label="Citations" value={citations.toLocaleString()} color="accent" />
                                 {totalPapers > 0 && (
                                     <BigStatCard icon={FileText} label="Papers" value={totalPapers} color="primary" />
-                                )}
-                                {coauthorCount > 0 && (
-                                    <BigStatCard icon={Users} label="Co-Authors" value={coauthorCount} color="accent" />
                                 )}
                             </div>
                         </div>
@@ -243,14 +185,12 @@ const FacultyProfile = () => {
                 </div>
             </div>
 
-            {/* ── Main Body ── */}
+            {/* Main Body */}
             <div className="container mx-auto px-4 py-10">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
 
-                    {/* ── Left Sidebar ── */}
+                    {/* Left Sidebar */}
                     <div className="lg:col-span-1 space-y-6">
-
-                        {/* Research Areas */}
                         {faculty.research_areas && faculty.research_areas.length > 0 && (
                             <SectionCard icon={TrendingUp} title="Research Areas">
                                 <div className="flex flex-wrap gap-1.5">
@@ -267,7 +207,6 @@ const FacultyProfile = () => {
                             </SectionCard>
                         )}
 
-                        {/* External Profile Links */}
                         {(scopusId || googleScholarId) && (
                             <div className="space-y-2">
                                 {scopusId && (
@@ -300,173 +239,25 @@ const FacultyProfile = () => {
                                 )}
                             </div>
                         )}
-
-                        {/* PhD Students */}
-                        {!isCoworkingLoading && coworkingData?.studentsSupervised && coworkingData.studentsSupervised.length > 0 && (
-                            <SectionCard icon={GraduationCap} title={`PhD Students (${coworkingData.stats.totalStudentsSupervised})`}>
-                                <div className="space-y-2">
-                                    {coworkingData.studentsSupervised.slice(0, 6).map((student, idx) => (
-                                        <div key={idx} className="group p-3 rounded-xl bg-muted/40 hover:bg-muted/70 border border-transparent hover:border-border/50 transition-all">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-semibold text-foreground leading-tight">{student.name}</p>
-                                                    {student.thesis_title && (
-                                                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">
-                                                            {student.thesis_title}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                {student.year && (
-                                                    <Badge variant="outline" className="text-[10px] flex-shrink-0 font-mono">
-                                                        {student.year}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </SectionCard>
-                        )}
                     </div>
 
-                    {/* ── Right Main Content ── */}
+                    {/* Right Main Content */}
                     <div className="lg:col-span-2 space-y-6">
-
-                        {isCoworkingLoading ? (
+                        {isSummaryLoading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
                                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                                 <p className="text-sm text-muted-foreground">Loading research data…</p>
                             </div>
                         ) : (
-                            <>
-                                {/* Co-authors */}
-                                {coworkingData?.coworkersFromPapers && coworkingData.coworkersFromPapers.length > 0 && (
-                                    <SectionCard icon={Users} title={`Co-Authors (${coworkingData.stats.uniqueCoauthors})`}>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                            {coworkingData.coworkersFromPapers.slice(0, 9).map((coworker, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (coworker.matched_profile) {
-                                                            navigate(`/faculty/${toSlug(coworker.name)}`, { state: { facultyId: coworker.matched_profile } });
-                                                        } else {
-                                                            navigate(`/faculty/${toSlug(coworker.name)}`);
-                                                        }
-                                                    }}
-                                                    className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40 hover:bg-primary/10 border border-transparent hover:border-primary/30 transition-all text-left cursor-pointer group"
-                                                >
-                                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary group-hover:from-primary/30 group-hover:to-accent/25 transition-all">
-                                                        {getInitials(coworker.name)}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs font-semibold text-foreground group-hover:text-primary truncate leading-tight transition-colors">{coworker.name}</p>
-                                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                                            {coworker.affiliation || "—"}
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </SectionCard>
-                                )}
-
-                                {/* Publication Timeline */}
-                                {sortedYears.length > 0 && (
-                                    <SectionCard icon={Calendar} title="Publication Timeline">
-                                        <div className="relative">
-                                            {/* Vertical line */}
-                                            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-primary/60 via-primary/30 to-transparent rounded-full" />
-
-                                            <div className="space-y-6">
-                                                {sortedYears.slice(0, 6).map((year, yearIdx) => {
-                                                    const papers = Array.from(timelineByYear[year].values());
-                                                    return (
-                                                        <div key={year} className="relative pl-7">
-                                                            {/* Year dot */}
-                                                            <div className="absolute left-0 top-1 w-3.5 h-3.5 rounded-full bg-gradient-to-br from-primary to-accent shadow-sm border-2 border-background" />
-
-                                                            {/* Year label */}
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <span className="text-base font-bold text-primary">{year}</span>
-                                                                <span className="text-[10px] text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5 font-medium">
-                                                                    {papers.length} publication{papers.length !== 1 ? "s" : ""}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Papers */}
-                                                            <div className="space-y-2">
-                                                                {papers.slice(0, 3).map((paper, idx) => (
-                                                                    <div
-                                                                        key={idx}
-                                                                        className="rounded-xl border border-border/50 bg-background/60 backdrop-blur p-3 hover:border-primary/30 hover:bg-primary/[0.02] transition-all shadow-sm"
-                                                                    >
-                                                                        {paper.paperUrl ? (
-                                                                            <a
-                                                                                href={paper.paperUrl}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="text-sm font-medium text-primary hover:underline underline-offset-2 line-clamp-2 leading-snug flex items-start gap-1 group"
-                                                                            >
-                                                                                {paper.title}
-                                                                                <ExternalLink className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
-                                                                            </a>
-                                                                        ) : (
-                                                                            <p className="text-sm font-medium text-foreground/90 line-clamp-2 leading-snug">
-                                                                                {paper.title}
-                                                                            </p>
-                                                                        )}
-                                                                        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mt-1.5">
-                                                                            {paper.coauthors.length > 0 && (
-                                                                                <span className="text-[11px] text-muted-foreground">
-                                                                                    with{" "}
-                                                                                    {paper.coauthors.map((ca, caIdx) => {
-                                                                                        const canNavigate = !!(ca.facultyId || ca.authorId);
-                                                                                        return (
-                                                                                            <span key={caIdx}>
-                                                                                                {caIdx > 0 && ", "}
-                                                                                                {canNavigate ? (
-                                                                                                    <button
-                                                                                                        type="button"
-                                                                                                        className="underline underline-offset-2 decoration-primary/50 hover:decoration-primary text-primary/80 hover:text-primary transition-colors cursor-pointer bg-transparent border-0 p-0 text-[11px]"
-                                                                                                        onClick={() => {
-                                                                                                            if (ca.facultyId) {
-                                                                                                                navigate(`/faculty/${toSlug(ca.name)}`, { state: { facultyId: ca.facultyId } });
-                                                                                                            } else if (ca.authorId) {
-                                                                                                                navigate(`/faculty/${toSlug(ca.name)}`);
-                                                                                                            }
-                                                                                                        }}
-                                                                                                    >
-                                                                                                        {ca.name}
-                                                                                                    </button>
-                                                                                                ) : (
-                                                                                                    <span>{ca.name}</span>
-                                                                                                )}
-                                                                                            </span>
-                                                                                        );
-                                                                                    })}
-                                                                                </span>
-                                                                            )}
-                                                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal border-border/60">
-                                                                                {paper.document_type}
-                                                                            </Badge>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                                {papers.length > 3 && (
-                                                                    <p className="text-[11px] text-muted-foreground pl-1 italic">
-                                                                        +{papers.length - 3} more in {year}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </SectionCard>
-                                )}
-                            </>
+                            summaryData?.timeline && summaryData.timeline.length > 0 && (
+                                <PublicationTimeline
+                                    timeline={summaryData.timeline}
+                                    kerberos={kerberos}
+                                    totalYears={summaryData.stats.totalYears}
+                                    yearLimit={summaryData.yearLimit}
+                                    onNavigateAuthor={handleNavigateAuthor}
+                                />
+                            )
                         )}
                     </div>
                 </div>
@@ -478,11 +269,6 @@ const FacultyProfile = () => {
 };
 
 export default FacultyProfile;
-
-/* ── Helpers ── */
-
-const toSlug = (name: string) =>
-    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const getInitials = (name: string) =>
     name

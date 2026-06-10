@@ -723,48 +723,37 @@ const Explore = () => {
   // Check if department is expanded (default true)
   const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
 
-  /** People sidebar: navigate to faculty profile page (resolved by _id). */
+  const kerberosFromEmail = (email?: string) =>
+    email ? email.split("@")[0]?.toLowerCase() : "";
+
+  /** People sidebar: navigate to faculty profile page in new tab. */
   const openRelatedFacultyProfile = async (faculty: RelatedFaculty) => {
     try {
       const full = await getFacultyById(faculty._id);
-      navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
-    } catch {
-      // Fallback: navigate by name slug only (FacultyProfile will search by name)
-      navigate(`/faculty/${toSlug(faculty.name)}`);
-    }
+      const k = kerberosFromEmail(full.email);
+      if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+    } catch { /* ignore */ }
   };
 
-  /** Show-all faculty list only has Scopus author_id — resolve then navigate. */
-  const openAggregatedFacultyProfile = async (scopusAuthorId: string, fallbackName?: string) => {
+  /** Show-all faculty list only has Scopus author_id — resolve then open in new tab. */
+  const openAggregatedFacultyProfile = async (scopusAuthorId: string, _fallbackName?: string) => {
     try {
       const full = await getFacultyByScopusId(scopusAuthorId);
-      navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
-    } catch {
-      if (fallbackName) {
-        navigate(`/faculty/${toSlug(fallbackName)}`);
-      }
-    }
+      const k = kerberosFromEmail(full.email);
+      if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+    } catch { /* ignore */ }
   };
 
-  /**
-   * Open faculty profile from a paper author line (Scopus author_id → Faculty).
-   * Falls back to name-based slug navigation when the Scopus ID isn't in the
-   * Faculty collection — FacultyProfile resolves it via directory search.
-   */
+  /** Open faculty profile from a paper author line in new tab. */
   const handleAuthorClickByScopus = useCallback(
-    async (scopusAuthorId: string, authorName: string) => {
+    async (scopusAuthorId: string, _authorName: string) => {
       try {
         const full = await getFacultyByScopusId(scopusAuthorId);
-        navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
-      } catch {
-        // Scopus ID not found in Faculty collection — navigate by name slug.
-        // FacultyProfile will resolve the actual _id via useDirectorySearch.
-        if (authorName) {
-          navigate(`/faculty/${toSlug(authorName)}`);
-        }
-      }
+        const k = kerberosFromEmail(full.email);
+        if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+      } catch { /* ignore */ }
     },
-    [navigate]
+    []
   );
 
   // Handle navigate to mind map
@@ -820,7 +809,7 @@ const Explore = () => {
   }, [filteredResults, clientSort, selectedAuthor, authorScopedData]);
 
   return (
-    <div className="min-h-screen page-bg">
+    <div className="min-h-screen page-bg flex flex-col">
       <Navigation />
 
       {/* Header */}
@@ -1198,7 +1187,7 @@ const Explore = () => {
       )}
 
       {/* Research Items Grid Layout */}
-      <section className="container mx-auto px-4 pt-10 pb-20">
+      <section className="container mx-auto px-4 pt-10 pb-20 flex-1">
         {/* Loading State */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">
@@ -2139,9 +2128,3 @@ const Explore = () => {
 };
 
 export default Explore;
-
-const toSlug = (name: string) =>
-    name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");

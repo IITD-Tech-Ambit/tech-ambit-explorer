@@ -363,73 +363,50 @@ export interface DepartmentGroupFacultiesResponse {
     faculties: GroupedDepartmentFaculty[];
 }
 
-export interface Coworker {
-    title: string;
-    publication_year: number;
-    document_type: string;
-    subject_area: string[];
+// Research Summary types (lean kerberos-keyed APIs)
+
+export interface TimelinePaperAuthor {
     name: string;
-    affiliation: string;
     author_id: string;
     matched_profile: string | null;
-    /** Direct link stored in the DB (may be Google Scholar or Scopus API URL). */
-    link?: string | null;
-    document_scopus_id?: string | null;
 }
 
-export interface SupervisedStudent {
-    name: string;
-    affiliation: string;
-    thesis_title: string;
-    year: number;
-}
-
-export interface FacultyCoworkingStats {
-    totalPapers: number;
-    uniqueCoauthors: number;
-    totalStudentsSupervised: number;
-}
-
-// Normalized analytics, shared by Scopus and Google Scholar responses.
-// Additive/optional: the existing UI renders from coworkersFromPapers + stats,
-// these fields are available for future use without changing current rendering.
-export interface NormalizedPaper {
+export interface TimelinePaper {
     title: string;
-    year: number | null;
-    citations: number;
     type: string;
-    venue: string;
-    authors: string[];
+    citations: number;
+    link: string | null;
+    document_scopus_id: string | null;
+    authors: TimelinePaperAuthor[];
 }
 
-export interface NormalizedCoAuthor {
-    name: string;
-    affiliation: string;
-    scholarId: string;
-}
-
-export interface PublicationTimelinePoint {
+export interface TimelineYear {
     year: number;
     count: number;
+    papers: TimelinePaper[];
 }
 
-export interface FacultyCoworkingResponse {
+export interface FacultyResearchSummary {
     faculty: {
         name: string;
         _id: string;
     };
-    /** Which data source produced this payload. */
-    source?: 'scopus' | 'scholar';
+    source: 'scopus' | 'scholar';
     hIndex: number;
     citationCount: number;
     scopusId?: string;
-    coworkersFromPapers: Coworker[];
-    studentsSupervised: SupervisedStudent[];
-    stats: FacultyCoworkingStats;
-    // Normalized, source-agnostic analytics (optional/additive).
-    papers?: NormalizedPaper[];
-    coAuthors?: NormalizedCoAuthor[];
-    publicationTimeline?: PublicationTimelinePoint[];
+    stats: { totalPapers: number; totalYears: number };
+    timeline: TimelineYear[];
+    yearOffset: number;
+    yearLimit: number;
+}
+
+export interface YearPublicationsResponse {
+    year: number;
+    total: number;
+    papers: TimelinePaper[];
+    skip: number;
+    limit: number;
 }
 
 // Author-Scoped Search Types
