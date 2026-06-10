@@ -1,4 +1,4 @@
-import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse, GroupedDepartmentsResponse, DirectorySearchResult } from '../types';
+import type { DirectoryResponse, DirectoryFaculty, FacultyCoworkingResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
 
 const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/directory`;
 
@@ -38,6 +38,27 @@ export const getGroupedFaculties = async (
     const response = await fetch(`${API_BASE_URL}/grouped?${params}`);
     const data = await response.json();
     if (!data.success) throw new Error('Failed to fetch grouped faculties');
+    return data.data;
+};
+
+export const getDepartmentGroupsSummary = async (
+    category: string = 'departments'
+): Promise<GroupedDepartmentsResponse> => {
+    const params = new URLSearchParams({ category, summaryOnly: 'true' });
+    const response = await fetch(`${API_BASE_URL}/grouped?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Failed to fetch department groups');
+    return data.data;
+};
+
+export const getDepartmentGroupFaculties = async (
+    category: string,
+    departmentId: string
+): Promise<DepartmentGroupFacultiesResponse> => {
+    const params = new URLSearchParams({ category });
+    const response = await fetch(`${API_BASE_URL}/grouped/${departmentId}/faculties?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error('Failed to fetch department faculties');
     return data.data;
 };
 

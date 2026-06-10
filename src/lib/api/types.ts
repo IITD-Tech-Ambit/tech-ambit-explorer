@@ -189,6 +189,8 @@ export interface SearchDocument {
     subject_area?: string[];
     link?: string;
     document_scopus_id?: string;
+    document_eid?: string;
+    open_search_id?: string;
 }
 
 export interface SearchFacets {
@@ -246,6 +248,39 @@ export interface SearchRequest {
     refine_within?: string;
 }
 
+// Suggest / Typeahead Types
+export interface SuggestAuthor {
+    id: string;
+    scopus_id: string;
+    name: string;
+    department: string;
+    image_url: string;
+    score: number;
+}
+
+export interface SuggestPaper {
+    id: string;
+    title: string;
+    year: number;
+    lead_author: string;
+    score: number;
+}
+
+export type SuggestIntent = 'author' | 'paper' | 'mixed';
+
+export interface SuggestResponse {
+    intent: SuggestIntent;
+    confidence: number;
+    groups: {
+        authors: SuggestAuthor[];
+        papers: SuggestPaper[];
+    };
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+}
+
 // Directory/Faculty Types
 export interface DirectoryDepartment {
     _id: string;
@@ -263,6 +298,7 @@ export interface DirectoryFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    googleScholarId?: string;
     department: DirectoryDepartment | null;
     tags?: string[];
     profileImageUrl?: string | null;
@@ -301,6 +337,7 @@ export interface GroupedDepartmentFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    googleScholarId?: string;
     profileImageUrl?: string | null;
     designation?: string | null;
     workingFromYear?: number | null;
@@ -309,10 +346,10 @@ export interface GroupedDepartmentFaculty {
 export interface GroupedDepartment {
     _id: string;
     department: DirectoryDepartment;
-    faculties: GroupedDepartmentFaculty[];
+    faculties?: GroupedDepartmentFaculty[];
     stats: {
         totalFaculty: number;
-        avgHIndex: number;
+        avgHIndex?: number;
     };
 }
 
@@ -320,6 +357,10 @@ export interface GroupedDepartmentsResponse {
     departments: GroupedDepartment[];
     totalDepartments: number;
     totalFaculty: number;
+}
+
+export interface DepartmentGroupFacultiesResponse {
+    faculties: GroupedDepartmentFaculty[];
 }
 
 export interface Coworker {
@@ -331,6 +372,9 @@ export interface Coworker {
     affiliation: string;
     author_id: string;
     matched_profile: string | null;
+    /** Direct link stored in the DB (may be Google Scholar or Scopus API URL). */
+    link?: string | null;
+    document_scopus_id?: string | null;
 }
 
 export interface SupervisedStudent {
@@ -346,17 +390,46 @@ export interface FacultyCoworkingStats {
     totalStudentsSupervised: number;
 }
 
+// Normalized analytics, shared by Scopus and Google Scholar responses.
+// Additive/optional: the existing UI renders from coworkersFromPapers + stats,
+// these fields are available for future use without changing current rendering.
+export interface NormalizedPaper {
+    title: string;
+    year: number | null;
+    citations: number;
+    type: string;
+    venue: string;
+    authors: string[];
+}
+
+export interface NormalizedCoAuthor {
+    name: string;
+    affiliation: string;
+    scholarId: string;
+}
+
+export interface PublicationTimelinePoint {
+    year: number;
+    count: number;
+}
+
 export interface FacultyCoworkingResponse {
     faculty: {
         name: string;
         _id: string;
     };
+    /** Which data source produced this payload. */
+    source?: 'scopus' | 'scholar';
     hIndex: number;
     citationCount: number;
     scopusId?: string;
     coworkersFromPapers: Coworker[];
     studentsSupervised: SupervisedStudent[];
     stats: FacultyCoworkingStats;
+    // Normalized, source-agnostic analytics (optional/additive).
+    papers?: NormalizedPaper[];
+    coAuthors?: NormalizedCoAuthor[];
+    publicationTimeline?: PublicationTimelinePoint[];
 }
 
 // Author-Scoped Search Types

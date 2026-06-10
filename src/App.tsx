@@ -16,6 +16,7 @@ import Mindmap from "./pages/Mindmap";
 import Contributors from "./pages/Contributors";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
+import { ThemeProvider } from "./components/theme-provider";
 
 // Configure React Query with production-ready defaults
 const queryClient = new QueryClient({
@@ -37,7 +38,8 @@ const App = () => {
   const [suggestionOpen, setSuggestionOpen] = useState(false);
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -77,6 +79,7 @@ const App = () => {
       {/* React Query DevTools - only visible in development */}
       {/* <ReactQueryDevtools initialIsOpen={false} /> */}
     </QueryClientProvider>
+    </ThemeProvider>
   );
 };
 

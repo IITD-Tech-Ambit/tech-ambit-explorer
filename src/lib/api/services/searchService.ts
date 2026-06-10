@@ -1,6 +1,34 @@
-import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse } from '../types';
+import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SuggestResponse } from '../types';
 
 const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3001/api/v1';
+
+const EMPTY_SUGGEST: SuggestResponse = {
+  intent: 'mixed',
+  confidence: 0,
+  groups: { authors: [], papers: [] },
+};
+
+/**
+ * Blended, intent-aware typeahead: returns Author + Paper suggestion groups plus a
+ * predicted intent. AbortController-aware so stale keystrokes can be cancelled.
+ */
+export async function getSuggestions(
+  q: string,
+  limit: number = 8,
+  signal?: AbortSignal
+): Promise<SuggestResponse> {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return EMPTY_SUGGEST;
+
+  const params = new URLSearchParams({ q: trimmed, limit: String(limit) });
+  const response = await fetch(`${SEARCH_API_BASE_URL}/suggest?${params.toString()}`, { signal });
+
+  if (!response.ok) {
+    throw new Error(`Suggest failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 /** 
  * Perform a hybrid search using BM25 + SPECTER2 semantic embeddings

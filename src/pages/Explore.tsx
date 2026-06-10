@@ -10,10 +10,13 @@ import Footer from "@/components/Footer";
 
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
-import type { AuthorScopedSearchRequest, SearchAuthor } from "@/lib/api/types";
+import { useSuggest } from "@/lib/api/hooks/useSuggest";
+import type { AuthorScopedSearchRequest, SearchAuthor, SuggestAuthor, SuggestPaper } from "@/lib/api/types";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
+import { SearchSuggestions, type SearchSuggestionsHandle } from "@/components/SearchSuggestions";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
@@ -157,7 +160,7 @@ function ExploreCardAuthorsLine({
 }: {
   authors: SearchAuthor[] | undefined;
   selectedAuthor: { name: string; author_id: string } | null;
-  onAuthorClick: (scopusAuthorId: string) => void;
+  onAuthorClick: (scopusAuthorId: string, name: string) => void;
 }) {
   const entries = getExploreCardAuthorEntries(authors, selectedAuthor);
   if (entries.length === 0) return null;
@@ -177,10 +180,10 @@ function ExploreCardAuthorsLine({
           {i > 0 && ", "}
           <button
             type="button"
-            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left hover:underline underline-offset-2 decoration-primary/50 ${
-              selectedAuthor && i === 0 ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"
+            className={`inline p-0 bg-transparent border-0 cursor-pointer text-left underline underline-offset-2 decoration-primary/60 hover:decoration-primary transition-colors ${
+              selectedAuthor && i === 0 ? "font-semibold text-primary" : "text-primary/80 hover:text-primary"
             }`}
-            onClick={() => onAuthorClick(entry.author_id)}
+            onClick={() => onAuthorClick(entry.author_id, entry.name)}
           >
             {entry.name}
           </button>
@@ -193,6 +196,7 @@ function ExploreCardAuthorsLine({
 
 const Explore = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Initialize search state from URL params for persistence across navigation.
@@ -206,6 +210,11 @@ const Explore = () => {
     return page ? parseInt(page, 10) : 1;
   });
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
+
+  // Typeahead suggestions (blended authors + papers)
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<SearchSuggestionsHandle>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
 
   // State for filtering papers by author (now includes author_id for API call)
   const [selectedAuthor, setSelectedAuthor] = useState<{ name: string; author_id: string } | null>(null);
@@ -258,6 +267,12 @@ const Explore = () => {
 
   // Persistent client-side search log (localStorage)
   const { history: searchHistory, addEntry: addSearchLog, removeEntry: removeSearchLog, clear: clearSearchLog } = useSearchHistory();
+
+  // Blended typeahead — debounced + abortable inside the hook. Reflects the input box text.
+  const { data: suggestData, isFetching: isSuggestFetching } = useSuggest(searchQuery, {
+    enabled: showSuggestions,
+  });
+  const recentQueries = useMemo(() => searchHistory.map((h) => h.query), [searchHistory]);
 
   // Sync state from URL when the user navigates with browser back/forward
   const isFirstRender = useRef(true);
@@ -567,12 +582,99 @@ const Explore = () => {
     setSearchQuery("");
   };
 
-  // Handle search on Enter key
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Key handling for the search box: let the suggestions dropdown consume
+  // Arrow/Enter/Esc first; otherwise Enter runs the normal search.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestionsRef.current?.handleKeyDown(e)) return;
     if (e.key === "Enter") {
+      setShowSuggestions(false);
       performSearch(1);
     }
   };
+
+  // Close the suggestions dropdown on outside click.
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const handler = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSuggestions]);
+
+  // Run an author-name search through the existing pipeline (no active topic case).
+  const runAuthorNameSearch = useCallback((name: string) => {
+    const nextSearchIn: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'> = ['author'];
+    setSearchIn(nextSearchIn);
+    setSubmittedQuery(name);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: name, mode: searchMode, searchIn: nextSearchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', name);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', 'author');
+    setSearchParams(newParams);
+  }, [searchMode, addSearchLog, setSearchParams]);
+
+  // Selecting an author from typeahead → existing author flow.
+  // With an active topic: scope within it (author-scope). Otherwise: author-name search.
+  const selectAuthorSuggestion = useCallback((author: SuggestAuthor) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    if (submittedQuery.trim() && author.scopus_id) {
+      setSelectedAuthor({ name: author.name, author_id: author.scopus_id });
+      setAuthorScopedPage(1);
+      return;
+    }
+    runAuthorNameSearch(author.name);
+  }, [submittedQuery, runAuthorNameSearch]);
+
+  // Selecting a paper from typeahead → run a normal search on its title.
+  const selectPaperSuggestion = useCallback((paper: SuggestPaper) => {
+    const title = paper.title.trim();
+    if (!title) return;
+    setShowSuggestions(false);
+    setSearchQuery('');
+    setSubmittedQuery(title);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: title, mode: searchMode, searchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', title);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
+    setSearchParams(newParams);
+  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
+
+  // Selecting a recent query → re-run that search.
+  const selectRecentSuggestion = useCallback((q: string) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    setSubmittedQuery(q);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    setRefineQuery('');
+    setSubmittedRefineQuery('');
+    addSearchLog({ query: q, mode: searchMode, searchIn });
+    const newParams = new URLSearchParams();
+    newParams.set('q', q);
+    newParams.set('page', '1');
+    newParams.set('mode', searchMode);
+    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
+    setSearchParams(newParams);
+  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
 
   // Handle filter change
   const handleFilterChange = (filter: string) => {
@@ -633,21 +735,36 @@ const Explore = () => {
   };
 
   /** Show-all faculty list only has Scopus author_id — resolve then navigate. */
-  const openAggregatedFacultyProfile = async (scopusAuthorId: string) => {
+  const openAggregatedFacultyProfile = async (scopusAuthorId: string, fallbackName?: string) => {
     try {
       const full = await getFacultyByScopusId(scopusAuthorId);
       navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
-    } catch (err) {
-      console.error("Failed to load faculty profile", err);
+    } catch {
+      if (fallbackName) {
+        navigate(`/faculty/${toSlug(fallbackName)}`);
+      }
     }
   };
 
-  /** Open faculty profile from a paper author line (Scopus author_id → Faculty). */
+  /**
+   * Open faculty profile from a paper author line (Scopus author_id → Faculty).
+   * Falls back to name-based slug navigation when the Scopus ID isn't in the
+   * Faculty collection — FacultyProfile resolves it via directory search.
+   */
   const handleAuthorClickByScopus = useCallback(
-    async (scopusAuthorId: string) => {
-      await openAggregatedFacultyProfile(scopusAuthorId);
+    async (scopusAuthorId: string, authorName: string) => {
+      try {
+        const full = await getFacultyByScopusId(scopusAuthorId);
+        navigate(`/faculty/${toSlug(full.name)}`, { state: { facultyId: full._id } });
+      } catch {
+        // Scopus ID not found in Faculty collection — navigate by name slug.
+        // FacultyProfile will resolve the actual _id via useDirectorySearch.
+        if (authorName) {
+          navigate(`/faculty/${toSlug(authorName)}`);
+        }
+      }
     },
-    []
+    [navigate]
   );
 
   // Handle navigate to mind map
@@ -722,7 +839,7 @@ const Explore = () => {
             {/* Search Bar Row — always visible so users can refine queries, switch modes, or adjust filters after a search. */}
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               {/* Search Bar */}
-              <div className="relative flex-1 w-full">
+              <div className="relative flex-1 w-full" ref={searchBoxRef}>
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
                   {searchIn.length === 1 && searchIn[0] === 'author'
                     ? <Users className="w-5 h-5 text-primary/70" />
@@ -741,8 +858,12 @@ const Explore = () => {
                     searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
                   }`}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={handleSearchKeyDown}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={showSuggestions}
                 />
                 {searchQuery && (
                   <button
@@ -754,13 +875,30 @@ const Explore = () => {
                   </button>
                 )}
                 <Button
-                  onClick={() => performSearch(1)}
+                  onClick={() => { setShowSuggestions(false); performSearch(1); }}
                   className="absolute right-2 top-1/2 -translate-y-1/2"
                   disabled={isLoading}
                   size="icon"
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
+
+                {/* Blended typeahead dropdown */}
+                {showSuggestions && (
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50">
+                    <SearchSuggestions
+                      ref={suggestionsRef}
+                      query={searchQuery}
+                      data={suggestData}
+                      isLoading={isSuggestFetching}
+                      recent={recentQueries}
+                      onSelectAuthor={selectAuthorSuggestion}
+                      onSelectPaper={selectPaperSuggestion}
+                      onSelectRecent={selectRecentSuggestion}
+                      onClose={() => setShowSuggestions(false)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Basic vs Advanced Search Mode Toggle */}
@@ -1209,7 +1347,7 @@ const Explore = () => {
                                   title="View profile"
                                   aria-label={`View profile for ${faculty.name}`}
                                   className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id)}
+                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
                                 >
                                   <UserCircle className="h-4 w-4" />
                                 </button>
@@ -1837,7 +1975,7 @@ const Explore = () => {
                         <button
                           key={`${row.author_id}-${idx}`}
                           type="button"
-                          onClick={() => handleAuthorClickByScopus(row.author_id)}
+                          onClick={() => handleAuthorClickByScopus(row.author_id, row.name)}
                           className={`rounded-xl px-4 py-2 border text-left transition-smooth hover:-translate-y-0.5 hover:shadow-md ${
                             row.highlight
                               ? "bg-primary/5 border-primary/30 ring-1 ring-primary/20 shadow-sm"
@@ -1915,17 +2053,62 @@ const Explore = () => {
                  Close
                </Button>
                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                 {selectedDocument.document_scopus_id && (
-                   <a
-                     href={`https://www.scopus.com/pages/publications/${selectedDocument.document_scopus_id}?origin=resultslist`}
-                     target="_blank"
-                     rel="noopener noreferrer"
-                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20"
-                   >
-                     <ExternalLink className="h-4 w-4" />
-                     View Original Paper
-                   </a>
-                 )}
+                 {(() => {
+                   const link = selectedDocument.link ?? '';
+                   const scopusId = selectedDocument.document_scopus_id ?? '';
+                   const eid = selectedDocument.document_eid ?? '';
+
+                   // Scholar-origin papers use a synthetic "scholar_<hash>" as both IDs.
+                   const isScholarId = (id: string) => id.startsWith('scholar_');
+
+                   // 1. Google Scholar link from DB — always correct for GS papers
+                   if (link.includes('scholar.google.com')) {
+                     return (
+                       <a href={link} target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View on Google Scholar
+                       </a>
+                     );
+                   }
+
+                   // 2. Real Scopus ID → public paper page
+                   if (scopusId && !isScholarId(scopusId)) {
+                     return (
+                       <a href={`https://www.scopus.com/pages/publications/${scopusId}?origin=resultslist`}
+                         target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   // 3. Fallback: EID-based Scopus URL (also real Scopus papers)
+                   if (eid && !isScholarId(eid)) {
+                     return (
+                       <a href={`https://www.scopus.com/record/display.uri?eid=${encodeURIComponent(eid)}&origin=resultslist`}
+                         target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   // 4. Any other non-API link stored in DB
+                   if (link && !/\/api\/documents\//i.test(link)) {
+                     return (
+                       <a href={link} target="_blank" rel="noopener noreferrer"
+                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 text-sm font-bold rounded-lg transition-all border border-primary/20">
+                         <ExternalLink className="h-4 w-4" />
+                         View Original Paper
+                       </a>
+                     );
+                   }
+
+                   return null;
+                 })()}
                  <Button
                    size="lg"
                    onClick={() => handleNavigateToMindMap(selectedDocument._id)}
