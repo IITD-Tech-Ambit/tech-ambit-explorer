@@ -1,7 +1,7 @@
 import { useQuery, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
-import { getFaculties, getFacultyById, getFacultyCoworking, getGroupedFaculties, getDepartmentGroupsSummary, getDepartmentGroupFaculties, searchFaculties } from '../services/directoryService';
-import type { DirectoryFaculty, DirectoryResponse, FacultyCoworkingResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
+import { getFaculties, getFacultyById, getFacultyByKerberos, getFacultyResearchSummary, getFacultyYearPublications, getGroupedFaculties, getDepartmentGroupsSummary, getDepartmentGroupFaculties, searchFaculties } from '../services/directoryService';
+import type { DirectoryFaculty, DirectoryResponse, FacultyResearchSummary, YearPublicationsResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
 
 export const useDirectorySearch = (
     query: string,
@@ -12,7 +12,7 @@ export const useDirectorySearch = (
         queryKey: queryKeys.directory.search(query),
         queryFn: () => searchFaculties(query, limit),
         enabled: query.length >= 2,
-        staleTime: 30 * 1000, // 30 seconds
+        staleTime: 30 * 1000,
         ...options,
     });
 };
@@ -83,14 +83,41 @@ export const useFacultyById = (
     });
 };
 
-export const useFacultyCoworking = (
-    id: string,
-    options?: Omit<UseQueryOptions<FacultyCoworkingResponse, Error>, 'queryKey' | 'queryFn'>
-): UseQueryResult<FacultyCoworkingResponse, Error> => {
-    return useQuery<FacultyCoworkingResponse, Error>({
-        queryKey: queryKeys.directory.coworking(id),
-        queryFn: () => getFacultyCoworking(id),
-        enabled: !!id,
+export const useFacultyByKerberos = (
+    kerberos: string,
+    options?: Omit<UseQueryOptions<DirectoryFaculty, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<DirectoryFaculty, Error> => {
+    return useQuery<DirectoryFaculty, Error>({
+        queryKey: queryKeys.directory.byKerberos(kerberos),
+        queryFn: () => getFacultyByKerberos(kerberos),
+        enabled: !!kerberos,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+};
+
+export const useFacultyResearchSummary = (
+    kerberos: string,
+    options?: Omit<UseQueryOptions<FacultyResearchSummary, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<FacultyResearchSummary, Error> => {
+    return useQuery<FacultyResearchSummary, Error>({
+        queryKey: queryKeys.directory.researchSummary(kerberos),
+        queryFn: () => getFacultyResearchSummary(kerberos),
+        enabled: !!kerberos,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+};
+
+export const useFacultyYearPublications = (
+    kerberos: string,
+    year: number,
+    options?: Omit<UseQueryOptions<YearPublicationsResponse, Error>, 'queryKey' | 'queryFn'>
+): UseQueryResult<YearPublicationsResponse, Error> => {
+    return useQuery<YearPublicationsResponse, Error>({
+        queryKey: queryKeys.directory.yearPublications(kerberos, year),
+        queryFn: () => getFacultyYearPublications(kerberos, year, 3),
+        enabled: false,
         staleTime: 5 * 60 * 1000,
         ...options,
     });

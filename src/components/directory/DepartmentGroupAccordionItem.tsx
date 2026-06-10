@@ -49,9 +49,6 @@ const DEPT_HODS: Record<string, string> = {
     "Textile & Fibre Engineering":                 "Deepti Gupta",
 };
 
-const toSlug = (name: string) =>
-    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-
 interface DepartmentGroupAccordionItemProps {
     category: string;
     deptGroup: GroupedDepartment;
@@ -112,9 +109,15 @@ const DepartmentGroupAccordionItem = ({
                             {hodName && (
                                 <button
                                     type="button"
-                                    onClick={(e) => {
+                                    onClick={async (e) => {
                                         e.stopPropagation();
-                                        navigate(`/faculty/${toSlug(hodName)}`);
+                                        try {
+                                            const { searchFaculties } = await import("@/lib/api/services/directoryService");
+                                            const result = await searchFaculties(hodName, 1);
+                                            const match = result.faculties?.[0];
+                                            const k = match?.email?.split("@")[0]?.toLowerCase();
+                                            if (k) navigate(`/faculty/${k}`);
+                                        } catch { /* ignore */ }
                                     }}
                                     title={`View profile of HOD: ${hodName}`}
                                     className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/70 hover:text-primary bg-muted/60 hover:bg-primary/10 border border-border/60 hover:border-primary/30 rounded-full px-2 py-0.5 transition-all whitespace-nowrap"

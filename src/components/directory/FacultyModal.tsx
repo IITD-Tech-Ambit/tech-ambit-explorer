@@ -1,14 +1,14 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Mail, BookOpen, Users, GraduationCap, Calendar, Award, ExternalLink, Clock3, Building2 } from "lucide-react";
+import { Mail, BookOpen, Award, ExternalLink, Building2, Loader2, FileText } from "lucide-react";
 import type { ElementType } from "react";
-import { useNavigate } from "react-router-dom";
-import { useFacultyCoworking } from "@/lib/api/hooks/useDirectory";
+import { useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty } from "@/lib/api/types";
+import PublicationTimeline from "@/components/PublicationTimeline";
 
-const toSlug = (name: string) =>
-    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const kerberosFromEmail = (email?: string) =>
+    email ? email.split("@")[0]?.toLowerCase() : "";
 
 interface FacultyModalProps {
     faculty: DirectoryFaculty | null;
@@ -16,73 +16,42 @@ interface FacultyModalProps {
     onClose: () => void;
 }
 
-type CoauthorEntry = {
-    name: string;
-    facultyId: string | null;
-    authorId: string;
-};
-
-type DeduplicatedPaper = {
-    title: string;
-    publication_year: number;
-    document_type: string;
-    coauthors: CoauthorEntry[];
-    paperUrl: string | null;
-};
-
 const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
-    const navigate = useNavigate();
-    const { data: coworkingData, isLoading } = useFacultyCoworking(faculty?._id || "", {
-        enabled: open && !!faculty?._id,
+    const kerberos = kerberosFromEmail(faculty?.email);
+
+    const { data: summaryData, isLoading } = useFacultyResearchSummary(kerberos, {
+        enabled: open && !!kerberos,
     });
 
     if (!faculty) return null;
 
-    const tenure = formatTenure(faculty.workingFromYear);
     const initials = getInitials(faculty.name);
     const dept = faculty.department;
     const deptName = dept?.name?.trim();
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
 
-    const timelineByYear = coworkingData?.coworkersFromPapers?.reduce(
-        (acc, entry) => {
-            const year = entry.publication_year;
-            if (!year) return acc;
-            if (!acc[year]) acc[year] = new Map<string, DeduplicatedPaper>();
-            const existing = acc[year].get(entry.title);
-            const coauthor: CoauthorEntry = {
-                name: entry.name,
-                facultyId: entry.matched_profile ?? null,
-                authorId: entry.author_id ?? "",
-            };
-            if (existing) {
-                existing.coauthors.push(coauthor);
-            } else {
-                let paperUrl: string | null = null;
-                if (entry.link && entry.link.includes('scholar.google.com')) {
-                    paperUrl = entry.link;
-                } else if (!entry.document_scopus_id?.startsWith('scholar_') && entry.document_scopus_id) {
-                    paperUrl = `https://www.scopus.com/pages/publications/${entry.document_scopus_id}?origin=resultslist`;
-                } else if (entry.link && !/\/api\/documents\//i.test(entry.link)) {
-                    paperUrl = entry.link;
-                }
-                acc[year].set(entry.title, {
-                    title: entry.title,
-                    publication_year: year,
-                    document_type: entry.document_type,
-                    coauthors: [coauthor],
-                    paperUrl,
-                });
-            }
-            return acc;
-        },
-        {} as Record<number, Map<string, DeduplicatedPaper>>
-    ) ?? {};
+    const hIndex = summaryData?.hIndex ?? faculty.hIndex ?? 0;
+    const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
+    const totalPapers = summaryData?.stats?.totalPapers ?? 0;
 
-    const sortedYears = Object.keys(timelineByYear)
-        .map(Number)
-        .sort((a, b) => b - a);
+    const handleNavigateAuthor = async (authorId: string, matchedProfile: string | null, _name: string) => {
+        if (matchedProfile) {
+            try {
+                const { getFacultyById } = await import("@/lib/api/services/directoryService");
+                const f = await getFacultyById(matchedProfile);
+                const k = kerberosFromEmail(f.email);
+                if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+            } catch { /* ignore */ }
+        } else if (authorId) {
+            try {
+                const { getFacultyByScopusId } = await import("@/lib/api/services/directoryService");
+                const f = await getFacultyByScopusId(authorId);
+                const k = kerberosFromEmail(f.email);
+                if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+            } catch { /* ignore */ }
+        }
+    };
 
     return (
         <Dialog
@@ -153,12 +122,6 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                                     <span>Department not listed</span>
                                 </p>
                             )}
-                            {/* {tenure && (
-                                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1">
-                                    <Clock3 className="w-3.5 h-3.5" />
-                                    {tenure}
-                                </div>
-                            )} */}
                             {faculty.email && (
                                 <a
                                     href={`mailto:${faculty.email}`}
@@ -172,23 +135,9 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
-                        <StatPill
-                            icon={Award}
-                            label="h-index"
-                            value={coworkingData?.hIndex ?? faculty.hIndex ?? 0}
-                        />
-                        <StatPill
-                            icon={BookOpen}
-                            label="citations"
-                            value={coworkingData?.citationCount ?? faculty.citationCount ?? 0}
-                        />
-                        {coworkingData?.stats && (
-                            <StatPill
-                                icon={Users}
-                                label="co-authors"
-                                value={coworkingData.stats.uniqueCoauthors}
-                            />
-                        )}
+                        <StatPill icon={Award} label="h-index" value={hIndex} />
+                        <StatPill icon={BookOpen} label="citations" value={citations} />
+                        {totalPapers > 0 && <StatPill icon={FileText} label="papers" value={totalPapers} />}
                     </div>
                 </DialogHeader>
 
@@ -211,150 +160,24 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
 
                         {isLoading ? (
                             <div className="flex items-center justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : (
                             <>
-                                {coworkingData?.coworkersFromPapers && coworkingData.coworkersFromPapers.length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
-                                            <Users className="w-4 h-4" />
-                                            Coworkers ({coworkingData.stats.uniqueCoauthors})
-                                        </h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                            {coworkingData.coworkersFromPapers.slice(0, 9).map((coworker, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                                >
-                                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                        <User className="w-4 h-4 text-primary/60" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs font-medium truncate">{coworker.name}</p>
-                                                        <p className="text-[10px] text-muted-foreground truncate">
-                                                            {coworker.affiliation}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                {summaryData?.timeline && summaryData.timeline.length > 0 && (
+                                    <PublicationTimeline
+                                        timeline={summaryData.timeline}
+                                        kerberos={kerberos}
+                                        totalYears={summaryData.stats.totalYears}
+                                        yearLimit={summaryData.yearLimit}
+                                        onNavigateAuthor={handleNavigateAuthor}
+                                    />
                                 )}
 
-                                {coworkingData?.studentsSupervised && coworkingData.studentsSupervised.length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
-                                            <GraduationCap className="w-4 h-4" />
-                                            PhD Students Supervised ({coworkingData.stats.totalStudentsSupervised})
-                                        </h4>
-                                        <div className="space-y-2">
-                                            {coworkingData.studentsSupervised.slice(0, 5).map((student, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-medium">{student.name}</p>
-                                                            <p className="text-xs text-muted-foreground line-clamp-1">
-                                                                {student.thesis_title}
-                                                            </p>
-                                                        </div>
-                                                        {student.year && (
-                                                            <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                                                                {student.year}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {sortedYears.length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide flex items-center gap-2">
-                                            <Calendar className="w-4 h-4" />
-                                            Publication Timeline
-                                        </h4>
-                                        <div className="relative pl-4 border-l-2 border-primary/20 space-y-4">
-                                            {sortedYears.slice(0, 6).map((year) => {
-                                                const papers = Array.from(timelineByYear[year].values());
-                                                return (
-                                                    <div key={year} className="relative">
-                                                        <div className="absolute -left-[1.35rem] w-3 h-3 rounded-full bg-primary/80 border-2 border-background"></div>
-                                                        <div className="ml-2">
-                                                            <span className="text-sm font-semibold text-primary">{year}</span>
-                                                            <div className="mt-1 space-y-1">
-                                                                {papers.slice(0, 2).map((paper, idx) => (
-                                                                    <div
-                                                                        key={idx}
-                                                                        className="text-xs text-muted-foreground p-2 bg-muted/30 rounded"
-                                                                    >
-                                                                        {paper.paperUrl ? (
-                                                                            <a
-                                                                                href={paper.paperUrl}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="line-clamp-1 font-medium text-primary hover:underline underline-offset-2 flex items-center gap-1 group"
-                                                                            >
-                                                                                <span className="line-clamp-1">{paper.title}</span>
-                                                                                <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
-                                                                            </a>
-                                                                        ) : (
-                                                                            <p className="line-clamp-1 font-medium text-foreground/80">
-                                                                                {paper.title}
-                                                                            </p>
-                                                                        )}
-                                                                        <p className="text-[10px] mt-0.5 flex flex-wrap gap-x-1">
-                                                                            {paper.coauthors.length > 0 && (
-                                                                                <span>
-                                                                                    with{" "}
-                                                                                    {paper.coauthors.map((ca, caIdx) => (
-                                                                                        <span key={caIdx}>
-                                                                                            {caIdx > 0 && ", "}
-                                                                                            {ca.facultyId ? (
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    className="underline underline-offset-1 decoration-primary/50 hover:decoration-primary text-primary/80 hover:text-primary transition-colors cursor-pointer bg-transparent border-0 p-0 text-[10px]"
-                                                                                                    onClick={() => {
-                                                                                                        onClose();
-                                                                                                        navigate(`/faculty/${toSlug(ca.name)}`, { state: { facultyId: ca.facultyId } });
-                                                                                                    }}
-                                                                                                >
-                                                                                                    {ca.name}
-                                                                                                </button>
-                                                                                            ) : (
-                                                                                                <span>{ca.name}</span>
-                                                                                            )}
-                                                                                        </span>
-                                                                                    ))}
-                                                                                </span>
-                                                                            )}
-                                                                            <span>• {paper.document_type}</span>
-                                                                        </p>
-                                                                    </div>
-                                                                ))}
-                                                                {papers.length > 2 && (
-                                                                    <p className="text-[10px] text-muted-foreground pl-2">
-                                                                        +{papers.length - 2} more publications
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {(coworkingData?.scopusId || faculty.scopusId) && (
+                                {(summaryData?.scopusId || faculty.scopusId) && (
                                     <div className="pt-4 border-t">
                                         <a
-                                            href={`https://www.scopus.com/authid/detail.uri?authorId=${coworkingData?.scopusId || faculty.scopusId}`}
+                                            href={`https://www.scopus.com/authid/detail.uri?authorId=${summaryData?.scopusId || faculty.scopusId}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
@@ -382,14 +205,6 @@ const getInitials = (name: string) =>
         .slice(0, 2)
         .map((part) => part[0]?.toUpperCase() ?? "")
         .join("") || "IITD";
-
-const formatTenure = (year?: number | null) => {
-    if (!year) return null;
-    const currentYear = new Date().getFullYear();
-    if (year >= currentYear) return "Joined this year";
-    const diff = currentYear - year;
-    return diff === 1 ? "1 year at IIT Delhi" : `${diff} years at IIT Delhi`;
-};
 
 const StatPill = ({ icon: Icon, label, value }: { icon: ElementType; label: string; value: number }) => (
     <div className="flex items-center gap-2 rounded-xl bg-background/80 px-3 py-2 shadow-sm">
