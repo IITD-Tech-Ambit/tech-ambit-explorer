@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight, UserCircle } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import ExploreSearchLoader from "@/components/ExploreSearchLoader";
 
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
@@ -1189,12 +1190,7 @@ const Explore = () => {
       {/* Research Items Grid Layout */}
       <section className="container mx-auto px-4 pt-10 pb-20 flex-1">
         {/* Loading State */}
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Searching research papers...</p>
-          </div>
-        )}
+        {isLoading && <ExploreSearchLoader query={submittedRefineQuery || submittedQuery } />}
 
         {/* No Search Yet */}
         {!hasSearched && !isLoading && (
