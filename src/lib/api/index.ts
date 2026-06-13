@@ -15,6 +15,7 @@ export * from './services/magazineService';
 export * from './services/analyticsService';
 export * from './services/thesisService';
 export * from './services/searchService';
+export * from './services/chatService';
 
 // Re-export specific types for convenience
 export type { 
