@@ -1,4 +1,6 @@
-const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3001/api/v1';
+// The chatbot is a separate microservice. Defaults to the local dev port; in
+// production it is served behind nginx at /chat-api/api/v1.
+const CHAT_API_BASE_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:3003/api/v1';
 
 export interface ChatHistoryMessage {
   role: 'user' | 'assistant';
@@ -38,7 +40,7 @@ export async function streamChat(
 ): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`${SEARCH_API_BASE_URL}/chat`, {
+    response = await fetch(`${CHAT_API_BASE_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, history }),
