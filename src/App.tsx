@@ -13,6 +13,7 @@ import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
+import KnowledgeGraph from "./pages/KnowledgeGraph";
 import Contributors from "./pages/Contributors";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
@@ -53,6 +54,7 @@ const App = () => {
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
             <Route path="/mindmap" element={<Mindmap />} />
+            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
             <Route path="/contributors" element={<Contributors />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
