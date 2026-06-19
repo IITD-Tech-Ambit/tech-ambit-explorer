@@ -1381,7 +1381,7 @@ const Explore = () => {
                 let preciseCount = f.paperCount;
                 if (allFacultyData?.departments) {
                   for (const dept of allFacultyData.departments) {
-                    const found = dept.faculty.find(af => af.author_id === (f as any).expert_id);
+                    const found = dept.faculty.find(af => af.author_id === f.expert_id);
                     if (found) {
                       preciseCount = Math.max(preciseCount, found.paper_count);
                       break;
@@ -1450,7 +1450,7 @@ const Explore = () => {
                         </div>
                         <ul className="space-y-2 pl-4">
                           {groupedVisible[department].map((faculty) => {
-                            const facultyAuthorId = (faculty as RelatedFaculty & { expert_id?: string }).expert_id || '';
+                            const facultyAuthorId = faculty.expert_id || '';
                             const isSelected = selectedAuthor?.author_id === facultyAuthorId;
                             return (
                               <li key={faculty._id} className="flex items-stretch gap-1">

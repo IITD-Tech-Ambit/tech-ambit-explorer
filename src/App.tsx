@@ -13,9 +13,11 @@ import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
+import KnowledgeGraph from "./pages/KnowledgeGraph";
 import Contributors from "./pages/Contributors";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
+import ChatbotWidget from "./components/chat/ChatbotWidget";
 import { ThemeProvider } from "./components/theme-provider";
 
 // Configure React Query with production-ready defaults
@@ -52,17 +54,18 @@ const App = () => {
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
             <Route path="/mindmap" element={<Mindmap />} />
+            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
             <Route path="/contributors" element={<Contributors />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
 
-        {/* ── Global floating Suggestions button ── */}
+        {/* ── Global floating Suggestions button (stacked above the chatbot FAB) ── */}
         <button
           onClick={() => setSuggestionOpen(true)}
           aria-label="Open suggestions and feedback"
-          className="fixed bottom-6 right-6 z-[150] group flex items-center gap-2 px-4 py-3 rounded-2xl bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:bg-primary/90 active:scale-95 transition-all duration-200"
+          className="fixed bottom-20 right-6 z-[150] group flex items-center gap-2 px-4 py-3 rounded-2xl bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:bg-primary/90 active:scale-95 transition-all duration-200"
           style={{ boxShadow: "0 8px 32px -8px hsl(222 78% 48% / 0.45)" }}
         >
           <Lightbulb className="w-4 h-4 flex-shrink-0" />
@@ -75,6 +78,9 @@ const App = () => {
           open={suggestionOpen}
           onClose={() => setSuggestionOpen(false)}
         />
+
+        {/* ── Global RAG research chatbot ── */}
+        <ChatbotWidget />
       </TooltipProvider>
       {/* React Query DevTools - only visible in development */}
       {/* <ReactQueryDevtools initialIsOpen={false} /> */}

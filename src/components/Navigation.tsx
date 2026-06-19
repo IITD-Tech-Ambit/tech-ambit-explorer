@@ -37,6 +37,7 @@ const Navigation = () => {
     { name: "Directory", path: "/directory" },
     { name: "Magazines", path: "/magazines" },
     { name: "Mind Map", path: "/mindmap" },
+    { name: "Knowledge Graph", path: "/knowledge-graph" },
     { name: "Contributors", path: "/contributors" },
   ];
 
