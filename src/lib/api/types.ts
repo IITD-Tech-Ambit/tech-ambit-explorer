@@ -186,11 +186,13 @@ export interface SearchDocument {
     document_type: string;
     field_associated?: string;
     citation_count?: number;
+    reference_count?: number;
     subject_area?: string[];
     link?: string;
     document_scopus_id?: string;
     document_eid?: string;
     open_search_id?: string;
+    rerank_score?: number;
 }
 
 export interface SearchFacets {
@@ -210,6 +212,7 @@ export interface RelatedFaculty {
     _id: string;
     name: string;
     email: string;
+    expert_id?: string;
     department: {
         _id: string;
         name: string;
@@ -220,8 +223,16 @@ export interface RelatedFaculty {
 export interface SearchResponse {
     results: SearchDocument[];
     related_faculty?: RelatedFaculty[];
+    suggestions?: string[];
     facets: SearchFacets;
     pagination: SearchPagination;
+    mode?: 'basic' | 'advanced';
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+    message?: string;
+    fuzzy_fallback?: boolean;
     cacheHit?: boolean;
 }
 

@@ -1,6 +1,6 @@
 import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SuggestResponse } from '../types';
 
-const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3001/api/v1';
+const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
 
 const EMPTY_SUGGEST: SuggestResponse = {
   intent: 'mixed',
@@ -31,7 +31,7 @@ export async function getSuggestions(
 }
 
 /** 
- * Perform a hybrid search using BM25 + SPECTER2 semantic embeddings
+ * Perform a hybrid search using BM25 + semantic embeddings (with optional reranking)
  */
 export async function searchResearch(request: SearchRequest): Promise<SearchResponse> {
   const response = await fetch(`${SEARCH_API_BASE_URL}/search`, {
