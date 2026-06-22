@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
 import { searchResearch, getDocumentById, authorScopedSearch, getAllFacultyForQuery } from '../services/searchService';
-import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse } from '../types';
+import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SearchFilters } from '../types';
 
 /**
  * Hook for searching research documents with React Query
@@ -24,6 +24,7 @@ export const useSearchResearch = (
             sort: request.sort,
             mode: request.mode || 'advanced',
             refine_within: request.refine_within || null,
+            refine_chain: request.refine_chain?.length ? request.refine_chain.join('\u0001') : null,
             // Must match server-side cache: same fields in any order → same key
             search_in: request.search_in?.length
                 ? [...request.search_in].sort().join(',')
@@ -75,9 +76,14 @@ export const useAuthorScopedSearch = (
             ),
             request?.mode || 'advanced',
             request?.refine_within || null,
+            request?.refine_chain?.length ? request.refine_chain.join('\u0001') : null,
             request?.per_page ?? 20,
             request?.search_in?.length
                 ? [...request.search_in].sort().join(',')
+                : null,
+            // Filters participate in the key so a filtered drill-down isn't served a cached unfiltered result.
+            request?.filters && Object.keys(request.filters).length > 0
+                ? JSON.stringify(request.filters)
                 : null,
         ],
         queryFn: () => authorScopedSearch(request!),
@@ -95,13 +101,19 @@ export const useAuthorScopedSearch = (
 export const useAllFacultyForQuery = (
     query: string,
     mode: string = 'advanced',
-    options?: { enabled?: boolean; search_in?: string[]; refine_within?: string | null }
+    options?: { enabled?: boolean; search_in?: string[]; refine_within?: string | null; refine_chain?: string[] | null; filters?: SearchFilters }
 ) => {
     const isEnabled = options?.enabled === true && !!query.trim();
     const searchInKey = options?.search_in?.length
         ? [...options.search_in].sort().join(',')
         : '';
     const refineKey = options?.refine_within?.trim() || '';
+    const refineChainKey = options?.refine_chain?.length ? options.refine_chain.join('\u0001') : '';
+    // Filters participate in the cache key so a filtered request never reuses an
+    // unfiltered (or differently-filtered) cached People sidebar result.
+    const filtersKey = options?.filters && Object.keys(options.filters).length > 0
+        ? JSON.stringify(options.filters)
+        : '';
 
     return useQuery<AllFacultyForQueryResponse, Error>({
         queryKey: [
@@ -109,11 +121,15 @@ export const useAllFacultyForQuery = (
             mode,
             searchInKey,
             refineKey,
+            refineChainKey,
+            filtersKey,
         ],
         queryFn: () =>
             getAllFacultyForQuery(query, mode, {
                 search_in: options?.search_in,
                 refine_within: options?.refine_within,
+                refine_chain: options?.refine_chain,
+                filters: options?.filters,
             }),
         enabled: isEnabled,
         staleTime: 1000 * 60 * 10,  // Cache for 10 minutes (heavy query)

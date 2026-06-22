@@ -12,7 +12,7 @@ import ExploreSearchLoader from "@/components/ExploreSearchLoader";
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
 import { useSuggest } from "@/lib/api/hooks/useSuggest";
-import type { AuthorScopedSearchRequest, SearchAuthor, SuggestAuthor, SuggestPaper } from "@/lib/api/types";
+import type { AuthorScopedSearchRequest, SearchAuthor, SuggestAuthor, SuggestPaper, SearchFilters } from "@/lib/api/types";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
@@ -204,7 +204,13 @@ const Explore = () => {
   // Input stays empty even if a topic is already active — so the user can immediately
   // type a deep-search query against it.
   const [searchQuery, setSearchQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState(() => searchParams.get('q') || "");
+  // Multi-step refinement chain (oldest -> newest). The newest term drives ranking; all prior
+  // terms narrow the result set. chain[0] is the base topic. Derived from URL: ?q=<base>&refine=<r1>&refine=<r2>...
+  const [refinementChain, setRefinementChain] = useState<string[]>(() => {
+    const base = searchParams.get('q') || "";
+    const refines = searchParams.getAll('refine');
+    return base ? [base, ...refines] : [];
+  });
   const [isNavigating, setIsNavigating] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
     const page = searchParams.get('page');
@@ -262,9 +268,15 @@ const Explore = () => {
   const [peoplePage, setPeoplePage] = useState(1);
   const PEOPLE_PER_PAGE = 20;
 
-  // Search-on-Search (refine within results)
-  const [refineQuery, setRefineQuery] = useState('');
-  const [submittedRefineQuery, setSubmittedRefineQuery] = useState('');
+  // Derived chain values (cheap; computed each render from the canonical refinementChain).
+  const baseQuery = refinementChain[0] ?? "";
+  const activeQuery = refinementChain[refinementChain.length - 1] ?? "";
+  const priorChain = refinementChain.slice(0, -1);
+  const hasSearched = refinementChain.length > 0;
+
+  // Guard so our own programmatic URL writes don't trip the back/forward restore effect
+  // (which would otherwise reset selectedAuthor / mode mid-chain).
+  const skipUrlEffect = useRef(false);
 
   // Persistent client-side search log (localStorage)
   const { history: searchHistory, addEntry: addSearchLog, removeEntry: removeSearchLog, clear: clearSearchLog } = useSearchHistory();
@@ -282,16 +294,23 @@ const Explore = () => {
       isFirstRender.current = false;
       return;
     }
+    // Skip restores triggered by our own writeUrl() so mid-chain mode switches and
+    // author drill-downs aren't clobbered. Genuine back/forward navigations fall through.
+    if (skipUrlEffect.current) {
+      skipUrlEffect.current = false;
+      return;
+    }
     const q = searchParams.get('q') || '';
+    const refines = searchParams.getAll('refine');
     const page = searchParams.get('page');
     const filter = searchParams.get('filter') || 'All';
     const sort = searchParams.get('sort');
     const mode = searchParams.get('mode');
     const si = searchParams.get('search_in');
 
-    // Always reset the input to empty — if a topic is active, the next query becomes a deep search.
+    // Always reset the input to empty — if a chain is active, the next query becomes a deep search.
     setSearchQuery("");
-    setSubmittedQuery(q);
+    setRefinementChain(q ? [q, ...refines] : []);
     setCurrentPage(page ? parseInt(page, 10) : 1);
     setActiveFilter(filter);
     setSortBy(sort === 'date' || sort === 'citations' ? sort : 'relevance');
@@ -299,8 +318,6 @@ const Explore = () => {
     setSearchIn(si === 'author' ? ['author'] : si === 'all' ? [] : []);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
-    setRefineQuery('');
-    setSubmittedRefineQuery('');
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sidebarWidth, setSidebarWidth] = useState(24); // percentage width
   const isResizing = useRef(false);
@@ -385,66 +402,107 @@ const Explore = () => {
     "Book Chapter",
   ];
 
-  // Build search request - only when submittedQuery is set
+  // Single source of truth for facet filters, shared by BOTH the papers query
+  // (POST /search) and the People sidebar query (GET /search/faculty-for-query) so
+  // their paper totals always describe the identical filtered corpus.
+  const searchFilters = useMemo<SearchFilters>(() => {
+    const f: SearchFilters = {};
+    if (yearFrom) f.year_from = parseInt(yearFrom);
+    if (yearTo) f.year_to = parseInt(yearTo);
+    if (activeFilter !== "All") f.document_type = activeFilter;
+    return f;
+  }, [yearFrom, yearTo, activeFilter]);
+
+  // Write the current refinement chain (+ mode/sort/filter/search_in/page) to the URL so refresh,
+  // back/forward, and link sharing restore the exact narrowed state. Uses repeated `refine` params.
+  const writeUrl = useCallback((chain: string[], opts?: {
+    page?: number;
+    mode?: 'basic' | 'advanced';
+    searchIn?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
+    sort?: 'relevance' | 'date' | 'citations';
+    filter?: string;
+  }) => {
+    const params = new URLSearchParams();
+    const base = chain[0];
+    if (base) params.set('q', base);
+    chain.slice(1).forEach((t) => params.append('refine', t));
+    const page = opts?.page ?? currentPage;
+    if (page && page > 1) params.set('page', String(page));
+    const mode = opts?.mode ?? searchMode;
+    params.set('mode', mode);
+    const si = opts?.searchIn ?? searchIn;
+    params.set('search_in', si.length === 1 && si[0] === 'author' ? 'author' : 'all');
+    const filter = opts?.filter ?? activeFilter;
+    if (filter !== 'All') params.set('filter', filter);
+    const sort = opts?.sort ?? sortBy;
+    if (sort !== 'relevance') params.set('sort', sort);
+    skipUrlEffect.current = true;
+    setSearchParams(params);
+  }, [currentPage, searchMode, searchIn, activeFilter, sortBy, setSearchParams]);
+
+  // Build search request from the chain: newest term is `query`, prior terms are `refine_chain`.
   const searchRequest = useMemo<SearchRequest | null>(() => {
-    if (!submittedQuery.trim()) return null;
-    
+    const active = refinementChain[refinementChain.length - 1] ?? "";
+    if (!active.trim()) return null;
+    const prior = refinementChain.slice(0, -1);
+
     const request: SearchRequest = {
-      query: submittedRefineQuery || submittedQuery,
+      query: active,
       page: currentPage,
       per_page: perPage,
       sort: sortBy,
-      filters: {},
+      filters: searchFilters,
       // Always send explicit field list when any toggle is selected (all 5 is valid).
       search_in: searchIn.length > 0 ? searchIn : undefined,
       mode: searchMode,
-      ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
+      ...(prior.length > 0 ? { refine_chain: prior } : {}),
     };
 
-    // Add year filters
-    if (yearFrom) request.filters!.year_from = parseInt(yearFrom);
-    if (yearTo) request.filters!.year_to = parseInt(yearTo);
-
-    // Add document type filter
-    if (activeFilter !== "All") {
-      request.filters!.document_type = activeFilter;
-    }
-
-    console.log('Built searchRequest:', request);
     return request;
-  }, [submittedQuery, submittedRefineQuery, currentPage, perPage, sortBy, yearFrom, yearTo, activeFilter, searchIn, searchMode]);
+  }, [refinementChain, currentPage, perPage, sortBy, searchFilters, searchIn, searchMode]);
 
   // Use React Query for search
   const { data: searchData, isLoading, isFetching } = useSearchResearch(searchRequest);
 
   // Author-scoped search request (fires when an author is selected)
   const authorScopedRequest = useMemo<AuthorScopedSearchRequest | null>(() => {
-    if (!selectedAuthor || !submittedQuery.trim()) return null;
-    // Same contract as POST /search: main `query` is the active text; `refine_within` is the prior query when refining.
-    const activeQuery = submittedRefineQuery || submittedQuery;
+    const active = refinementChain[refinementChain.length - 1] ?? "";
+    if (!selectedAuthor || !active.trim()) return null;
+    const prior = refinementChain.slice(0, -1);
+    // Same contract as POST /search: main `query` is the newest term; `refine_chain` is the prior chain.
     return {
-      query: activeQuery,
+      query: active,
       author_id: selectedAuthor.author_id,
       page: authorScopedPage,
       per_page: 20,
       mode: searchMode,
-      ...(submittedRefineQuery ? { refine_within: submittedQuery } : {}),
+      ...(prior.length > 0 ? { refine_chain: prior } : {}),
       ...(searchIn.length > 0 ? { search_in: searchIn } : {}),
+      // Same facet filters as the papers list / People sidebar so the opened faculty's
+      // count equals the per-faculty count shown in the sidebar list.
+      ...(Object.keys(searchFilters).length > 0 ? { filters: searchFilters } : {}),
     };
-  }, [selectedAuthor, submittedQuery, submittedRefineQuery, authorScopedPage, searchMode, searchIn]);
+  }, [selectedAuthor, refinementChain, authorScopedPage, searchMode, searchIn, searchFilters]);
 
   const { data: authorScopedData, isLoading: isAuthorScopedLoading, isFetching: isAuthorScopedFetching } = useAuthorScopedSearch(authorScopedRequest);
 
-  // All faculty for query — same body shape as POST /search (active query, refine_within anchor, search_in)
-  const facultyForQueryText = submittedRefineQuery?.trim() ? submittedRefineQuery : submittedQuery;
-  const facultyForQueryRefineWithin = submittedRefineQuery?.trim() ? submittedQuery : undefined;
+  // Reset the faculty drill-down to page 1 whenever the facet filters or the active query
+  // change, so a filtered/changed refetch never requests a stale page offset into a different
+  // corpus. (Selecting a faculty already resets the page at the click sites.)
+  useEffect(() => {
+    setAuthorScopedPage(1);
+  }, [searchFilters, refinementChain]);
+
+  // All faculty for query — same body shape as POST /search (newest query, prior refine_chain, search_in)
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
-    facultyForQueryText,
+    activeQuery,
     searchMode,
     {
-      enabled: !!submittedQuery.trim(),
+      enabled: hasSearched,
       search_in: searchIn.length > 0 ? searchIn : undefined,
-      refine_within: facultyForQueryRefineWithin,
+      refine_chain: priorChain.length > 0 ? priorChain : undefined,
+      // Same facet filters as POST /search so total_matching_papers == pagination.total.
+      filters: searchFilters,
     }
   );
 
@@ -473,11 +531,10 @@ const Explore = () => {
   const results = searchData?.results || [];
   const pagination = searchData?.pagination || null;
   const relatedFaculty = searchData?.related_faculty || [];
-  const hasSearched = !!submittedQuery.trim();
 
-  // Tokens to highlight in result titles / abstracts — drawn from the active query + refine text
+  // Tokens to highlight in result titles / abstracts — drawn from every term in the chain.
   const highlightTokens = useMemo(() => {
-    const src = `${submittedQuery} ${submittedRefineQuery}`.trim();
+    const src = refinementChain.join(' ').trim();
     if (!src) return [] as string[];
     return Array.from(
       new Set(
@@ -487,81 +544,89 @@ const Explore = () => {
           .filter((t) => t.length >= 2)
       )
     );
-  }, [submittedQuery, submittedRefineQuery]);
+  }, [refinementChain]);
 
-  // Clear the active topic/refine chips and reset the search state (shared with input X button)
-  const clearActiveTopic = useCallback(() => {
+  // Clear the entire chain and reset the search state (shared with input X button / "Clear all").
+  const clearAll = useCallback(() => {
     setSearchQuery("");
-    setSubmittedQuery("");
+    setRefinementChain([]);
     setSelectedAuthor(null);
-    setRefineQuery("");
-    setSubmittedRefineQuery("");
+    setCurrentPage(1);
+    setAuthorScopedPage(1);
+    skipUrlEffect.current = true;
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
 
-  // Clear only the refine chip, keep the base topic search active
-  const clearRefineOnly = useCallback(() => {
-    setRefineQuery("");
-    setSubmittedRefineQuery("");
-  }, []);
+  // Jump back to a given step in the chain (truncate to that level). Guarantees re-narrowing
+  // from that point forward.
+  const goToChainLevel = useCallback((index: number) => {
+    if (index < 0 || index >= refinementChain.length - 1) return; // no-op for the newest chip
+    const next = refinementChain.slice(0, index + 1);
+    setRefinementChain(next);
+    setCurrentPage(1);
+    setAuthorScopedPage(1);
+    setSearchQuery("");
+    writeUrl(next, { page: 1 });
+  }, [refinementChain, writeUrl]);
 
-  // Submit the refine query and log it as a search event
-  const submitRefine = useCallback(() => {
-    const trimmed = refineQuery.trim();
-    if (!trimmed) return;
-    setSubmittedRefineQuery(refineQuery);
-    addSearchLog({
-      query: trimmed,
-      mode: searchMode,
-      searchIn: searchIn,
-      refineWithin: submittedQuery,
-    });
-  }, [refineQuery, searchMode, searchIn, submittedQuery, addSearchLog]);
+  // Remove the newest refinement step (one level up).
+  const popRefinement = useCallback(() => {
+    if (refinementChain.length <= 1) return;
+    goToChainLevel(refinementChain.length - 2);
+  }, [refinementChain, goToChainLevel]);
+
+  // Switch search mode; re-runs the current chain unchanged and persists mode to the URL.
+  const changeMode = useCallback((mode: 'basic' | 'advanced') => {
+    setSearchMode(mode);
+    if (refinementChain.length > 0) writeUrl(refinementChain, { mode });
+  }, [refinementChain, writeUrl]);
 
   // Navigate to a specific page of the ALREADY-submitted search.
   // This is what the First / Prev / numbered / Next / Last buttons call.
   // It deliberately does NOT read from `searchQuery` (the input box), which is
   // cleared after each submission so the user can immediately type a deep-search
-  // query. `submittedQuery` holds the active search; `currentPage` drives the
-  // useSearchResearch fetch via the `searchRequest` useMemo (line ~377).
+  // query. `refinementChain` holds the active search; `currentPage` drives the
+  // useSearchResearch fetch via the `searchRequest` useMemo.
   const goToPage = (page: number) => {
-    if (!submittedQuery.trim()) return;
+    if (!hasSearched) return;
     const totalPages = pagination?.total_pages ?? 1;
     const clamped = Math.min(Math.max(1, page), Math.max(1, totalPages));
     if (clamped === currentPage) return;
     setCurrentPage(clamped);
+    writeUrl(refinementChain, { page: clamped });
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* jsdom */ }
   };
 
-  // Perform search — first submission sets the topic; subsequent submissions while a
-  // topic is active run as a deep search (refine) within the current results. The
-  // input is cleared in both cases so the user can immediately queue the next query.
+  // Perform search — first submission sets the base topic; subsequent submissions while a chain
+  // is active append a narrowing step (the new term becomes the newest = `query`, all prior terms
+  // become `refine_chain`). The input is cleared so the user can immediately queue the next step.
   const performSearch = (page: number = 1) => {
     const query = searchQuery.trim();
     if (!query) return;
 
-    // If a topic is already active, treat this submission as a deep search (refine).
-    if (submittedQuery.trim()) {
-      setRefineQuery(query);
-      setSubmittedRefineQuery(query);
+    // A chain is already active → append a narrowing step.
+    if (refinementChain.length > 0) {
+      const next = [...refinementChain, query];
+      setRefinementChain(next);
       setSearchQuery("");
+      setCurrentPage(1);
+      setAuthorScopedPage(1);
       addSearchLog({
         query,
         mode: searchMode,
         searchIn: searchIn,
-        refineWithin: submittedQuery,
+        refineWithin: refinementChain[refinementChain.length - 1],
       });
+      writeUrl(next, { page: 1 });
       return;
     }
 
-    // Otherwise, this is the initial (topic) search.
-    console.log('performSearch called:', { query, page });
-    setSubmittedQuery(query);
+    // Otherwise, this is the initial (base topic) search.
+    const next = [query];
+    setRefinementChain(next);
     setCurrentPage(page);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
-    setRefineQuery('');
-    setSubmittedRefineQuery('');
 
     addSearchLog({
       query,
@@ -569,17 +634,7 @@ const Explore = () => {
       searchIn: searchIn,
     });
 
-    // Sync to URL params for persistence across navigation
-    const newParams = new URLSearchParams();
-    newParams.set('q', query);
-    newParams.set('page', String(page));
-    newParams.set('mode', searchMode);
-    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
-    if (activeFilter !== 'All') newParams.set('filter', activeFilter);
-    if (sortBy !== 'relevance') newParams.set('sort', sortBy);
-    setSearchParams(newParams);
-
-    // Clear the input so the next submission becomes a deep search.
+    writeUrl(next, { page });
     setSearchQuery("");
   };
 
@@ -605,77 +660,54 @@ const Explore = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, [showSuggestions]);
 
-  // Run an author-name search through the existing pipeline (no active topic case).
+  // Run an author-name search through the existing pipeline (no active chain case).
   const runAuthorNameSearch = useCallback((name: string) => {
     const nextSearchIn: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'> = ['author'];
     setSearchIn(nextSearchIn);
-    setSubmittedQuery(name);
+    setRefinementChain([name]);
     setCurrentPage(1);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
-    setRefineQuery('');
-    setSubmittedRefineQuery('');
     addSearchLog({ query: name, mode: searchMode, searchIn: nextSearchIn });
-    const newParams = new URLSearchParams();
-    newParams.set('q', name);
-    newParams.set('page', '1');
-    newParams.set('mode', searchMode);
-    newParams.set('search_in', 'author');
-    setSearchParams(newParams);
-  }, [searchMode, addSearchLog, setSearchParams]);
+    writeUrl([name], { page: 1, searchIn: nextSearchIn });
+  }, [searchMode, addSearchLog, writeUrl]);
 
   // Selecting an author from typeahead → existing author flow.
-  // With an active topic: scope within it (author-scope). Otherwise: author-name search.
+  // With an active chain: scope within it (author-scope). Otherwise: author-name search.
   const selectAuthorSuggestion = useCallback((author: SuggestAuthor) => {
     setShowSuggestions(false);
     setSearchQuery('');
-    if (submittedQuery.trim() && author.scopus_id) {
+    if (hasSearched && author.scopus_id) {
       setSelectedAuthor({ name: author.name, author_id: author.scopus_id });
       setAuthorScopedPage(1);
       return;
     }
     runAuthorNameSearch(author.name);
-  }, [submittedQuery, runAuthorNameSearch]);
+  }, [hasSearched, runAuthorNameSearch]);
+
+  // Start a fresh search at the base level from a given term (paper title / recent query).
+  const startFreshSearch = useCallback((term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setShowSuggestions(false);
+    setSearchQuery('');
+    setRefinementChain([trimmed]);
+    setCurrentPage(1);
+    setSelectedAuthor(null);
+    setAuthorScopedPage(1);
+    addSearchLog({ query: trimmed, mode: searchMode, searchIn });
+    writeUrl([trimmed], { page: 1 });
+  }, [searchMode, searchIn, addSearchLog, writeUrl]);
 
   // Selecting a paper from typeahead → run a normal search on its title.
   const selectPaperSuggestion = useCallback((paper: SuggestPaper) => {
-    const title = paper.title.trim();
-    if (!title) return;
-    setShowSuggestions(false);
-    setSearchQuery('');
-    setSubmittedQuery(title);
-    setCurrentPage(1);
-    setSelectedAuthor(null);
-    setAuthorScopedPage(1);
-    setRefineQuery('');
-    setSubmittedRefineQuery('');
-    addSearchLog({ query: title, mode: searchMode, searchIn });
-    const newParams = new URLSearchParams();
-    newParams.set('q', title);
-    newParams.set('page', '1');
-    newParams.set('mode', searchMode);
-    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
-    setSearchParams(newParams);
-  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
+    startFreshSearch(paper.title);
+  }, [startFreshSearch]);
 
   // Selecting a recent query → re-run that search.
   const selectRecentSuggestion = useCallback((q: string) => {
-    setShowSuggestions(false);
-    setSearchQuery('');
-    setSubmittedQuery(q);
-    setCurrentPage(1);
-    setSelectedAuthor(null);
-    setAuthorScopedPage(1);
-    setRefineQuery('');
-    setSubmittedRefineQuery('');
-    addSearchLog({ query: q, mode: searchMode, searchIn });
-    const newParams = new URLSearchParams();
-    newParams.set('q', q);
-    newParams.set('page', '1');
-    newParams.set('mode', searchMode);
-    newParams.set('search_in', searchIn.length === 1 && searchIn[0] === 'author' ? 'author' : 'all');
-    setSearchParams(newParams);
-  }, [searchMode, searchIn, addSearchLog, setSearchParams]);
+    startFreshSearch(q);
+  }, [startFreshSearch]);
 
   // Handle filter change
   const handleFilterChange = (filter: string) => {
@@ -840,8 +872,8 @@ const Explore = () => {
                   placeholder={
                     searchIn.length === 1 && searchIn[0] === 'author'
                       ? "Search by author name (e.g. Rajesh Khanna)..."
-                      : submittedQuery
-                        ? `Deep search within "${submittedQuery}"...`
+                      : hasSearched
+                        ? `Narrow within "${activeQuery}"... (step ${refinementChain.length + 1})`
                         : "Search by department, project, faculty, or keywords..."
                   }
                   className={`pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm ${
@@ -895,7 +927,7 @@ const Explore = () => {
               <div className="flex items-center shrink-0">
                 <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center">
                   <button
-                    onClick={() => setSearchMode('basic')}
+                    onClick={() => changeMode('basic')}
                     className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
                       searchMode === 'basic' 
                         ? 'bg-primary text-primary-foreground shadow-sm' 
@@ -906,7 +938,7 @@ const Explore = () => {
                     Basic
                   </button>
                   <button
-                    onClick={() => setSearchMode('advanced')}
+                    onClick={() => changeMode('advanced')}
                     className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
                       searchMode === 'advanced' 
                         ? 'bg-primary text-primary-foreground shadow-sm' 
@@ -989,7 +1021,7 @@ const Explore = () => {
             </div>
 
             {/* Search In: Author toggle — hidden after a search so only the deep search remains active */}
-            {!submittedQuery && (
+            {!hasSearched && (
             <div className="flex items-center gap-2 w-full">
               <span className="text-xs font-medium text-muted-foreground shrink-0">Search in:</span>
               {(() => {
@@ -1018,7 +1050,7 @@ const Explore = () => {
             )}
 
             {/* Recent searches strip (localStorage log) — only visible when no active search */}
-            {!submittedQuery && searchHistory.length > 0 && (
+            {!hasSearched && searchHistory.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
                   Recent:
@@ -1028,28 +1060,17 @@ const Explore = () => {
                     key={entry.timestamp}
                     type="button"
                     onClick={() => {
-                      setSearchQuery(entry.query);
-                      setSubmittedQuery(entry.query);
+                      const nextSearchIn = (entry.searchIn || []).filter((f): f is 'title' | 'abstract' | 'author' | 'subject_area' | 'field' =>
+                        ['title', 'abstract', 'author', 'subject_area', 'field'].includes(f)
+                      );
+                      setSearchQuery("");
+                      setRefinementChain([entry.query]);
                       setCurrentPage(1);
                       setSelectedAuthor(null);
                       setAuthorScopedPage(1);
-                      setRefineQuery('');
-                      setSubmittedRefineQuery('');
                       setSearchMode(entry.mode);
-                      setSearchIn(
-                        (entry.searchIn || []).filter((f): f is 'title' | 'abstract' | 'author' | 'subject_area' | 'field' =>
-                          ['title', 'abstract', 'author', 'subject_area', 'field'].includes(f)
-                        )
-                      );
-                      const newParams = new URLSearchParams();
-                      newParams.set('q', entry.query);
-                      newParams.set('page', '1');
-                      newParams.set('mode', entry.mode);
-                      newParams.set(
-                        'search_in',
-                        entry.searchIn.length === 1 && entry.searchIn[0] === 'author' ? 'author' : 'all'
-                      );
-                      setSearchParams(newParams);
+                      setSearchIn(nextSearchIn);
+                      writeUrl([entry.query], { page: 1, mode: entry.mode, searchIn: nextSearchIn });
                       addSearchLog({
                         query: entry.query,
                         mode: entry.mode,
@@ -1088,43 +1109,61 @@ const Explore = () => {
               </div>
             )}
 
-            {/* Active topic chip (image-1 style): shows submitted query as a red removable pill */}
-            {submittedQuery && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
-                  Topic:
+            {/* Refinement breadcrumb trail: each step narrows the result set. Intermediate chips
+                jump back to that step; the newest chip can be removed; "Clear all" resets. */}
+            {hasSearched && (
+              <div className="flex flex-wrap items-center gap-1.5 w-full">
+                <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
+                  {refinementChain.length > 1 ? 'Narrowing:' : 'Searching:'}
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
-                  <Search className="w-3.5 h-3.5" />
-                  {submittedQuery}
-                  <button
-                    type="button"
-                    onClick={clearActiveTopic}
-                    aria-label="Clear topic"
-                    className="ml-1 rounded-full hover:bg-white/20 p-0.5 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-                {submittedRefineQuery && (
-                  <>
-                    <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
-                      Refine:
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-blue-400 text-white shadow-sm">
-                      <Search className="w-3.5 h-3.5" />
-                      {submittedRefineQuery}
-                      <button
-                        type="button"
-                        onClick={clearRefineOnly}
-                        aria-label="Clear refine"
-                        className="ml-1 rounded-full hover:bg-white/20 p-0.5 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  </>
-                )}
+                <nav aria-label="Refinement steps" className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  {refinementChain.map((term, i) => {
+                    const isNewest = i === refinementChain.length - 1;
+                    return (
+                      <div key={`${term}-${i}`} className="flex items-center gap-1.5 animate-fade-in">
+                        {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium shadow-sm transition-colors ${
+                            isNewest
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-secondary text-secondary-foreground hover:bg-secondary/70 cursor-pointer'
+                          }`}
+                        >
+                          {isNewest ? (
+                            <span className="truncate max-w-[220px]">{term}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => goToChainLevel(i)}
+                              title={`Back to results for "${term}"`}
+                              aria-label={`Go back to step ${i + 1}: ${term}`}
+                              className="truncate max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                            >
+                              {term}
+                            </button>
+                          )}
+                          {isNewest && refinementChain.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={popRefinement}
+                              aria-label={`Remove last refinement "${term}"`}
+                              className="ml-0.5 rounded-full hover:bg-white/20 p-0.5 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </nav>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="ml-1 text-[11px] text-muted-foreground hover:text-destructive underline-offset-2 hover:underline transition-colors shrink-0"
+                >
+                  Clear all
+                </button>
               </div>
             )}
 
@@ -1149,37 +1188,34 @@ const Explore = () => {
           </div>
         </div>
 
-        {/* Active refinement banner (only shown if a refine query was previously submitted) */}
-        {hasSearched && !isLoading && submittedRefineQuery && (
-          <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
-            <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  {selectedAuthor ? (
-                    <>Refined <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                  ) : (
-                    <>Narrowed results for "<span className="text-primary">{submittedQuery}</span>" to match "<span className="font-semibold text-primary">{submittedRefineQuery}</span>"</>
-                  )}
+        {/* Narrowing context line (shown once a chain has >= 2 steps) reinforces that the result
+            set shrinks with each step. */}
+        {hasSearched && !isLoading && refinementChain.length > 1 && (() => {
+          const total = selectedAuthor && authorScopedData
+            ? (authorScopedData.pagination?.total ?? 0)
+            : (pagination?.total ?? 0);
+          return (
+            <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
+              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
+                <p className="text-xs text-muted-foreground">
+                  Narrowed through <span className="font-semibold text-foreground">{refinementChain.length}</span> steps
+                  {selectedAuthor && <> within <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers</>}
+                  {' — '}
+                  <span className="font-semibold text-foreground">{total}</span> result{total === 1 ? '' : 's'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {selectedAuthor && authorScopedData ? (authorScopedData.pagination?.total ?? 0) : pagination?.total ?? 0} refined results found
-                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={popRefinement}
+                  className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Undo last step
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setRefineQuery('');
-                  setSubmittedRefineQuery('');
-                }}
-                className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Clear refinement
-              </Button>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </section>
 
       {/* Click-away overlay for filters */}
@@ -1190,7 +1226,7 @@ const Explore = () => {
       {/* Research Items Grid Layout */}
       <section className="container mx-auto px-4 pt-10 pb-20 flex-1">
         {/* Loading State */}
-        {isLoading && <ExploreSearchLoader query={submittedRefineQuery || submittedQuery } />}
+        {isLoading && <ExploreSearchLoader query={activeQuery} />}
 
         {/* No Search Yet */}
         {!hasSearched && !isLoading && (
@@ -1287,7 +1323,7 @@ const Explore = () => {
                 <>
                   <div className="shrink-0 mb-4 mt-2">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{allFacultyData.total_faculty}</span> faculty across all results{' '}
+                      Found <span className="font-semibold text-primary">{allFacultyData.total_faculty}</span> faculty across all {allFacultyData.total_matching_papers.toLocaleString()} matching papers{' '}
                       {relatedFaculty.length > 0 && (
                         <button
                           className="text-primary hover:underline font-medium text-sm"
@@ -1531,10 +1567,10 @@ const Explore = () => {
                 <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 animate-slide-up">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-foreground">
-                      {submittedRefineQuery ? (
-                        <>Showing <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers matching "<span className="text-primary">{submittedRefineQuery}</span>" within "<span className="text-primary">{submittedQuery}</span>" <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                      {refinementChain.length > 1 ? (
+                        <>Showing <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
                       ) : (
-                        <>Showing results for "<span className="text-primary">{submittedQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
                       )}
                     </p>
                     {authorScopedData && (
@@ -1560,7 +1596,7 @@ const Explore = () => {
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
                   <p className="text-sm text-muted-foreground">
-                    {submittedRefineQuery ? `Refining within ${selectedAuthor.name}'s papers...` : `Searching ${selectedAuthor.name}'s papers...`}
+                    {refinementChain.length > 1 ? `Refining within ${selectedAuthor.name}'s papers...` : `Searching ${selectedAuthor.name}'s papers...`}
                   </p>
                 </div>
               )}
@@ -1572,7 +1608,14 @@ const Explore = () => {
                     {selectedAuthor && authorScopedData ? (
                       <>Found <span className="font-semibold text-primary">{authorScopedData.pagination?.total ?? 0}</span> matching papers</>
                     ) : pagination ? (
-                      <>Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results</>
+                      searchData?.fuzzy_fallback ? (
+                        // Fuzzy-fallback state: no papers cleared the relevance bar, so this count is
+                        // the APPROXIMATE (lexical) corpus — labelled distinctly so it doesn't read as
+                        // the relevant total the People sidebar describes.
+                        <>No exact matches — showing <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> approximate results</>
+                      ) : (
+                        <>Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span> results</>
+                      )
                     ) : null}
                   </p>
                   <div className="flex items-center gap-3">
@@ -1608,7 +1651,7 @@ const Explore = () => {
                   <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
                   <h3 className="text-lg font-semibold mb-1">No Matching Papers</h3>
                   <p className="text-sm text-muted-foreground px-4">
-                    {selectedAuthor.name} has {authorScopedData.author.total_papers} papers, but none closely match "{submittedRefineQuery || submittedQuery}"
+                    {selectedAuthor.name} has {authorScopedData.author.total_papers} papers, but none closely match "{activeQuery}"
                   </p>
                 </div>
               )}

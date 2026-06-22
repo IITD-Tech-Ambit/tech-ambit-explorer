@@ -1,4 +1,4 @@
-import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SuggestResponse } from '../types';
+import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SuggestResponse, SearchFilters } from '../types';
 
 const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
 
@@ -128,7 +128,7 @@ export async function checkSearchHealth(): Promise<{
 export async function getAllFacultyForQuery(
   query: string,
   mode: string = 'advanced',
-  options?: { search_in?: string[]; refine_within?: string | null }
+  options?: { search_in?: string[]; refine_within?: string | null; refine_chain?: string[] | null; filters?: SearchFilters }
 ): Promise<AllFacultyForQueryResponse> {
   const params = new URLSearchParams();
   params.set('query', query);
@@ -138,6 +138,16 @@ export async function getAllFacultyForQuery(
   }
   if (options?.refine_within?.trim()) {
     params.set('refine_within', options.refine_within.trim());
+  }
+  // refine_chain is JSON-encoded (same pattern as filters) so the People sidebar narrows
+  // through the IDENTICAL chain as POST /search.
+  if (options?.refine_chain?.length) {
+    params.set('refine_chain', JSON.stringify(options.refine_chain));
+  }
+  // Send the SAME facet filters as POST /search (JSON-encoded) so the People sidebar
+  // describes the identical filtered corpus and its totals match the papers list.
+  if (options?.filters && Object.keys(options.filters).length > 0) {
+    params.set('filters', JSON.stringify(options.filters));
   }
 
   const response = await fetch(`${SEARCH_API_BASE_URL}/search/faculty-for-query?${params.toString()}`);

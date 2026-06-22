@@ -17,6 +17,45 @@ export interface ChatSource {
   field_associated: string | null;
   citation_count: number;
   link: string | null;
+  document_scopus_id: string | null;
+  document_eid: string | null;
+}
+
+// Chart data structures matching backend sse_events.py
+export interface DataPoint { x: string | number; y: number }
+export interface ChartSeries { label: string; data: DataPoint[] }
+
+export interface LineChartData {
+  chart_type: 'line';
+  title: string;
+  x_label: string;
+  y_label: string;
+  series: ChartSeries[];
+}
+export interface BarChartData {
+  chart_type: 'bar';
+  title: string;
+  x_label: string;
+  y_label: string;
+  layout?: 'horizontal' | 'vertical';
+  categories: string[];
+  series: { label: string; data: number[] }[];
+}
+export interface PieChartData {
+  chart_type: 'pie';
+  title: string;
+  slices: { label: string; value: number }[];
+}
+export type ChartPayload = LineChartData | BarChartData | PieChartData;
+
+export interface ChatChartEvent {
+  tool_name: string;
+  chart: ChartPayload;
+}
+
+export interface ThinkingStep {
+  step: string;
+  detail: string | null;
 }
 
 export interface ChatStreamCallbacks {
@@ -24,13 +63,15 @@ export interface ChatStreamCallbacks {
   onToken: (text: string) => void;
   onDone: () => void;
   onError: (message: string) => void;
-  /** Progress updates while the backend runs a tool, e.g. "Computing statistics..." */
-  onStatus?: (text: string) => void;
+  /** Thinking insight while the backend processes — do NOT expose tool names */
+  onThinking?: (step: ThinkingStep) => void;
+  /** Structured chart data for frontend rendering */
+  onChart?: (chart: ChatChartEvent) => void;
 }
 
 /**
  * Stream a chat answer from the RAG endpoint (Server-Sent Events over fetch).
- * Events: sources, token, done, error.
+ * Events: thinking | sources | chart | token | done | error.
  */
 export async function streamChat(
   message: string,
@@ -53,9 +94,7 @@ export async function streamChat(
   }
 
   if (!response.ok || !response.body) {
-    if (response.status === 429) {
-      callbacks.onError('You are sending messages too quickly. Please wait a moment.');
-    } else if (response.status === 503) {
+    if (response.status === 503) {
       callbacks.onError('The chat service is currently unavailable.');
     } else {
       callbacks.onError('The chat service returned an error. Please try again.');
@@ -71,11 +110,18 @@ export async function streamChat(
     try {
       const parsed = JSON.parse(data);
       switch (eventName) {
+        case 'thinking':
+          callbacks.onThinking?.(parsed as ThinkingStep);
+          break;
         case 'status':
-          callbacks.onStatus?.(parsed.text as string);
+          // Legacy — map to thinking for backward compat
+          callbacks.onThinking?.({ step: parsed.text as string, detail: null });
           break;
         case 'sources':
           callbacks.onSources(parsed as ChatSource[]);
+          break;
+        case 'chart':
+          callbacks.onChart?.(parsed as ChatChartEvent);
           break;
         case 'token':
           callbacks.onToken(parsed.text as string);
@@ -99,7 +145,6 @@ export async function streamChat(
 
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE frames are separated by a blank line
       let sepIndex: number;
       while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, sepIndex);

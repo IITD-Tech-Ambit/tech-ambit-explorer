@@ -204,7 +204,14 @@ export interface SearchFacets {
 export interface SearchPagination {
     page: number;
     per_page: number;
+    // True full count of matching papers (track_total_hits) — the headline figure.
     total: number;
+    // Number of top candidates cross-encoder reranked (transparency only). Pages within this
+    // window are reranked; deeper pages are paginated in raw hybrid-score order. This does NOT
+    // bound navigation.
+    ranked_window?: number;
+    // Derived from the true `total` (so the page count agrees with the headline), clamped only
+    // to the deepest page servable within OpenSearch's max_result_window.
     total_pages: number;
 }
 
@@ -256,7 +263,10 @@ export interface SearchRequest {
     filters?: SearchFilters;
     search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
     mode?: 'basic' | 'advanced';
+    /** Legacy single-step refinement. Prefer refine_chain for multi-step narrowing. */
     refine_within?: string;
+    /** Ordered prior queries (oldest first); each narrows the result set as a strict lexical filter. */
+    refine_chain?: string[];
 }
 
 // Suggest / Typeahead Types
@@ -427,9 +437,14 @@ export interface AuthorScopedSearchRequest {
     page?: number;
     per_page?: number;
     mode?: 'basic' | 'advanced';
+    /** Legacy single-step refinement. Prefer refine_chain for multi-step narrowing. */
     refine_within?: string;
+    /** Ordered prior queries (oldest first); each narrows within this author's papers. */
+    refine_chain?: string[];
     /** Same as main search: restrict matching to these fields (e.g. author = author names only). */
     search_in?: Array<'title' | 'abstract' | 'author' | 'subject_area' | 'field'>;
+    /** Same facet filters as POST /search so the drill-down count matches the sidebar per-faculty count. */
+    filters?: SearchFilters;
 }
 
 export interface AuthorScopedSearchResponse {
