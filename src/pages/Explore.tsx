@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronLeft, ChevronRight, UserCircle } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
@@ -18,6 +18,15 @@ import { formatAbstract, highlightTerms } from "@/lib/utils";
 import { useSearchHistory } from "@/hooks/use-search-history";
 import { SearchSuggestions, type SearchSuggestionsHandle } from "@/components/SearchSuggestions";
 import { useToast } from "@/hooks/use-toast";
+import {
+  PeopleSectionHeader,
+  PeopleFacultyRow,
+  PeopleDepartmentBlock,
+  PeopleListContainer,
+  PeopleLoadingState,
+  PeopleEmptyState,
+  PeopleLoadMoreSentinel,
+} from "@/components/explore/PeopleSectionUI";
 
 /**
  * Paper `authors` from the search API are already limited to IIT Delhi Faculty roster (Scopus id on Faculty).
@@ -248,21 +257,22 @@ const Explore = () => {
     return mode === 'advanced' ? 'advanced' : 'basic';
   });
 
-  // Client-side sort state — basic mode defaults to citations, advanced to relevance
-  const [clientSort, setClientSort] = useState<'relevance' | 'citations'>(
-    () => searchMode === 'basic' ? 'citations' : 'relevance'
-  );
+  // Client-side sort state — both modes default to relevance
+  const [clientSort, setClientSort] = useState<'relevance' | 'citations'>('relevance');
 
-  // Sync default client sort when mode changes
+  // Reset to relevance when switching search mode
   useEffect(() => {
-    setClientSort(searchMode === 'basic' ? 'citations' : 'relevance');
+    setClientSort('relevance');
   }, [searchMode]);
 
   // Collapsible department sections state (by default all expanded)
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
 
-  // Sidebar toggle state
-  const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(true);
+  // Sidebar toggle state — default closed on mobile/tablet (< xl = 1280px), open on desktop
+  const [isPeopleSidebarOpen, setIsPeopleSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(min-width: 1280px)").matches;
+  });
   const [showAllFaculty, setShowAllFaculty] = useState(false);
   const [isPeopleLoadingMore, setIsPeopleLoadingMore] = useState(false);
   const [peoplePage, setPeoplePage] = useState(1);
@@ -531,6 +541,11 @@ const Explore = () => {
   const results = searchData?.results || [];
   const pagination = searchData?.pagination || null;
   const relatedFaculty = searchData?.related_faculty || [];
+
+  const peopleTotalCount =
+    (showAllFaculty || relatedFaculty.length === 0)
+      ? (allFacultyData?.total_faculty ?? 0)
+      : relatedFaculty.length;
 
   // Tokens to highlight in result titles / abstracts — drawn from every term in the chain.
   const highlightTokens = useMemo(() => {
@@ -846,14 +861,13 @@ const Explore = () => {
       <Navigation />
 
       {/* Header */}
-      <section className="gradient-subtle pt-32 pb-16 section-bg">
+      <section className="gradient-subtle pt-16 sm:pt-20 pb-6 sm:pb-10 section-bg">
         <div className="container mx-auto px-4">
-          <h1 className="text-5xl font-bold mb-4 animate-fade-in">
+          <h1 className="text-2xl sm:text-4xl font-bold mb-2 sm:mb-3 animate-fade-in">
             Explore Research
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl animate-slide-up">
-            Browse through our comprehensive repository of research projects, departments,
-            centers, and interdisciplinary initiatives at IIT Delhi.
+          <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 max-w-2xl animate-slide-up">
+            Browse faculty, publications, departments and interdisciplinary initiatives at IIT Delhi.
           </p>
 
           {/* Search and Filters Container */}
@@ -924,13 +938,13 @@ const Explore = () => {
               </div>
 
               {/* Basic vs Advanced Search Mode Toggle */}
-              <div className="flex items-center shrink-0">
-                <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center">
+              <div className="flex items-center shrink-0 w-full sm:w-auto">
+                <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center w-full sm:w-auto">
                   <button
                     onClick={() => changeMode('basic')}
-                    className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      searchMode === 'basic' 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
+                      searchMode === 'basic'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="BM25 Keyword matching only"
@@ -939,9 +953,9 @@ const Explore = () => {
                   </button>
                   <button
                     onClick={() => changeMode('advanced')}
-                    className={`px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      searchMode === 'advanced' 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
+                      searchMode === 'advanced'
+                        ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Hybrid Keyword + AI Semantic matching"
@@ -1224,25 +1238,29 @@ const Explore = () => {
       )}
 
       {/* Research Items Grid Layout */}
-      <section className="container mx-auto px-4 pt-10 pb-20 flex-1">
+      <section className="container mx-auto px-4 pt-4 pb-16 flex-1">
         {/* Loading State */}
         {isLoading && <ExploreSearchLoader query={activeQuery} />}
 
         {/* No Search Yet */}
         {!hasSearched && !isLoading && (
-          <div className="text-center py-20">
-            <Search className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Start Your Search</h3>
-            <p className="text-muted-foreground">Enter a query above to find research papers</p>
+          <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
+              <Search className="h-7 w-7 text-muted-foreground/60" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1.5 text-foreground">Start Your Search</h3>
+            <p className="text-sm text-muted-foreground max-w-xs">Enter a keyword, faculty name, or topic above to explore IIT Delhi's research</p>
           </div>
         )}
 
         {/* No Results */}
         {hasSearched && !isLoading && filteredResults.length === 0 && (
-          <div className="text-center py-20">
-            <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Results Found</h3>
-            <p className="text-muted-foreground">Try different keywords or adjust your filters</p>
+          <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
+              <FileText className="h-7 w-7 text-muted-foreground/60" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1.5">No Results Found</h3>
+            <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
           </div>
         )}
 
@@ -1258,45 +1276,30 @@ const Explore = () => {
             <div 
               className={`relative shrink-0 flex items-stretch ${!isResizingState ? 'transition-all duration-300 ease-in-out' : ''} ${isPeopleSidebarOpen ? 'w-full xl:w-[var(--sidebar-width)]' : 'w-full xl:w-8'}`}
             >
-        <div 
+        <div
           ref={leftColRef}
-          className={`w-full flex flex-col gap-4 pt-1 md:sticky md:top-6 max-h-[calc(100vh-3rem)]`}
+          className={`w-full flex flex-col gap-4 pt-1 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)]`}
         >
-          <div className={`shrink-0 flex items-center gap-2 mb-2 border-b border-border pb-4 ${isPeopleSidebarOpen ? 'justify-between pr-4' : 'justify-center border-transparent xl:border-border'}`}>
-            <div className={`flex items-center gap-2 ${!isPeopleSidebarOpen && 'xl:hidden'}`}>
-              <Users className="h-5 w-5 text-primary" />
-              <h2 className="text-2xl font-bold text-foreground">People</h2>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              onClick={() => setIsPeopleSidebarOpen(!isPeopleSidebarOpen)}
-              title={isPeopleSidebarOpen ? "Collapse People Sidebar" : "Expand People Sidebar"}
-            >
-              {isPeopleSidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-            </Button>
-          </div>
-          <div className={`flex flex-col flex-1 min-h-0 transition-all duration-300 overflow-hidden pr-4 ${isPeopleSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
+          <PeopleSectionHeader
+            count={peopleTotalCount}
+            isOpen={isPeopleSidebarOpen}
+            onToggle={() => setIsPeopleSidebarOpen(!isPeopleSidebarOpen)}
+          />
+
+          <div className={`flex flex-col xl:flex-1 xl:min-h-0 transition-all duration-300 overflow-hidden pr-0 sm:pr-4 ${isPeopleSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
           <>
             {/* Show All mode - server-side; also used as auto-fallback when current page has no IITD faculty */}
             {(showAllFaculty || relatedFaculty.length === 0) ? (() => {
               if (isAllFacultyLoading) {
-                return (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                    <p className="text-sm text-muted-foreground">Loading all faculty...</p>
-                  </div>
-                );
+                return <PeopleLoadingState />;
               }
 
               if (!allFacultyData || allFacultyData.total_faculty === 0) {
                 return (
-                  <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
-                    <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-1">No Authors Found</h3>
-                    <p className="text-sm text-muted-foreground px-4">No matched faculty found across all results</p>
-                  </div>
+                  <PeopleEmptyState
+                    title="No Authors Found"
+                    description="No matched faculty found across all results"
+                  />
                 );
               }
 
@@ -1334,66 +1337,40 @@ const Explore = () => {
                       )}
                     </p>
                   </div>
-                  <div className="flex-1 min-h-0 space-y-4 pr-1 scrollbar-thin overflow-y-auto">
+                  <PeopleListContainer>
                     {(() => { peopleHasMoreRef.current = hasMore; return null; })()}
                     {deptOrder.map(department => (
-                      <div key={department} className="mb-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-sm font-semibold text-foreground">
-                            {department} <span className="text-xs font-normal text-muted-foreground ml-1">({groupedVisible[department].totalInDept})</span>
-                          </h3>
-                        </div>
-                        <ul className="space-y-2 pl-4">
-                          {groupedVisible[department].items.map((faculty) => {
-                            const isSelected = selectedAuthor?.author_id === faculty.author_id;
-                            return (
-                              <li key={faculty.author_id} className="flex items-stretch gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => { setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id }); setAuthorScopedPage(1); }}
-                                  className={`text-sm text-left flex flex-1 min-w-0 items-start justify-between transition-colors rounded-md px-1 -mx-1 ${
-                                    isSelected
-                                      ? "text-primary font-semibold"
-                                      : "text-muted-foreground hover:text-primary"
-                                  }`}
-                                >
-                                  <div className="flex items-start min-w-0">
-                                    <span className="shrink-0 mr-2 mt-[2px]">•</span>
-                                    <span className="truncate">{faculty.name}</span>
-                                  </div>
-                                  <span className={`text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paper_count}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  title="View profile"
-                                  aria-label={`View profile for ${faculty.name}`}
-                                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  onClick={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
-                                >
-                                  <UserCircle className="h-4 w-4" />
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
+                      <PeopleDepartmentBlock
+                        key={department}
+                        department={department}
+                        count={groupedVisible[department].totalInDept}
+                      >
+                        {groupedVisible[department].items.map((faculty) => {
+                          const isSelected = selectedAuthor?.author_id === faculty.author_id;
+                          return (
+                            <PeopleFacultyRow
+                              key={faculty.author_id}
+                              name={faculty.name}
+                              paperCount={faculty.paper_count}
+                              isSelected={isSelected}
+                              onSelect={() => {
+                                setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id });
+                                setAuthorScopedPage(1);
+                              }}
+                              onViewProfile={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
+                            />
+                          );
+                        })}
+                      </PeopleDepartmentBlock>
                     ))}
 
-                    {/* Infinite scroll sentinel */}
                     {hasMore && (
-                      <div ref={peopleSentinelRef} className="flex items-center justify-center py-4 h-12">
-                        {isPeopleLoadingMore && (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                            <span className="text-xs text-muted-foreground">Loading more...</span>
-                          </>
-                        )}
-                      </div>
+                      <PeopleLoadMoreSentinel sentinelRef={peopleSentinelRef} isLoading={isPeopleLoadingMore} />
                     )}
                     {!hasMore && allFacultyFlat.length > PEOPLE_PER_PAGE && (
                       <p className="text-xs text-center text-muted-foreground py-2">All {allFacultyFlat.length} faculty shown</p>
                     )}
-                  </div>
+                  </PeopleListContainer>
                 </>
               );
             })() : (() => {
@@ -1401,11 +1378,10 @@ const Explore = () => {
 
               if (relatedFaculty.length === 0) {
                 return (
-                  <div className="text-center py-10 bg-accent-light border border-accent rounded-lg">
-                    <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-1">No Authors Found</h3>
-                    <p className="text-sm text-muted-foreground px-4">No IIT Delhi affiliated authors found in the current page results</p>
-                  </div>
+                  <PeopleEmptyState
+                    title="No Authors Found"
+                    description="No IIT Delhi affiliated authors found in the current page results"
+                  />
                 );
               }
 
@@ -1475,67 +1451,41 @@ const Explore = () => {
                       </button>
                     </p>
                   </div>
-                  <div className="flex-1 min-h-0 space-y-4 pr-1 scrollbar-thin overflow-y-auto">
+                  <PeopleListContainer>
                     {(() => { peopleHasMoreRef.current = hasMore; return null; })()}
                     {deptOrder.map(department => (
-                      <div key={department} className="mb-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-sm font-semibold text-foreground">
-                            {department} <span className="text-xs font-normal text-muted-foreground ml-1">({deptGroups[department].faculty.length})</span>
-                          </h3>
-                        </div>
-                        <ul className="space-y-2 pl-4">
-                          {groupedVisible[department].map((faculty) => {
-                            const facultyAuthorId = faculty.expert_id || '';
-                            const isSelected = selectedAuthor?.author_id === facultyAuthorId;
-                            return (
-                              <li key={faculty._id} className="flex items-stretch gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => { setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: facultyAuthorId }); setAuthorScopedPage(1); }}
-                                  className={`text-sm text-left flex flex-1 min-w-0 items-start justify-between transition-colors rounded-md px-1 -mx-1 ${
-                                    isSelected
-                                      ? "text-primary font-semibold"
-                                      : "text-muted-foreground hover:text-primary"
-                                  }`}
-                                >
-                                  <div className="flex items-start min-w-0">
-                                    <span className="shrink-0 mr-2">•</span>
-                                    <span className="truncate">{faculty.name}</span>
-                                  </div>
-                                  <span className={`text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>{faculty.paperCount}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  title="View profile"
-                                  aria-label={`View profile for ${faculty.name}`}
-                                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  onClick={() => void openRelatedFacultyProfile(faculty)}
-                                >
-                                  <UserCircle className="h-4 w-4" />
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
+                      <PeopleDepartmentBlock
+                        key={department}
+                        department={department}
+                        count={deptGroups[department].faculty.length}
+                      >
+                        {groupedVisible[department].map((faculty) => {
+                          const facultyAuthorId = faculty.expert_id || '';
+                          const isSelected = selectedAuthor?.author_id === facultyAuthorId;
+                          return (
+                            <PeopleFacultyRow
+                              key={faculty._id}
+                              name={faculty.name}
+                              paperCount={faculty.paperCount}
+                              isSelected={isSelected}
+                              onSelect={() => {
+                                setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: facultyAuthorId });
+                                setAuthorScopedPage(1);
+                              }}
+                              onViewProfile={() => void openRelatedFacultyProfile(faculty)}
+                            />
+                          );
+                        })}
+                      </PeopleDepartmentBlock>
                     ))}
 
-                    {/* Infinite scroll sentinel */}
                     {hasMore && (
-                      <div ref={peopleSentinelRef} className="flex items-center justify-center py-4 h-12">
-                        {isPeopleLoadingMore && (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                            <span className="text-xs text-muted-foreground">Loading more...</span>
-                          </>
-                        )}
-                      </div>
+                      <PeopleLoadMoreSentinel sentinelRef={peopleSentinelRef} isLoading={isPeopleLoadingMore} />
                     )}
                     {!hasMore && allFacultyFlat.length > PEOPLE_PER_PAGE && (
                       <p className="text-xs text-center text-muted-foreground py-2">All {allFacultyFlat.length} faculty shown</p>
                     )}
-                  </div>
+                  </PeopleListContainer>
                 </>
               );
             })()}
@@ -1556,7 +1506,7 @@ const Explore = () => {
         </div> {/* End Left Column */}
 
         {/* Right Column - Research Papers */}
-            <div className={`transition-all duration-300 w-full flex-1 ${isPeopleSidebarOpen ? 'xl:pl-8' : 'xl:pl-4'} border-t xl:border-t-0 xl:border-l border-border pt-8 xl:pt-0 space-y-6`}>
+            <div className={`transition-all duration-300 w-full flex-1 ${isPeopleSidebarOpen ? 'xl:pl-8' : 'xl:pl-4'} border-t xl:border-t-0 xl:border-l border-border pt-6 sm:pt-8 xl:pt-0 space-y-4 sm:space-y-6`}>
               <div className="flex items-center gap-2 mb-2 border-b border-border pb-4">
                 <FileText className="h-5 w-5 text-primary" />
                 <h2 className="text-2xl font-bold text-foreground">Research Papers</h2>
@@ -1603,7 +1553,7 @@ const Explore = () => {
               
               {/* Results Header */}
               {sortedResults.length > 0 && (
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground">
                     {selectedAuthor && authorScopedData ? (
                       <>Found <span className="font-semibold text-primary">{authorScopedData.pagination?.total ?? 0}</span> matching papers</>
@@ -1674,7 +1624,7 @@ const Explore = () => {
                       </Badge>
                     )}
                   </div>
-                  <CardTitle className="text-xl mb-2">{highlightTerms(item.title, highlightTokens)}</CardTitle>
+                  <CardTitle className="text-base sm:text-xl mb-2 leading-snug">{highlightTerms(item.title, highlightTokens)}</CardTitle>
                   <ExploreCardAuthorsLine
                     authors={item.authors}
                     selectedAuthor={selectedAuthor}
@@ -1777,7 +1727,7 @@ const Explore = () => {
                             <div className="flex items-start justify-between mb-2">
                               <Badge variant="secondary">{item.document_type}</Badge>
                             </div>
-                            <CardTitle className="text-xl mb-2">{highlightTerms(item.title, highlightTokens)}</CardTitle>
+                            <CardTitle className="text-base sm:text-xl mb-2 leading-snug">{highlightTerms(item.title, highlightTokens)}</CardTitle>
                             <ExploreCardAuthorsLine
                     authors={item.authors}
                     selectedAuthor={selectedAuthor}
@@ -1831,16 +1781,19 @@ const Explore = () => {
 
         {/* Pagination - main search */}
         {!selectedAuthor && pagination && pagination.total_pages > 1 && (
-          <div className="flex justify-center items-center gap-2 mt-8 mb-4">
+          <div className="flex flex-wrap justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => goToPage(1)}
               disabled={currentPage === 1}
+              className="hidden sm:inline-flex"
             >
               First
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
             >
@@ -1857,6 +1810,7 @@ const Explore = () => {
                   return (
                     <Button
                       key={pageNum}
+                      size="sm"
                       variant={pageNum === currentPage ? "default" : "outline"}
                       onClick={() => goToPage(pageNum)}
                     >
@@ -1870,6 +1824,7 @@ const Explore = () => {
 
             <Button
               variant="outline"
+              size="sm"
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === pagination.total_pages}
             >
@@ -1877,8 +1832,10 @@ const Explore = () => {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => goToPage(pagination.total_pages)}
               disabled={currentPage === pagination.total_pages}
+              className="hidden sm:inline-flex"
             >
               Last
             </Button>
@@ -1891,16 +1848,19 @@ const Explore = () => {
 
         {/* Pagination - author-scoped search */}
         {selectedAuthor && authorScopedData && (authorScopedData.pagination?.total_pages ?? 0) > 1 && (
-          <div className="flex justify-center items-center gap-2 mt-8 mb-4">
+          <div className="flex flex-wrap justify-center items-center gap-2 mt-8 mb-4">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setAuthorScopedPage(1)}
               disabled={authorScopedPage === 1}
+              className="hidden sm:inline-flex"
             >
               First
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setAuthorScopedPage(p => p - 1)}
               disabled={authorScopedPage === 1}
             >
@@ -1917,6 +1877,7 @@ const Explore = () => {
                   return (
                     <Button
                       key={pageNum}
+                      size="sm"
                       variant={pageNum === authorScopedPage ? "default" : "outline"}
                       onClick={() => setAuthorScopedPage(pageNum)}
                     >
@@ -1930,6 +1891,7 @@ const Explore = () => {
 
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setAuthorScopedPage(p => p + 1)}
               disabled={authorScopedPage === (authorScopedData.pagination?.total_pages ?? 0)}
             >
@@ -1937,8 +1899,10 @@ const Explore = () => {
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setAuthorScopedPage(authorScopedData.pagination?.total_pages ?? 1)}
               disabled={authorScopedPage === (authorScopedData.pagination?.total_pages ?? 0)}
+              className="hidden sm:inline-flex"
             >
               Last
             </Button>
@@ -1975,7 +1939,7 @@ const Explore = () => {
                     <Badge variant="outline" className="px-3 py-0.5 bg-background/50 backdrop-blur-sm rounded-full uppercase tracking-wider text-[10px] text-muted-foreground border-border/50">{selectedDocument.field_associated}</Badge>
                   )}
                 </div>
-                <h2 className="text-2xl font-bold text-foreground leading-tight">{highlightTerms(selectedDocument.title, highlightTokens)}</h2>
+                <h2 className="text-lg sm:text-2xl font-bold text-foreground leading-tight">{highlightTerms(selectedDocument.title, highlightTokens)}</h2>
               </div>
               <Button
                 variant="ghost"
