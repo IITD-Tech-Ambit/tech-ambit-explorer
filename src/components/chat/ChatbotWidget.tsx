@@ -1,19 +1,22 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  MessageCircle, X, Send, Loader2, Trash2,
-  Sparkles, Brain, ChevronDown, BookOpen,
+  X, Send, Loader2,
+  Sparkles, Brain, BookOpen,
+  Microscope, Users, TrendingUp, Building2,
 } from "lucide-react";
 import { streamChat, type ChatSource, type ChatChartEvent, type ThinkingStep } from "@/lib/api/services/chatService";
 import ChatMessage, { type ChatMessageData } from "./ChatMessage";
+import ChatPanelHeader from "./ChatPanelHeader";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STORAGE_KEY = "research-ambit-chat-v2";
 const MAX_HISTORY_TURNS = 6;
 
 const STARTER_QUESTIONS = [
-  "Which professors work on machine learning?",
-  "What is the research trend in renewable energy at IIT Delhi?",
-  "Compare Prof. Subhashis Banerjee and Prof. Amitabha Mukherjee",
-  "What departments does IIT Delhi have?",
+  { q: "Which professors work on machine learning?", icon: Brain },
+  { q: "Research trends in renewable energy?", icon: TrendingUp },
+  { q: "Compare two faculty members", icon: Users },
+  { q: "What departments does IIT Delhi have?", icon: Building2 },
 ];
 
 const loadMessages = (): ChatMessageData[] => {
@@ -34,14 +37,12 @@ const ThinkingBubble = ({ steps }: { steps: ThinkingStep[] }) => {
         <Brain className="w-3 h-3 text-primary animate-pulse" />
       </div>
       <div className="flex flex-col gap-1 flex-1">
-        {/* Completed steps */}
         {steps.slice(0, -1).map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-primary/40 flex-shrink-0" />
             <span className="text-[11px] text-muted-foreground/60 line-through">{s.step}</span>
           </div>
         ))}
-        {/* Active step */}
         {latest && (
           <div className="flex items-center gap-2">
             <span className="flex gap-0.5">
@@ -58,6 +59,7 @@ const ThinkingBubble = ({ steps }: { steps: ThinkingStep[] }) => {
 };
 
 const ChatbotWidget = () => {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessageData[]>(loadMessages);
@@ -83,18 +85,25 @@ const ChatbotWidget = () => {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinkingSteps, open]);
 
+  // Focus input when panel opens
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+    if (open) setTimeout(() => inputRef.current?.focus(), 150);
   }, [open]);
+
+  // Lock body scroll on mobile while chat is open
+  useEffect(() => {
+    if (!isMobile) return;
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open, isMobile]);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
 
-  // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = e.target;
-    el.style.height = "42px";
-    el.style.height = Math.min(el.scrollHeight, 112) + "px";
+    el.style.height = "44px";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
   const updateLast = useCallback((updater: (m: ChatMessageData) => ChatMessageData) => {
@@ -116,7 +125,7 @@ const ChatbotWidget = () => {
         .map((m) => ({ role: m.role, content: m.content }));
 
       setInput("");
-      if (textareaRef.current) textareaRef.current.style.height = "42px";
+      if (textareaRef.current) textareaRef.current.style.height = "44px";
       setIsStreaming(true);
       setThinkingSteps([]);
       setMessages((prev) => [
@@ -132,15 +141,9 @@ const ChatbotWidget = () => {
         trimmed,
         history,
         {
-          onThinking: (step) => {
-            setThinkingSteps((prev) => [...prev, step]);
-          },
-          onSources: (sources: ChatSource[]) => {
-            updateLast((m) => ({ ...m, sources }));
-          },
-          onChart: (chart: ChatChartEvent) => {
-            updateLast((m) => ({ ...m, chart }));
-          },
+          onThinking: (step) => setThinkingSteps((prev) => [...prev, step]),
+          onSources: (sources: ChatSource[]) => updateLast((m) => ({ ...m, sources })),
+          onChart: (chart: ChatChartEvent) => updateLast((m) => ({ ...m, chart })),
           onToken: (token: string) => {
             setThinkingSteps([]);
             updateLast((m) => ({ ...m, content: m.content + token }));
@@ -176,247 +179,318 @@ const ChatbotWidget = () => {
     try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   };
 
+  // Desktop Enter sends; mobile virtual keyboard Enter = newline
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !isMobile) {
       e.preventDefault();
       sendMessage(input);
     }
   };
 
   const lastMessage = messages[messages.length - 1];
-  const showThinking = isStreaming && thinkingSteps.length > 0 && lastMessage?.role === "assistant" && !lastMessage.content;
-  const showDots = isStreaming && thinkingSteps.length === 0 && lastMessage?.role === "assistant" && !lastMessage.content;
+  const showThinking =
+    isStreaming && thinkingSteps.length > 0 &&
+    lastMessage?.role === "assistant" && !lastMessage.content;
+  const showDots =
+    isStreaming && thinkingSteps.length === 0 &&
+    lastMessage?.role === "assistant" && !lastMessage.content;
+
+  // ── Shared panel contents ──
+  const panelContents = (opts?: { showDragHandle?: boolean }) => (
+    <>
+      <ChatPanelHeader
+        hasMessages={messages.length > 0}
+        onClear={clearChat}
+        onClose={() => setOpen(false)}
+        showDragHandle={opts?.showDragHandle}
+      />
+
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        style={{ WebkitOverflowScrolling: "touch" } as any}
+      >
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-4 px-4 py-6">
+            {/* Icon + intro */}
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: "linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(124,58,237,0.10) 100%)",
+                  border: "1px solid rgba(99,102,241,0.15)",
+                }}
+              >
+                <BookOpen className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-foreground">What would you like to explore?</p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed max-w-[240px]">
+                  Ask about faculty, research areas, publications, or departments.
+                </p>
+              </div>
+            </div>
+
+            {/* Starter questions — 2×2 grid */}
+            <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
+              {STARTER_QUESTIONS.map(({ q, icon: Icon }) => (
+                <button
+                  key={q}
+                  onClick={() => sendMessage(q)}
+                  className="flex flex-col items-start gap-2 p-3 rounded-xl text-left transition-all hover:scale-[1.02] active:scale-[0.97] touch-manipulation group"
+                  style={{
+                    border: "1px solid hsl(var(--border) / 0.7)",
+                    background: "hsl(var(--muted) / 0.25)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "hsl(var(--primary) / 0.35)";
+                    e.currentTarget.style.background = "hsl(var(--primary) / 0.05)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "hsl(var(--border) / 0.7)";
+                    e.currentTarget.style.background = "hsl(var(--muted) / 0.25)";
+                  }}
+                >
+                  <Icon className="w-4 h-4 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
+                  <span className="text-[11px] text-foreground/75 leading-snug">{q}</span>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-muted-foreground/40 text-center">
+              Powered by IIT Delhi research index
+            </p>
+          </div>
+        ) : (
+          <div className="px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 min-w-0 w-full max-w-full overflow-x-hidden">
+            {messages.map((m, i) => {
+              if (m.role === "assistant" && !m.content && !m.error && !m.chart) return null;
+              const isLastMsg = i === messages.length - 1;
+              const onEdit =
+                m.role === "user" && !isStreaming
+                  ? (text: string) => {
+                      setInput(text);
+                      if (textareaRef.current) {
+                        textareaRef.current.style.height = "44px";
+                        textareaRef.current.style.height =
+                          Math.min(textareaRef.current.scrollHeight, 120) + "px";
+                        textareaRef.current.focus();
+                      }
+                    }
+                  : undefined;
+              const onRetry =
+                m.role === "assistant" && isLastMsg && !isStreaming
+                  ? () => {
+                      const lastUser = [...messages].reverse().find((x) => x.role === "user");
+                      if (lastUser) sendMessage(lastUser.content);
+                    }
+                  : undefined;
+              return (
+                <ChatMessage
+                  key={i}
+                  message={m}
+                  onEdit={onEdit}
+                  onRetry={onRetry}
+                  isLast={isLastMsg}
+                />
+              );
+            })}
+            {showThinking && <ThinkingBubble steps={thinkingSteps} />}
+            {showDots && (
+              <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted/40 w-fit border border-border/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:300ms]" />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div
+        className="px-3 pt-2.5 flex-shrink-0"
+        style={{
+          borderTop: "1px solid hsl(var(--border) / 0.4)",
+          background: "hsl(var(--muted) / 0.08)",
+          paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <div
+          className="flex items-end gap-2 rounded-2xl px-3 py-2"
+          style={{
+            background: "hsl(var(--background))",
+            border: "1.5px solid hsl(var(--border) / 0.6)",
+            transition: "border-color 0.15s, box-shadow 0.15s",
+          }}
+          onFocusCapture={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--primary) / 0.5)";
+            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px hsl(var(--primary) / 0.08)";
+          }}
+          onBlurCapture={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--border) / 0.6)";
+            (e.currentTarget as HTMLElement).style.boxShadow = "none";
+          }}
+        >
+          <textarea
+            ref={(el) => {
+              (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+              (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+            }}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about research, faculty…"
+            rows={1}
+            maxLength={2000}
+            disabled={isStreaming}
+            className="flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground/40 outline-none disabled:opacity-50 touch-manipulation py-1.5"
+            style={{
+              fontSize: "16px",
+              lineHeight: "1.5",
+              minHeight: "36px",
+              maxHeight: "120px",
+            }}
+            onFocus={() => {
+              if (isMobile) {
+                setTimeout(
+                  () => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }),
+                  350,
+                );
+              }
+            }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={isStreaming || !input.trim()}
+            aria-label="Send"
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mb-0.5 active:scale-90 transition-all disabled:opacity-35 disabled:cursor-not-allowed touch-manipulation"
+            style={{
+              background: input.trim() && !isStreaming
+                ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                : "hsl(var(--muted))",
+              boxShadow: input.trim() && !isStreaming
+                ? "0 4px 12px -2px rgba(99,102,241,0.45)"
+                : "none",
+              transition: "background 0.15s, box-shadow 0.15s",
+            }}
+          >
+            {isStreaming ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            ) : (
+              <Send
+                className="w-3.5 h-3.5"
+                style={{ color: input.trim() ? "white" : "hsl(var(--muted-foreground))" }}
+              />
+            )}
+          </button>
+        </div>
+        <p className="text-[9px] text-muted-foreground/35 mt-1.5 px-1 text-center">
+          Answers may be incomplete · {!isMobile && "Enter to send · "}Shift+Enter for newline
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <>
-      {/* ── Launcher FAB ── */}
+      {/* ── Backdrop (mobile only) ── */}
+      <div
+        aria-hidden="true"
+        onClick={() => setOpen(false)}
+        className="md:hidden fixed inset-0 z-[155] transition-opacity duration-250"
+        style={{
+          background: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(3px)",
+          WebkitBackdropFilter: "blur(3px)",
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+        }}
+      />
+
+      {/* ── Launcher FAB ──
+          CSS breakpoints (no JS conditional) so it never flashes position on mobile.
+          Mobile: right-4  bottom=[safe-area]  56×56
+          Desktop md+: right-6  bottom-20  48×48
+      ── */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close research assistant" : "Open research assistant"}
-        title={open ? "Close research assistant" : "Research Assistant"}
-        className="fixed bottom-20 right-6 z-[150] flex items-center justify-center w-12 h-12 rounded-2xl text-white shadow-xl hover:shadow-2xl active:scale-95 transition-all duration-200"
+        title={open ? "Close" : "Research Assistant"}
+        className={`
+          fixed z-[150] flex items-center justify-center text-white
+          active:scale-90 transition-all duration-200
+          touch-manipulation rounded-2xl
+          w-14 h-14 right-4
+          bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))]
+          md:w-12 md:h-12 md:right-6 md:bottom-20
+        `}
         style={{
-          background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-          boxShadow: "0 8px 30px -6px rgba(99, 102, 241, 0.55)",
+          background: open
+            ? "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"
+            : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+          boxShadow: "0 8px 32px -6px rgba(99,102,241,0.6), 0 2px 8px -2px rgba(0,0,0,0.2)",
+          transition: "background 0.2s, transform 0.2s, box-shadow 0.2s",
         }}
       >
-        <div className="relative">
+        <div
+          className="relative"
+          style={{
+            transform: open ? "rotate(0deg) scale(1)" : "rotate(0deg) scale(1)",
+            transition: "transform 0.2s",
+          }}
+        >
           {open ? (
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5 md:w-4 md:h-4" />
           ) : (
             <>
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-5 h-5 md:w-4 md:h-4" />
               {messages.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-white/50" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-1 ring-white/60 animate-pulse" />
               )}
             </>
           )}
         </div>
       </button>
 
-      {/* ── Chat panel ── */}
+      {/* ── Mobile: bottom sheet ── */}
+      <div
+        aria-hidden={!open}
+        className="md:hidden fixed inset-x-0 bottom-0 z-[160] flex flex-col overflow-hidden"
+        style={{
+          height: "min(92dvh, 100dvh - env(safe-area-inset-top, 0px))",
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          borderRadius: "20px 20px 0 0",
+          background: "hsl(var(--background))",
+          borderTop: "1px solid hsl(var(--border) / 0.6)",
+          boxShadow: "0 -12px 48px -8px rgba(0,0,0,0.22)",
+          transform: open ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+          pointerEvents: open ? "auto" : "none",
+        }}
+      >
+        {panelContents({ showDragHandle: true })}
+      </div>
+
+      {/* ── Desktop (md+): floating panel ── */}
       {open && (
         <div
-          className="fixed bottom-[8.5rem] right-4 sm:right-6 z-[160] flex flex-col overflow-hidden"
+          className="hidden md:flex fixed flex-col overflow-hidden z-[160]"
           style={{
-            width: "min(calc(100vw - 2rem), 440px)",
-            height: "min(640px, calc(100vh - 7rem))",
+            bottom: "8.5rem",
+            right: "1.5rem",
+            width: "min(calc(100vw - 2rem), 420px)",
+            height: "min(600px, calc(100vh - 8rem))",
             borderRadius: "20px",
-            boxShadow: "0 24px 64px -12px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.05)",
             background: "hsl(var(--background))",
             border: "1px solid hsl(var(--border) / 0.5)",
+            boxShadow:
+              "0 32px 80px -12px rgba(0,0,0,0.28), 0 8px 24px -4px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.04)",
           }}
         >
-          {/* ── Header ── */}
-          <div
-            className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
-            style={{
-              background: "linear-gradient(135deg, hsl(var(--primary) / 0.12) 0%, hsl(var(--accent) / 0.06) 100%)",
-              borderBottom: "1px solid hsl(var(--border) / 0.4)",
-            }}
-          >
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)", boxShadow: "0 4px 12px -2px rgba(99,102,241,0.4)" }}
-            >
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-foreground leading-none">Research Assistant</p>
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                IIT Delhi Research Portal
-              </p>
-            </div>
-            {messages.length > 0 && (
-              <button
-                onClick={clearChat}
-                aria-label="Clear conversation"
-                title="Clear conversation"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <button
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors flex-shrink-0"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* ── Messages ── */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth">
-            {messages.length === 0 ? (
-              /* ── Empty state ── */
-              <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-3">
-                <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(124,58,237,0.1))" }}
-                >
-                  <BookOpen className="w-7 h-7 text-primary" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[14px] font-bold text-foreground">Research Assistant</p>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed max-w-[260px]">
-                    Ask me anything about IIT Delhi's research — faculty, publications, departments, and trends.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 w-full">
-                  {STARTER_QUESTIONS.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => sendMessage(q)}
-                      className="text-left text-[12px] px-3.5 py-2.5 rounded-xl text-foreground/80 leading-snug transition-all hover:scale-[1.01] active:scale-[0.99]"
-                      style={{
-                        border: "1px solid hsl(var(--border) / 0.7)",
-                        background: "hsl(var(--muted) / 0.3)",
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--primary) / 0.4)";
-                        (e.currentTarget as HTMLElement).style.background = "hsl(var(--primary) / 0.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--border) / 0.7)";
-                        (e.currentTarget as HTMLElement).style.background = "hsl(var(--muted) / 0.3)";
-                      }}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((m, i) => {
-                  if (m.role === "assistant" && !m.content && !m.error && !m.chart) return null;
-                  const isLastMsg = i === messages.length - 1;
-                  // For user messages, allow edit only when not streaming
-                  const onEdit =
-                    m.role === "user" && !isStreaming
-                      ? (text: string) => {
-                          setInput(text);
-                          if (textareaRef.current) {
-                            textareaRef.current.style.height = "42px";
-                            textareaRef.current.style.height =
-                              Math.min(textareaRef.current.scrollHeight, 112) + "px";
-                            textareaRef.current.focus();
-                          }
-                        }
-                      : undefined;
-                  // For assistant messages, allow retry on last message
-                  const onRetry =
-                    m.role === "assistant" && isLastMsg && !isStreaming
-                      ? () => {
-                          const lastUser = [...messages].reverse().find((x) => x.role === "user");
-                          if (lastUser) sendMessage(lastUser.content);
-                        }
-                      : undefined;
-                  return (
-                    <ChatMessage
-                      key={i}
-                      message={m}
-                      onEdit={onEdit}
-                      onRetry={onRetry}
-                      isLast={isLastMsg}
-                    />
-                  );
-                })}
-
-                {/* ── Thinking steps ── */}
-                {showThinking && <ThinkingBubble steps={thinkingSteps} />}
-
-                {/* ── Initial dots (before first thinking step) ── */}
-                {showDots && (
-                  <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-muted/40 w-fit border border-border/30">
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:300ms]" />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* ── Input area ── */}
-          <div
-            className="px-3 py-3 flex-shrink-0"
-            style={{ borderTop: "1px solid hsl(var(--border) / 0.4)", background: "hsl(var(--muted) / 0.15)" }}
-          >
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={(el) => {
-                  (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
-                  (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
-                }}
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask about research, faculty, departments…"
-                rows={1}
-                maxLength={2000}
-                disabled={isStreaming}
-                className="flex-1 resize-none px-3.5 py-2.5 rounded-xl text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-all disabled:opacity-50"
-                style={{
-                  minHeight: "42px",
-                  maxHeight: "112px",
-                  background: "hsl(var(--background))",
-                  border: "1.5px solid hsl(var(--border) / 0.7)",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "hsl(var(--primary) / 0.5)";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px hsl(var(--primary) / 0.1)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "hsl(var(--border) / 0.7)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              />
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={isStreaming || !input.trim()}
-                aria-label="Send"
-                className="w-[42px] h-[42px] rounded-xl flex items-center justify-center text-white flex-shrink-0 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: input.trim() && !isStreaming
-                    ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
-                    : "hsl(var(--muted))",
-                  boxShadow: input.trim() && !isStreaming ? "0 4px 12px -2px rgba(99,102,241,0.4)" : "none",
-                }}
-              >
-                {isStreaming ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                ) : (
-                  <Send className="w-4 h-4" style={{ color: input.trim() ? "white" : "hsl(var(--muted-foreground))" }} />
-                )}
-              </button>
-            </div>
-            <p className="text-[9px] text-muted-foreground/50 mt-1.5 px-1">
-              Powered by IIT Delhi research index · Answers may be incomplete
-            </p>
-          </div>
+          {panelContents()}
         </div>
       )}
     </>
