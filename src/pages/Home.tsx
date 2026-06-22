@@ -40,7 +40,7 @@ const Home = () => {
           <div className="max-w-xs sm:max-w-xl md:max-w-2xl lg:max-w-3xl animate-fade-in">
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-sm mb-6">
-              <Sparkles className="h-4 w-4 text-amber-400" />
+              {/* <Sparkles className="h-4 w-4 text-amber-400" /> */}
               <span>Discover Research Excellence</span>
             </div>
             
@@ -61,9 +61,9 @@ const Home = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </Button>
               </Link>
-              <Link to="/mindmap" className="w-full sm:w-auto">
+              <Link to="/knowledge-graph" className="w-full sm:w-auto">
                 <Button size="lg" variant="outline" className="w-full sm:w-auto group text-sm sm:text-base bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300">
-                  View Mind Map
+                  Explore Knowledge Graph
                   <Globe className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-12 transition-transform duration-300" />
                 </Button>
               </Link>
@@ -95,7 +95,7 @@ const Home = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16 items-center">
             <div className="order-2 lg:order-1">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-                <Sparkles className="h-4 w-4" />
+                {/* <Sparkles className="h-4 w-4" /> */}
                 <span>Research Excellence</span>
               </div>
               <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-foreground leading-tight">

@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin, Github, Twitter, Linkedin, ExternalLink } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
+import {
+  BROAD_THEME_CLUSTERS,
+  broadThemeClusterColor,
+} from "@/components/knowledge-graph/atlasClusters";
 
 const Footer = () => {
   const footerRef = useRef<HTMLElement>(null);
@@ -107,6 +111,7 @@ const Footer = () => {
                 { to: "/directory", label: "Directory" },
                 { to: "/magazines", label: "Magazines" },
                 { to: "/mindmap", label: "Mind Map" },
+                { to: "/knowledge-graph", label: "Knowledge Graph" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
                 <li key={link.to}>
@@ -126,24 +131,16 @@ const Footer = () => {
           <div>
             <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Research Areas</h3>
             <ul className="space-y-3 text-sm">
-              {[
-                "Artificial Intelligence",
-                "Sustainable Energy",
-                "Biotechnology",
-                "Quantum Computing",
-                "Materials Science",
-              ].map((area, index) => (
-                <li 
+              {BROAD_THEME_CLUSTERS.map((area) => (
+                <li
                   key={area}
-                  className="flex items-center text-muted-foreground"
+                  className="flex items-start text-muted-foreground"
                 >
-                  <span 
-                    className="w-1.5 h-1.5 rounded-full mr-3"
-                    style={{
-                      background: `hsl(${222 + index * 20} 70% 55%)`,
-                    }}
+                  <span
+                    className="w-1.5 h-1.5 rounded-full mr-3 mt-1.5 flex-shrink-0"
+                    style={{ background: broadThemeClusterColor(area) }}
                   />
-                  {area}
+                  <span>{area}</span>
                 </li>
               ))}
             </ul>

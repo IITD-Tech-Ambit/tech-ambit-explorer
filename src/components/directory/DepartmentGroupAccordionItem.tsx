@@ -49,6 +49,36 @@ const DEPT_HODS: Record<string, string> = {
     "Textile & Fibre Engineering":                 "Deepti Gupta",
 };
 
+/** Kerberos (email prefix) for each HOD — avoids ambiguous search results. */
+const DEPT_HOD_KERBEROS: Record<string, string> = {
+    "Applied Mechanics":                           "sawan",
+    "Biochemical Engineering & Biotechnology":     "preeti",
+    "Chemical Engineering":                        "arathore",
+    "Chemistry Department":                        "sisn",
+    "Civil Engineering":                           "matsagar",
+    "Computer Science & Engineering":              "naveen",
+    "Department of Design":                        "sumer",
+    "Department of Energy Science & Engineering":  "rams",
+    "Department of Management Studies":            "sprsingh",
+    "Humanities & Social Sciences":                "a_banerji",
+    "Materials Science & Engineering":             "lnebhani",
+    "Mathematics Department":                      "mmehra",
+    "Mechanical Engineering":                      "pmvs",
+    "Physics Department":                          "sujeetc",
+    "Textile & Fibre Engineering":                 "deepti",
+};
+
+async function resolveHodKerberos(departmentName: string, hodName: string): Promise<string | null> {
+    const direct = DEPT_HOD_KERBEROS[departmentName];
+    if (direct) return direct;
+
+    const { searchFaculties } = await import("@/lib/api/services/directoryService");
+    const result = await searchFaculties(hodName, 15);
+    const inDept = result.faculties?.find((f) => f.department?.name === departmentName);
+    const match = inDept ?? result.faculties?.[0];
+    return match?.email?.split("@")[0]?.toLowerCase() ?? null;
+}
+
 interface DepartmentGroupAccordionItemProps {
     category: string;
     deptGroup: GroupedDepartment;
@@ -112,10 +142,10 @@ const DepartmentGroupAccordionItem = ({
                                     onClick={async (e) => {
                                         e.stopPropagation();
                                         try {
-                                            const { searchFaculties } = await import("@/lib/api/services/directoryService");
-                                            const result = await searchFaculties(hodName, 1);
-                                            const match = result.faculties?.[0];
-                                            const k = match?.email?.split("@")[0]?.toLowerCase();
+                                            const k = await resolveHodKerberos(
+                                                deptGroup.department.name,
+                                                hodName,
+                                            );
                                             if (k) navigate(`/faculty/${k}`);
                                         } catch { /* ignore */ }
                                     }}
