@@ -885,7 +885,7 @@ const Explore = () => {
                   type="text"
                   placeholder={
                     searchIn.length === 1 && searchIn[0] === 'author'
-                      ? "Search by author name (e.g. Rajesh Khanna)..."
+                      ? "Search by author name..."
                       : hasSearched
                         ? `Narrow within "${activeQuery}"... (step ${refinementChain.length + 1})`
                         : "Search by department, project, faculty, or keywords..."

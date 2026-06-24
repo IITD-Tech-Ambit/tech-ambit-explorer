@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin, Github, Twitter, Linkedin, ExternalLink } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
+import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import {
   BROAD_THEME_CLUSTERS,
   broadThemeClusterColor,
@@ -10,6 +11,7 @@ const Footer = () => {
   const footerRef = useRef<HTMLElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
     const footer = footerRef.current;
@@ -64,15 +66,24 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand Section */}
           <div className="lg:col-span-1">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
-                <span className="text-white font-bold text-lg">R</span>
-              </div>
+            <Link to="/" className="flex items-center space-x-3 mb-6 group w-fit">
+              {!logoError ? (
+                <img
+                  src={siteLogo}
+                  alt="Research Ambit"
+                  className="logo-img"
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <div className="logo-fallback" aria-hidden>
+                  RA
+                </div>
+              )}
               <div>
                 <span className="font-bold text-lg text-foreground">Research Ambit</span>
                 <p className="text-xs text-muted-foreground">IIT Delhi</p>
               </div>
-            </div>
+            </Link>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
               Central research repository connecting departments, labs, and innovative projects at IIT Delhi.
             </p>
