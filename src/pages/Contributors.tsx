@@ -60,6 +60,13 @@ const mentors: TeamMember[] = [
 
 const phaseContributors: TeamMember[] = [
   {
+    name: "Nikhil Gupta",
+    role: "Journalist",
+    entryNumber: "ch1221016@iitd.ac.in",
+    linkedin: "https://www.linkedin.com/in/nikhil-gupta-b67786252/",
+    email: "ch1221016@iitd.ac.in",
+  },
+  {
     name: "Anuradha Barnwal",
     role: "Operations",
     entryNumber: "bb1230659@iitd.ac.in",

@@ -77,7 +77,7 @@ const DIM_SIZE = 0.011;
 const DIM_ALPHA = 0.18;
 const BASE_SIZE = 0.022;
 
-type AtlasMode = "view" | "interactive";
+export type AtlasMode = "view" | "interactive";
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -387,7 +387,7 @@ function AtlasPaperPanel({
   );
 }
 
-export default function ResearchAtlas() {
+export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: AtlasMode) => void }) {
   const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -498,6 +498,29 @@ export default function ResearchAtlas() {
 
   useEffect(() => {
     viewOnlyRef.current = isViewMode;
+  }, [isViewMode]);
+
+  useEffect(() => {
+    onModeChange?.(atlasMode);
+  }, [atlasMode, onModeChange]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const scene = sceneRef.current;
+    if (!container || !scene) return;
+
+    const applySize = () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      scene.camera.aspect = w / h;
+      scene.camera.updateProjectionMatrix();
+      scene.renderer.setSize(w, h);
+      scene.labelRenderer.setSize(w, h);
+    };
+
+    applySize();
+    const t = window.setTimeout(applySize, 520);
+    return () => window.clearTimeout(t);
   }, [isViewMode]);
 
   useEffect(() => {
@@ -1239,7 +1262,11 @@ export default function ResearchAtlas() {
 
   const modeToggle = (
     <div
-      className="inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg"
+      className={cn(
+        "inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg",
+        "transition-all duration-300 ease-out",
+        isViewMode && "ring-1 ring-white/10",
+      )}
       role="group"
       aria-label="Atlas display mode"
     >
@@ -1247,9 +1274,10 @@ export default function ResearchAtlas() {
         type="button"
         onClick={enterViewMode}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
+          "transition-all duration-300 ease-out",
           isViewMode
-            ? "bg-white text-black shadow-sm"
+            ? "bg-white text-black shadow-sm scale-[1.02]"
             : "text-slate-300 hover:text-white hover:bg-slate-800/80",
         )}
         aria-pressed={isViewMode}
@@ -1261,9 +1289,10 @@ export default function ResearchAtlas() {
         type="button"
         onClick={enterInteractiveMode}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
+          "transition-all duration-300 ease-out",
           !isViewMode
-            ? "bg-white text-black shadow-sm"
+            ? "bg-white text-black shadow-sm scale-[1.02]"
             : "text-slate-300 hover:text-white hover:bg-slate-800/80",
         )}
         aria-pressed={!isViewMode}
