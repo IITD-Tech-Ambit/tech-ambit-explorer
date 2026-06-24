@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 import MindMap from "@/components/MindMap";
 import { OpenPathResponse } from "@/lib/api";
 
@@ -22,22 +23,22 @@ const Mindmap = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col page-bg">
       <Navigation />
-      
-      <main className="flex-1 pt-20 overflow-hidden">
-        <div className="h-full flex flex-col px-4 py-8">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-4xl md:text-5xl font-bold">Mind Map</h1>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <MindMap 
+
+      <main className="flex flex-col shrink-0">
+        <div className="container mx-auto px-4 pt-24 pb-4 flex flex-col h-[calc(100vh-5rem)]">
+          <h1 className="text-4xl md:text-5xl font-bold mb-6 shrink-0">Mind Map</h1>
+          <div className="flex-1 min-h-0 relative">
+            <MindMap
               navigationPath={navigationPath}
               onNavigationComplete={handleNavigationComplete}
             />
           </div>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 };

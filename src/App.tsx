@@ -15,10 +15,13 @@ import MagazineDetail from "./pages/MagazineDetail";
 import Mindmap from "./pages/Mindmap";
 import KnowledgeGraph from "./pages/KnowledgeGraph";
 import Contributors from "./pages/Contributors";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
 import ChatbotWidget from "./components/chat/ChatbotWidget";
 import { ThemeProvider } from "./components/theme-provider";
+import ScrollToTop from "./components/ScrollToTop";
 
 // Configure React Query with production-ready defaults
 const queryClient = new QueryClient({
@@ -46,16 +49,19 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/directory" element={<Directory />} />
+            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
             <Route path="/mindmap" element={<Mindmap />} />
-            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
             <Route path="/contributors" element={<Contributors />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

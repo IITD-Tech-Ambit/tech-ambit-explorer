@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
-import { Mail, Phone, MapPin, Github, Twitter, Linkedin, ExternalLink } from "lucide-react";
+import { Mail, Phone, MapPin, Github, Twitter, Linkedin, ExternalLink, Facebook } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import {
   BROAD_THEME_CLUSTERS,
   broadThemeClusterColor,
+  knowledgeGraphThemePath,
 } from "@/components/knowledge-graph/atlasClusters";
+import LegalLinks from "@/components/LegalLinks";
 
 const Footer = () => {
   const footerRef = useRef<HTMLElement>(null);
@@ -90,25 +92,25 @@ const Footer = () => {
             {/* Social Links */}
             <div className="flex items-center space-x-3">
               <a 
-                href="#" 
+                href="https://x.com/iitdelhi" 
                 className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
                 aria-label="Twitter"
               >
                 <Twitter className="h-4 w-4" />
               </a>
               <a 
-                href="#" 
+                href="https://www.linkedin.com/school/iitdelhi/" 
                 className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
                 aria-label="LinkedIn"
               >
                 <Linkedin className="h-4 w-4" />
               </a>
               <a 
-                href="#" 
+                href="https://www.facebook.com/IITDelhi/" 
                 className="w-9 h-9 rounded-full bg-muted/80 dark:bg-slate-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all duration-300 hover:scale-110 text-muted-foreground hover:shadow-lg"
-                aria-label="GitHub"
+                aria-label="Facebook"
               >
-                <Github className="h-4 w-4" />
+                <Facebook className="h-4 w-4" />
               </a>
             </div>
           </div>
@@ -120,9 +122,9 @@ const Footer = () => {
               {[
                 { to: "/explore", label: "Explore Research" },
                 { to: "/directory", label: "Directory" },
+                { to: "/knowledge-graph", label: "Knowledge Graph" },
                 { to: "/magazines", label: "Magazines" },
                 { to: "/mindmap", label: "Mind Map" },
-                { to: "/knowledge-graph", label: "Knowledge Graph" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
                 <li key={link.to}>
@@ -143,15 +145,17 @@ const Footer = () => {
             <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Research Areas</h3>
             <ul className="space-y-3 text-sm">
               {BROAD_THEME_CLUSTERS.map((area) => (
-                <li
-                  key={area}
-                  className="flex items-start text-muted-foreground"
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full mr-3 mt-1.5 flex-shrink-0"
-                    style={{ background: broadThemeClusterColor(area) }}
-                  />
-                  <span>{area}</span>
+                <li key={area}>
+                  <Link
+                    to={knowledgeGraphThemePath(area)}
+                    className="group flex items-start text-muted-foreground hover:text-primary transition-all duration-300"
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full mr-3 mt-1.5 flex-shrink-0 transition-transform duration-300 group-hover:scale-125"
+                      style={{ background: broadThemeClusterColor(area) }}
+                    />
+                    <span>{area}</span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -207,8 +211,7 @@ const Footer = () => {
               © {new Date().getFullYear()} <span className="text-foreground font-medium">Research Ambit</span>, IIT Delhi. All rights reserved.
             </p>
             <div className="flex items-center space-x-6 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-primary transition-colors duration-300">Privacy Policy</a>
-              <a href="#" className="hover:text-primary transition-colors duration-300">Terms of Service</a>
+              <LegalLinks />
               <a 
                 href="https://iitd.ac.in" 
                 target="_blank" 

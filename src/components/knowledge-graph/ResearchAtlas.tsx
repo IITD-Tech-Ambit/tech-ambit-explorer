@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
@@ -262,6 +263,40 @@ function AtlasPaperPanel({
 
         <h2 className="text-base font-semibold text-white leading-snug">{paper.title}</h2>
 
+        {!detailLoading && (detail?.iitd_faculty?.length ?? 0) > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
+              <User className="h-3.5 w-3.5" /> IIT Delhi faculty
+            </p>
+            <ul className="space-y-2">
+              {detail!.iitd_faculty!.map((f) => (
+                <li key={f.facultyId}>
+                  {f.kerberos ? (
+                    <a
+                      href={`/faculty/${f.kerberos}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 hover:bg-cyan-950/50 transition-colors"
+                    >
+                      <span className="font-medium text-cyan-200">{f.name}</span>
+                      {f.department && (
+                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
+                      )}
+                    </a>
+                  ) : (
+                    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-2">
+                      <span className="font-medium text-white">{f.name}</span>
+                      {f.department && (
+                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {([
             { label: paper.theme, type: "theme" as const },
@@ -325,40 +360,6 @@ function AtlasPaperPanel({
           </div>
         )}
 
-        {!detailLoading && (detail?.iitd_faculty?.length ?? 0) > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
-              <User className="h-3.5 w-3.5" /> IIT Delhi faculty
-            </p>
-            <ul className="space-y-2">
-              {detail!.iitd_faculty!.map((f) => (
-                <li key={f.facultyId}>
-                  {f.kerberos ? (
-                    <a
-                      href={`/faculty/${f.kerberos}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 hover:bg-cyan-950/50 transition-colors"
-                    >
-                      <span className="font-medium text-cyan-200">{f.name}</span>
-                      {f.department && (
-                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
-                      )}
-                    </a>
-                  ) : (
-                    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-2">
-                      <span className="font-medium text-white">{f.name}</span>
-                      {f.department && (
-                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
-                      )}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {!detailLoading && (detail?.authors?.length ?? 0) > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
@@ -396,6 +397,7 @@ function AtlasPaperPanel({
 }
 
 export default function ResearchAtlas() {
+  const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const comboRef = useRef<HTMLDivElement>(null);
@@ -512,6 +514,17 @@ export default function ResearchAtlas() {
       .then(setFacultyList)
       .catch(() => setFacultyList([]));
   }, []);
+
+  useEffect(() => {
+    const theme = searchParams.get("theme")?.trim();
+    if (!theme) return;
+    setQuery(theme);
+    searchQueryRef.current = theme;
+    setSearchQuery(theme);
+    setSearchFacultyOnlyId(null);
+    setSearchDepartmentOnly(null);
+    setAtlasMode("interactive");
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;

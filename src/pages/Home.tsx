@@ -62,7 +62,7 @@ const Home = () => {
                 </Button>
               </Link>
               <Link to="/knowledge-graph" className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto group text-sm sm:text-base bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20 hover:border-white/50 transition-all duration-300">
+                <Button size="lg" className="w-full sm:w-auto group text-sm sm:text-base bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300">
                   Explore Knowledge Graph
                   <Globe className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-12 transition-transform duration-300" />
                 </Button>
