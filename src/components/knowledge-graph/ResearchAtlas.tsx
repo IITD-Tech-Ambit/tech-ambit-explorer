@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  BookOpen, Building2, Calendar, ExternalLink, Loader2, RotateCcw, Search,
+  Building2, Calendar, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
   Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -50,9 +51,9 @@ import {
   type ThemeClusterLabel,
 } from "./atlasClusters";
 
-const BG = "#0a1224";
+const BG = "#000000";
 const BASE_COLOR = new THREE.Color("#6ecfff");
-const BLOCKED_COLOR = new THREE.Color("#0a1528");
+const BLOCKED_COLOR = new THREE.Color("#000000");
 const DIM_COLOR = new THREE.Color("#1e3a5f");
 const HOVER_COLOR = new THREE.Color("#ffb347");
 const SELECTED_COLOR = new THREE.Color("#67e8f9");
@@ -75,6 +76,8 @@ const CLUSTER_HIGHLIGHT_SIZES: Record<MatchLevel, number> = {
 const DIM_SIZE = 0.011;
 const DIM_ALPHA = 0.18;
 const BASE_SIZE = 0.022;
+
+type AtlasMode = "view" | "interactive";
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -142,57 +145,6 @@ function createThemeLabelElement(
 
   const countEl = el.querySelector(".atlas-theme-count") as HTMLSpanElement;
   return { el, countEl, line, marker };
-}
-
-function AtlasThemeLegend({
-  labels,
-  dimmed,
-  filtered,
-}: {
-  labels: ThemeClusterLabel[];
-  dimmed: boolean;
-  filtered: boolean;
-}) {
-  const visible = filtered ? labels.filter((l) => l.count > 0) : labels;
-  if (!visible.length) return null;
-
-  return (
-    <div
-      className={cn(
-        "absolute bottom-4 left-4 z-20 max-w-[min(100vw-2rem,320px)] rounded-xl",
-        "border border-slate-700/60 bg-slate-950/90 backdrop-blur-md shadow-xl",
-        "transition-opacity duration-300",
-        dimmed && "opacity-45",
-      )}
-    >
-      <p className="px-3 pt-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-800/80">
-        Broad theme clusters{filtered ? " · filtered" : ""}
-      </p>
-      <ul className="max-h-52 overflow-y-auto px-2 py-2 space-y-1">
-        {visible.map((label) => (
-          <li
-            key={label.theme}
-            className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-800/50"
-          >
-            <span
-              className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: label.color, boxShadow: `0 0 6px ${label.color}` }}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-medium text-slate-200 leading-snug">
-                {label.theme}
-              </span>
-              <span className="text-[10px] text-slate-500">
-                {filtered && label.count !== label.totalCount
-                  ? `${formatCount(label.count)} of ${formatCount(label.totalCount)} papers`
-                  : `${formatCount(label.count)} papers`}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 function isPaperPickable(
@@ -311,6 +263,40 @@ function AtlasPaperPanel({
 
         <h2 className="text-base font-semibold text-white leading-snug">{paper.title}</h2>
 
+        {!detailLoading && (detail?.iitd_faculty?.length ?? 0) > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
+              <User className="h-3.5 w-3.5" /> IIT Delhi faculty
+            </p>
+            <ul className="space-y-2">
+              {detail!.iitd_faculty!.map((f) => (
+                <li key={f.facultyId}>
+                  {f.kerberos ? (
+                    <a
+                      href={`/faculty/${f.kerberos}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 hover:bg-cyan-950/50 transition-colors"
+                    >
+                      <span className="font-medium text-cyan-200">{f.name}</span>
+                      {f.department && (
+                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
+                      )}
+                    </a>
+                  ) : (
+                    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-2">
+                      <span className="font-medium text-white">{f.name}</span>
+                      {f.department && (
+                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {([
             { label: paper.theme, type: "theme" as const },
@@ -365,49 +351,6 @@ function AtlasPaperPanel({
           </div>
         )}
 
-        {!detailLoading && detail?.abstract && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
-              <BookOpen className="h-3.5 w-3.5" /> Abstract
-            </p>
-            <p className="text-sm text-slate-300 leading-relaxed line-clamp-8">{detail.abstract}</p>
-          </div>
-        )}
-
-        {!detailLoading && (detail?.iitd_faculty?.length ?? 0) > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
-              <User className="h-3.5 w-3.5" /> IIT Delhi faculty
-            </p>
-            <ul className="space-y-2">
-              {detail!.iitd_faculty!.map((f) => (
-                <li key={f.facultyId}>
-                  {f.kerberos ? (
-                    <a
-                      href={`/faculty/${f.kerberos}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-lg border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 hover:bg-cyan-950/50 transition-colors"
-                    >
-                      <span className="font-medium text-cyan-200">{f.name}</span>
-                      {f.department && (
-                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
-                      )}
-                    </a>
-                  ) : (
-                    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-2">
-                      <span className="font-medium text-white">{f.name}</span>
-                      {f.department && (
-                        <span className="block text-xs text-slate-400 mt-0.5">{f.department}</span>
-                      )}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {!detailLoading && (detail?.authors?.length ?? 0) > 0 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
@@ -445,6 +388,7 @@ function AtlasPaperPanel({
 }
 
 export default function ResearchAtlas() {
+  const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const comboRef = useRef<HTMLDivElement>(null);
@@ -472,10 +416,12 @@ export default function ResearchAtlas() {
   const searchQueryRef = useRef("");
   const highlightSetRef = useRef<Set<number>>(new Set());
   const searchFilterRef = useRef<Set<number> | null>(null);
+  const viewOnlyRef = useRef(false);
 
   const [papers, setPapers] = useState<KgAtlasPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilterSet, setSearchFilterSet] = useState<Set<number> | null>(null);
@@ -548,11 +494,28 @@ export default function ResearchAtlas() {
   const hasSuggestions =
     suggestions.length > 0 || facultySuggestions.length > 0 || departmentSuggestions.length > 0;
 
+  const isViewMode = atlasMode === "view";
+
+  useEffect(() => {
+    viewOnlyRef.current = isViewMode;
+  }, [isViewMode]);
+
   useEffect(() => {
     fetchKgFacultyIndex()
       .then(setFacultyList)
       .catch(() => setFacultyList([]));
   }, []);
+
+  useEffect(() => {
+    const theme = searchParams.get("theme")?.trim();
+    if (!theme) return;
+    setQuery(theme);
+    searchQueryRef.current = theme;
+    setSearchQuery(theme);
+    setSearchFacultyOnlyId(null);
+    setSearchDepartmentOnly(null);
+    setAtlasMode("interactive");
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -728,9 +691,36 @@ export default function ResearchAtlas() {
       highlightLevel: ClusterLevel | null,
       searchFilter: Set<number> | null,
       themeColors: Map<string, THREE.Color>,
+      viewOnly: boolean,
     ) => {
       const scene = sceneRef.current;
       if (!scene || !index) return;
+
+      const colors = scene.colorAttr.array as Float32Array;
+      const sizes = scene.sizeAttr.array as Float32Array;
+      const alphas = scene.alphaAttr.array as Float32Array;
+
+      if (viewOnly) {
+        highlightSetRef.current = new Set();
+        setShowTierLegend(false);
+        setClusterHighlightCount(0);
+
+        for (let i = 0; i < paperList.length; i++) {
+          const paper = paperList[i];
+          const ci = i * 3;
+          const color = themeColors.get(paper.theme) ?? BASE_COLOR;
+          colors[ci] = color.r;
+          colors[ci + 1] = color.g;
+          colors[ci + 2] = color.b;
+          sizes[i] = BASE_SIZE;
+          alphas[i] = 0.92;
+        }
+
+        scene.colorAttr.needsUpdate = true;
+        scene.sizeAttr.needsUpdate = true;
+        scene.alphaAttr.needsUpdate = true;
+        return;
+      }
 
       const searchActive = Boolean(searchFilter && searchFilter.size > 0);
       const clusterHighlightActive = Boolean(highlightLevel && selectedPaper);
@@ -758,9 +748,6 @@ export default function ResearchAtlas() {
         setClusterHighlightCount(0);
       }
 
-      const colors = scene.colorAttr.array as Float32Array;
-      const sizes = scene.sizeAttr.array as Float32Array;
-      const alphas = scene.alphaAttr.array as Float32Array;
       const hoveredIdx = hoveredPaper?.i ?? -1;
       const selectedIdx = selectedPaper?.i ?? -1;
 
@@ -827,6 +814,7 @@ export default function ResearchAtlas() {
       activeHighlightLevel,
       searchFilterSet,
       themeColorMap,
+      isViewMode,
     );
   }, [
     papers,
@@ -837,6 +825,7 @@ export default function ResearchAtlas() {
     searchFilterSet,
     themeColorMap,
     applyHighlights,
+    isViewMode,
   ]);
 
   useEffect(() => {
@@ -874,7 +863,7 @@ export default function ResearchAtlas() {
     renderer.setClearColor(BG, 1);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(BG, 0.08);
+    scene.fog = new THREE.FogExp2(BG, 0.05);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
     camera.position.set(0, 0, 2.4);
@@ -997,6 +986,7 @@ export default function ResearchAtlas() {
     let hoverFrame = 0;
 
     const pickPaper = (clientX: number, clientY: number): KgAtlasPaper | null => {
+      if (viewOnlyRef.current) return null;
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -1014,6 +1004,11 @@ export default function ResearchAtlas() {
     };
 
     const onMove = (e: MouseEvent) => {
+      if (viewOnlyRef.current) {
+        setHovered(null);
+        setCanvasCursor("grab");
+        return;
+      }
       hoverFrame++;
       if (hoverFrame % 2 !== 0) return;
       setTooltipPos({
@@ -1026,6 +1021,7 @@ export default function ResearchAtlas() {
     };
 
     const onClick = (e: MouseEvent) => {
+      if (viewOnlyRef.current) return;
       const paper = pickPaper(e.clientX, e.clientY);
       if (!paper) return;
       setSelected(paper);
@@ -1152,6 +1148,16 @@ export default function ResearchAtlas() {
     setMatchedDepartments([]);
   };
 
+  const enterViewMode = () => {
+    clearHighlights();
+    setComboOpen(false);
+    setAtlasMode("view");
+  };
+
+  const enterInteractiveMode = () => {
+    setAtlasMode("interactive");
+  };
+
   const resetView = () => {
     const s = sceneRef.current;
     if (!s) return;
@@ -1190,22 +1196,22 @@ export default function ResearchAtlas() {
         return `No papers match “${searchQuery.trim()}” — try faculty, department, or keyword`;
       }
       if (searchDepartmentOnly && matchedDepartments.length === 1) {
-        return `${formatCount(searchMatchCount)} papers · ${matchedDepartments[0].department} · unrelated papers hidden`;
+        return `${formatCount(searchMatchCount)} papers · ${matchedDepartments[0].department}`;
       }
       if (searchFacultyOnlyId && matchedFaculty.length === 1) {
-        return `${formatCount(searchMatchCount)} papers by ${matchedFaculty[0].name} · unrelated papers hidden`;
+        return `${formatCount(searchMatchCount)} papers by ${matchedFaculty[0].name}`;
       }
       if (matchedDepartments.length > 0 && matchedFaculty.length === 0) {
         const deptNames = matchedDepartments.slice(0, 2).map((d) => d.department).join(", ");
         const suffix = matchedDepartments.length > 2 ? ` +${matchedDepartments.length - 2} more` : "";
-        return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” (${deptNames}${suffix}) · unrelated hidden`;
+        return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” (${deptNames}${suffix})`;
       }
       if (matchedFaculty.length > 0) {
         const facNames = matchedFaculty.slice(0, 2).map((f) => f.name).join(", ");
         const suffix = matchedFaculty.length > 2 ? ` +${matchedFaculty.length - 2} more` : "";
-        return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” (${facNames}${suffix}) · unrelated hidden`;
+        return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” (${facNames}${suffix})`;
       }
-      return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” · unrelated papers hidden · click a dot, then pick a level in sidebar`;
+      return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” · click a dot, then pick a level in sidebar`;
     }
     if (clusterIndex) {
       return `${formatCount(papers.length)} papers · ${clusterIndex.themes.length} themes · ${clusterIndex.subdomains.length} sub-domains · ${clusterIndex.topics.length} topics`;
@@ -1229,12 +1235,99 @@ export default function ResearchAtlas() {
     papers.length,
   ]);
 
-  const showTooltip = hovered && !selected;
+  const showTooltip = hovered && !selected && !isViewMode;
+
+  const modeToggle = (
+    <div
+      className="inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg"
+      role="group"
+      aria-label="Atlas display mode"
+    >
+      <button
+        type="button"
+        onClick={enterViewMode}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+          isViewMode
+            ? "bg-white text-black shadow-sm"
+            : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+        )}
+        aria-pressed={isViewMode}
+      >
+        <Eye className="h-3.5 w-3.5" />
+        View
+      </button>
+      <button
+        type="button"
+        onClick={enterInteractiveMode}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+          !isViewMode
+            ? "bg-white text-black shadow-sm"
+            : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+        )}
+        aria-pressed={!isViewMode}
+      >
+        <MousePointer2 className="h-3.5 w-3.5" />
+        Explore
+      </button>
+    </div>
+  );
 
   return (
-    <div className="relative flex flex-col flex-1 min-h-0 bg-[#0a1224] text-white">
+    <div className="relative flex flex-col flex-1 min-h-0 bg-black text-white">
+      <div className="absolute top-4 right-4 z-30 pointer-events-auto flex items-center gap-2">
+        {!isViewMode && (searchActive || selected) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={clearHighlights}
+            className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800"
+          >
+            Clear
+          </Button>
+        )}
+        {!isViewMode && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => zoomBy(1 / 1.3)}
+              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => zoomBy(1.3)}
+              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resetView}
+              className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Reset view
+            </Button>
+          </>
+        )}
+        {modeToggle}
+      </div>
+
+      {!isViewMode && (
       <header className="absolute top-0 inset-x-0 z-20 pointer-events-none">
-        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2">
+        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-52 sm:pr-64">
           <div ref={comboRef} className="flex-1 max-w-3xl mx-auto pointer-events-auto">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1354,52 +1447,9 @@ export default function ResearchAtlas() {
               </div>
             )}
           </div>
-
-          <div className="flex items-center gap-2 pointer-events-auto shrink-0 pt-0.5">
-            {(searchActive || selected) && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={clearHighlights}
-                className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800"
-              >
-                Clear
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => zoomBy(1 / 1.3)}
-              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => zoomBy(1.3)}
-              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={resetView}
-              className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800 hover:text-white"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Reset view
-            </Button>
-          </div>
         </div>
       </header>
+      )}
 
       <div ref={containerRef} className="absolute inset-0">
         <canvas
@@ -1410,7 +1460,7 @@ export default function ResearchAtlas() {
       </div>
 
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a1224]/80 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-slate-300">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span>Loading {formatCount(69677)} papers…</span>
@@ -1423,14 +1473,6 @@ export default function ResearchAtlas() {
             {error}
           </div>
         </div>
-      )}
-
-      {!loading && !error && (
-        <AtlasThemeLegend
-          labels={filteredThemeLabels}
-          dimmed={searchActive || Boolean(selected)}
-          filtered={themeFilterActive}
-        />
       )}
 
       {showTooltip && (
@@ -1453,7 +1495,7 @@ export default function ResearchAtlas() {
         </div>
       )}
 
-      {selected && (
+      {selected && !isViewMode && (
         <AtlasPaperPanel
           paper={selected}
           detail={paperDetail}

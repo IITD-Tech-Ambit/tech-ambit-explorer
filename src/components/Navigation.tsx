@@ -35,9 +35,9 @@ const Navigation = () => {
   const navItems = [
     { name: "Explore", path: "/explore" },
     { name: "Directory", path: "/directory" },
+    { name: "Knowledge Graph", path: "/knowledge-graph" },
     { name: "Magazines", path: "/magazines" },
     { name: "Mind Map", path: "/mindmap" },
-    { name: "Knowledge Graph", path: "/knowledge-graph" },
     { name: "Contributors", path: "/contributors" },
   ];
 

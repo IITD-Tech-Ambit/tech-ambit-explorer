@@ -5,7 +5,7 @@ import { useElementWidth } from "@/hooks/use-element-width";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
-  ChevronDown, Copy, Check, RotateCcw, Download, Pencil,
+  ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
 } from "lucide-react";
 import type { ChatSource, ChatChartEvent, LineChartData, BarChartData, PieChartData } from "@/lib/api/services/chatService";
 import {
@@ -371,6 +371,70 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
   );
 };
 
+// ── Chart → PNG export ──
+
+async function chartToPng(container: HTMLDivElement): Promise<Blob | null> {
+  // Target the Recharts SVG specifically — querySelector("svg") would find the
+  // lucide icon in the chart header first, giving a tiny icon instead of the chart.
+  const svg = container.querySelector<SVGSVGElement>("svg.recharts-surface");
+  if (!svg) return null;
+
+  const rect = svg.getBoundingClientRect();
+  const w = Math.round(rect.width) || 600;
+  const h = Math.round(rect.height) || 300;
+
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(w));
+  clone.setAttribute("height", String(h));
+
+  // Inline computed styles on every element so CSS variables resolve in the exported image
+  const srcEls = Array.from(svg.querySelectorAll("*"));
+  const dstEls = Array.from(clone.querySelectorAll("*"));
+  const props = [
+    "fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-opacity",
+    "opacity", "font-size", "font-family", "font-weight", "text-anchor", "dominant-baseline",
+  ];
+  srcEls.forEach((src, i) => {
+    const dst = dstEls[i] as SVGElement;
+    if (!dst) return;
+    const cs = window.getComputedStyle(src as Element);
+    props.forEach((p) => {
+      const v = cs.getPropertyValue(p);
+      if (v) dst.style.setProperty(p, v);
+    });
+  });
+
+  // White background rect so the chart is readable on any surface
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", "100%");
+  bg.setAttribute("height", "100%");
+  bg.setAttribute("fill", "white");
+  clone.insertBefore(bg, clone.firstChild);
+
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  return new Promise<Blob | null>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
+      ctx.scale(dpr, dpr);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(resolve, "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
 // ── Action button bar ──
 
 const btnCls =
@@ -390,6 +454,7 @@ const AssistantActions = ({
   canRetry?: boolean;
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copiedChart, setCopiedChart] = useState(false);
 
   const handleCopy = async () => {
     try {
@@ -401,19 +466,29 @@ const AssistantActions = ({
     }
   };
 
-  const handleDownload = () => {
+  const handleCopyChart = async () => {
     const container = chartRef.current;
     if (!container) return;
-    const svg = container.querySelector("svg");
-    if (!svg) return;
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    const svgStr = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+    const blob = await chartToPng(container);
+    if (!blob) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setCopiedChart(true);
+      setTimeout(() => setCopiedChart(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const handleDownload = async () => {
+    const container = chartRef.current;
+    if (!container) return;
+    const blob = await chartToPng(container);
+    if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "chart.svg";
+    a.download = "chart.png";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -431,7 +506,17 @@ const AssistantActions = ({
         </button>
       )}
       {hasChart && (
-        <button onClick={handleDownload} title="Download chart" className={btnCls}>
+        <button onClick={handleCopyChart} title={copiedChart ? "Copied!" : "Copy chart as image"} className={btnCls}>
+          {copiedChart ? (
+            <Check className="w-3 h-3 text-emerald-500" />
+          ) : (
+            <ImageIcon className="w-3 h-3" />
+          )}
+          <span>{copiedChart ? "Copied" : "Copy chart"}</span>
+        </button>
+      )}
+      {hasChart && (
+        <button onClick={handleDownload} title="Download chart as PNG" className={btnCls}>
           <Download className="w-3 h-3" />
           <span>Download</span>
         </button>
