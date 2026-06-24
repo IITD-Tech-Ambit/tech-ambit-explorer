@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  BookOpen, Building2, Calendar, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
+  Building2, Calendar, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
   Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -348,15 +348,6 @@ function AtlasPaperPanel({
           <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading full details…
-          </div>
-        )}
-
-        {!detailLoading && detail?.abstract && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1">
-              <BookOpen className="h-3.5 w-3.5" /> Abstract
-            </p>
-            <p className="text-sm text-slate-300 leading-relaxed line-clamp-8">{detail.abstract}</p>
           </div>
         )}
 
