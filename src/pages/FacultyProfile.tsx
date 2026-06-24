@@ -10,6 +10,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useFacultyByKerberos, useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
 import PublicationTimeline from "@/components/PublicationTimeline";
+import { getDepartmentUrl } from "@/lib/deptUrls";
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
@@ -63,6 +64,7 @@ const FacultyProfile = () => {
     const deptName = dept?.name?.trim();
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
+    const deptUrl = getDepartmentUrl(deptName);
 
     const hIndex = summaryData?.hIndex ?? faculty.hIndex ?? 0;
     const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
@@ -150,17 +152,39 @@ const FacultyProfile = () => {
 
                             <div className="flex flex-wrap gap-3 mb-5">
                                 {deptName && (
-                                    <div className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm">
-                                        <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
-                                            <Building2 className="w-3.5 h-3.5 text-primary" />
+                                    deptUrl ? (
+                                        <a
+                                            href={deptUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm text-foreground hover:text-primary hover:border-primary/30 transition-colors group"
+                                        >
+                                            <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
+                                                <Building2 className="w-3.5 h-3.5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-none mb-0.5">
+                                                    {deptCategory || "Department"}
+                                                </p>
+                                                <p className="text-sm font-semibold leading-none flex items-center gap-1">
+                                                    {deptName}
+                                                    <ExternalLink className="w-3 h-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                                </p>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm">
+                                            <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
+                                                <Building2 className="w-3.5 h-3.5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-none mb-0.5">
+                                                    {deptCategory || "Department"}
+                                                </p>
+                                                <p className="text-sm font-semibold text-foreground leading-none">{deptName}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-none mb-0.5">
-                                                {deptCategory || "Department"}
-                                            </p>
-                                            <p className="text-sm font-semibold text-foreground leading-none">{deptName}</p>
-                                        </div>
-                                    </div>
+                                    )
                                 )}
                                 {faculty.email && (
                                     <a
