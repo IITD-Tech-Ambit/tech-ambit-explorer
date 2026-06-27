@@ -19,6 +19,8 @@ export interface ChatSource {
   link: string | null;
   document_scopus_id: string | null;
   document_eid: string | null;
+  kerberos: string | null;
+  faculty_name: string | null;
 }
 
 // Chart data structures matching backend sse_events.py
