@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
   ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
+  UserRound,
 } from "lucide-react";
 import type { ChatSource, ChatChartEvent, LineChartData, BarChartData, PieChartData } from "@/lib/api/services/chatService";
 import {
@@ -311,63 +312,164 @@ function resolvePaperHref(source: ChatSource): string | null {
 }
 
 const SourceItem = ({ source }: { source: ChatSource }) => {
-  const authors =
-    source.authors.slice(0, 2).join(", ") + (source.authors.length > 2 ? " et al." : "");
-  const meta = [source.publication_year, authors].filter(Boolean).join(" · ");
   const href = resolvePaperHref(source);
+  const authors = source.authors.slice(0, 2).join(", ") + (source.authors.length > 2 ? ` +${source.authors.length - 2}` : "");
 
-  const inner = (
-    <div className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-accent/20 transition-colors group/item">
-      <span className="flex-shrink-0 w-5 h-5 rounded-md bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center mt-0.5">
+  const content = (
+    <div className="group/item flex items-start gap-3 px-4 py-3 hover:bg-primary/[0.03] transition-colors duration-150">
+      {/* Index badge */}
+      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center mt-0.5 ring-1 ring-primary/15">
         {source.index}
       </span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-[12px] font-medium text-foreground leading-snug line-clamp-2">
+
+      {/* Body */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Title */}
+        <p className="text-[12px] font-medium text-foreground leading-snug line-clamp-2 group-hover/item:text-primary transition-colors duration-150">
           {source.title}
-        </span>
-        {meta && (
-          <span className="block text-[10px] text-muted-foreground truncate mt-0.5">{meta}</span>
-        )}
-      </span>
+        </p>
+
+        {/* Meta row */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {source.publication_year && (
+            <span className="text-[10px] text-muted-foreground/70 font-medium">
+              {source.publication_year}
+            </span>
+          )}
+          {authors && (
+            <span className="text-[10px] text-muted-foreground/60 truncate max-w-[180px]">
+              {authors}
+            </span>
+          )}
+          {/* IIT Delhi faculty badge */}
+          {source.faculty_name && source.kerberos && (
+            <a
+              href={`/faculty/${source.kerberos}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold no-underline text-primary bg-primary/8 border border-primary/20 hover:bg-primary/15 hover:border-primary/40 transition-all duration-150 flex-shrink-0"
+            >
+              <UserRound className="w-2.5 h-2.5 flex-shrink-0" />
+              {source.faculty_name}
+              <ExternalLink className="w-2 h-2 flex-shrink-0 opacity-50" />
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* External link arrow */}
       {href && (
-        <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover/item:text-primary flex-shrink-0 mt-1 transition-colors" />
+        <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
       )}
     </div>
   );
 
   return href ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className="block">
-      {inner}
+      {content}
     </a>
   ) : (
-    <div>{inner}</div>
+    <div>{content}</div>
   );
 };
 
 const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-border/40 overflow-hidden">
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{
+        border: "1px solid hsl(var(--border)/0.45)",
+        background: "hsl(var(--card))",
+        boxShadow: "0 1px 6px -2px rgba(0,0,0,0.07)",
+      }}
+    >
+      {/* Header toggle */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-1.5 px-3 py-2 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 transition-colors duration-150 text-left hover:bg-muted/30"
+        style={{ borderBottom: open ? "1px solid hsl(var(--border)/0.35)" : "none" }}
       >
-        <BookOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-1">
+        {/* Icon */}
+        <div
+          className="w-[22px] h-[22px] rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{
+            background:
+              "linear-gradient(135deg, hsl(var(--primary)/0.12), hsl(var(--accent)/0.08))",
+            border: "1px solid hsl(var(--primary)/0.15)",
+          }}
+        >
+          <BookOpen className="w-3 h-3 text-primary" />
+        </div>
+        <span className="text-[11px] font-semibold text-foreground/80 flex-1">
           {sources.length} Source{sources.length !== 1 ? "s" : ""}
         </span>
         <ChevronDown
-          className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
         />
       </button>
+
+      {/* Items */}
       {open && (
-        <div className="divide-y divide-border/20 border-t border-border/30">
+        <div className="divide-y" style={{ borderColor: "hsl(var(--border)/0.25)" }}>
           {sources.map((s) => (
             <SourceItem key={s.id || s.title} source={s} />
           ))}
         </div>
       )}
     </div>
+  );
+};
+
+// ── Markdown link renderer ──
+// Faculty links (/faculty/kerberos) → pill chip; everything else → styled external link
+
+const MarkdownLink = ({
+  href,
+  children,
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  const isFaculty = href?.startsWith("/faculty/");
+
+  if (isFaculty) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="
+          inline-flex items-center gap-1 align-middle
+          px-2 py-0.5 mx-0.5 rounded-full
+          text-[11px] font-semibold no-underline
+          text-primary bg-primary/8 border border-primary/20
+          hover:bg-primary/14 hover:border-primary/40 hover:shadow-sm
+          transition-all duration-150 cursor-pointer
+        "
+      >
+        <UserRound className="w-3 h-3 flex-shrink-0 opacity-80" />
+        <span>{children}</span>
+        <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-50" />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="
+        inline-flex items-baseline gap-0.5
+        text-primary underline decoration-primary/30 underline-offset-2
+        hover:decoration-primary/70 hover:text-primary/90
+        transition-colors duration-150
+      "
+    >
+      <span>{children}</span>
+      <ExternalLink className="w-3 h-3 flex-shrink-0 self-center opacity-50 ml-0.5" />
+    </a>
   );
 };
 
@@ -539,16 +641,19 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
   if (message.role === "user") {
     return (
       <div className="group/msg flex flex-col items-end gap-0.5">
-        <div className="max-w-[88%] sm:max-w-[82%] px-3.5 sm:px-4 py-2.5 rounded-2xl rounded-br-sm bg-primary text-primary-foreground text-sm leading-relaxed shadow-sm break-words">
+        <div
+          className="max-w-[88%] sm:max-w-[82%] px-3.5 sm:px-4 py-2.5 rounded-2xl rounded-br-sm text-primary-foreground text-sm leading-relaxed break-words"
+          style={{
+            background:
+              "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(222 68% 40%) 55%, hsl(var(--accent)/0.85) 100%)",
+            boxShadow: "0 2px 10px -2px hsl(var(--primary)/0.35)",
+          }}
+        >
           {message.content}
         </div>
         {onEdit && (
           <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
-            <button
-              onClick={() => onEdit(message.content)}
-              title="Edit query"
-              className={btnCls}
-            >
+            <button onClick={() => onEdit(message.content)} title="Edit query" className={btnCls}>
               <Pencil className="w-3 h-3" />
               <span>Edit</span>
             </button>
@@ -563,12 +668,27 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
     <div className="group/msg flex flex-col gap-2 w-full min-w-0 max-w-full">
       {message.content && (
         <div
-          className={`w-full min-w-0 max-w-full px-4 py-3 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words shadow-sm border ${
+          className={`relative w-full min-w-0 max-w-full pl-4 pr-4 py-3 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words ${
             message.error
-              ? "bg-destructive/6 text-destructive border-destructive/20"
-              : "bg-card text-foreground border-border/40"
+              ? "bg-destructive/6 text-destructive border border-destructive/20"
+              : "bg-card text-foreground border border-border/35"
           }`}
+          style={
+            !message.error
+              ? { boxShadow: "0 1px 4px -1px rgba(0,0,0,0.06)" }
+              : undefined
+          }
         >
+          {/* Thin left accent bar */}
+          {!message.error && (
+            <div
+              className="absolute left-0 top-3 bottom-3 w-[2.5px] rounded-r-full"
+              style={{
+                background:
+                  "linear-gradient(180deg, hsl(var(--primary)/0.55), hsl(var(--accent)/0.4))",
+              }}
+            />
+          )}
           <div
             className="
               prose prose-sm dark:prose-invert max-w-none
@@ -580,7 +700,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
               prose-h1:text-[15px] prose-h2:text-[14px] prose-h3:text-[13px]
               prose-strong:text-foreground prose-strong:font-semibold
               prose-em:text-muted-foreground
-              prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+              prose-a:no-underline
               prose-code:text-primary prose-code:bg-primary/8 prose-code:px-1.5 prose-code:py-0.5
               prose-code:rounded prose-code:text-[11px] prose-code:font-mono prose-code:font-medium
               prose-pre:bg-muted prose-pre:rounded-lg prose-pre:text-xs prose-pre:overflow-x-auto
@@ -591,7 +711,12 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
               [&>*:first-child]:mt-0 [&>*:last-child]:mb-0
             "
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{ a: MarkdownLink }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         </div>
       )}
