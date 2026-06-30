@@ -4,13 +4,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
+  Building2, Calendar, ChevronDown, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
   Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
+  KgAtlasClusterBreakdown,
   KgAtlasDepartmentMatch,
   KgAtlasFacultyMatch,
   KgAtlasPaper,
@@ -18,6 +19,7 @@ import type {
   KgFacultyItem,
 } from "./types";
 import {
+  fetchKgAtlasClusterBreakdown,
   fetchKgAtlasDepartmentSearch,
   fetchKgAtlasFacultySearch,
   fetchKgDepartmentAtlasIndices,
@@ -30,7 +32,10 @@ import {
 import { getPaperExternalUrl } from "./paperLink";
 import {
   applyFilteredThemeCounts,
+  broadThemeClusterColor,
   buildAtlasClusterIndex,
+  buildThemeClusterBreakdownClient,
+  paperMatchesQuery,
   buildDepartmentList,
   buildThemeColorMap,
   clusterKey,
@@ -102,6 +107,8 @@ function createThemeLabelElement(
     "transform:translate(-8px,-50%)",
     "text-align:left",
     "white-space:nowrap",
+    "padding:6px 10px",
+    "cursor:pointer",
   ].join(";");
 
   const countText = formatThemeCount(label, filtered);
@@ -133,17 +140,20 @@ function createThemeLabelElement(
   );
 
   const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.014, 10, 10),
+    new THREE.SphereGeometry(0.018, 10, 10),
     new THREE.MeshBasicMaterial({
       color: label.color,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.9,
       depthWrite: false,
     }),
   );
   marker.position.copy(cluster);
+  marker.userData.theme = label.theme;
+  marker.userData.isThemeMarker = true;
 
   const countEl = el.querySelector(".atlas-theme-count") as HTMLSpanElement;
+  el.dataset.theme = label.theme;
   return { el, countEl, line, marker };
 }
 
@@ -153,6 +163,154 @@ function isPaperPickable(
 ): boolean {
   if (!searchFilter) return true;
   return searchFilter.has(paper.i);
+}
+
+function AtlasThemeClusterPanel({
+  theme,
+  query,
+  breakdown,
+  loading,
+  onClose,
+  onPaperClick,
+}: {
+  theme: string;
+  query: string;
+  breakdown: KgAtlasClusterBreakdown | null;
+  loading: boolean;
+  onClose: () => void;
+  onPaperClick: (paper: KgAtlasPaper) => void;
+}) {
+  const [openDept, setOpenDept] = useState<string | null>(null);
+  const themeColor = broadThemeClusterColor(theme);
+
+  return (
+    <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[420px] border-l border-slate-700/60 bg-slate-950/95 backdrop-blur-md overflow-y-auto shadow-2xl">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-700/60 bg-slate-950/95">
+        <span className="text-xs font-semibold uppercase tracking-wide text-cyan-400/90">
+          Theme cluster
+        </span>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={onClose}
+          className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="p-4 space-y-4">
+        <div
+          className="rounded-xl border p-3"
+          style={{ borderColor: `${themeColor}55`, backgroundColor: `${themeColor}12` }}
+        >
+          <div className="flex items-start gap-2">
+            <span
+              className="mt-1 h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: themeColor, boxShadow: `0 0 8px ${themeColor}` }}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white leading-snug">{theme}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Papers matching “{query}” in this theme
+                {breakdown ? ` · ${formatCount(breakdown.totalPapers)} total` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading departments…
+          </div>
+        )}
+
+        {!loading && breakdown && breakdown.departments.length === 0 && (
+          <p className="text-sm text-slate-500">No papers found for this theme and search.</p>
+        )}
+
+        {!loading && breakdown && breakdown.departments.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1">
+              <Building2 className="h-3.5 w-3.5" />
+              Departments ({breakdown.departments.length})
+            </p>
+            {breakdown.departments.map((dept) => {
+              const isOpen = openDept === dept.department;
+              return (
+                <div
+                  key={dept.department}
+                  className="rounded-xl border border-slate-700/50 bg-slate-900/40 overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenDept(isOpen ? null : dept.department)}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-800/50 transition-colors"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-slate-500 transition-transform",
+                        isOpen && "rotate-180",
+                      )}
+                    />
+                    <span className="flex-1 min-w-0 text-sm font-medium text-slate-200 truncate">
+                      {dept.department}
+                    </span>
+                    <span className="shrink-0 text-xs text-slate-500">
+                      {formatCount(dept.paperCount)} papers
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <ul className="border-t border-slate-800/80 px-2 py-2 space-y-1 max-h-64 overflow-y-auto">
+                      {dept.papers.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onPaperClick({
+                                i: p.i,
+                                id: p.id,
+                                title: p.title,
+                                theme,
+                                subdomain: "",
+                                topic: p.topic,
+                                citations: p.citations,
+                                x: 0,
+                                y: 0,
+                                z: 0,
+                              })
+                            }
+                            className="w-full rounded-lg px-2 py-2 text-left hover:bg-slate-800/70 transition-colors"
+                          >
+                            <span className="block text-xs text-white leading-snug line-clamp-2">
+                              {p.title}
+                            </span>
+                            {p.topic && (
+                              <span className="block mt-0.5 text-[10px] text-slate-500 truncate">
+                                {p.topic}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                      {dept.paperCount > dept.papers.length && (
+                        <li className="px-2 py-1 text-[10px] text-slate-500">
+                          Showing {formatCount(dept.papers.length)} of {formatCount(dept.paperCount)} papers
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
 }
 
 function AtlasPaperPanel({
@@ -417,6 +575,8 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const highlightSetRef = useRef<Set<number>>(new Set());
   const searchFilterRef = useRef<Set<number> | null>(null);
   const viewOnlyRef = useRef(false);
+  const searchActiveRef = useRef(false);
+  const themeClusterClickRef = useRef<(theme: string) => void>(() => {});
 
   const [papers, setPapers] = useState<KgAtlasPaper[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,8 +602,12 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const [clusterName, setClusterName] = useState("");
   const [paperDetail, setPaperDetail] = useState<KgPaperMeta | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedThemeCluster, setSelectedThemeCluster] = useState<string | null>(null);
+  const [clusterBreakdown, setClusterBreakdown] = useState<KgAtlasClusterBreakdown | null>(null);
+  const [clusterBreakdownLoading, setClusterBreakdownLoading] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [canvasCursor, setCanvasCursor] = useState("grab");
+  const [sceneReady, setSceneReady] = useState(false);
 
   const clusterIndex = useMemo(
     () => (papers.length ? buildAtlasClusterIndex(papers) : null),
@@ -589,6 +753,8 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     setActiveHighlightLevel(null);
     setSelected(null);
     setClusterName("");
+    setSelectedThemeCluster(null);
+    setClusterBreakdown(null);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -715,6 +881,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       searchFilter: Set<number> | null,
       themeColors: Map<string, THREE.Color>,
       viewOnly: boolean,
+      activeThemeCluster: string | null,
     ) => {
       const scene = sceneRef.current;
       if (!scene || !index) return;
@@ -804,6 +971,10 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
               : MATCH_COLORS[lvl];
           size = CLUSTER_HIGHLIGHT_SIZES[lvl];
           alpha = 1;
+        } else if (activeThemeCluster && searchActive && searchFilter!.has(paper.i) && paper.theme === activeThemeCluster) {
+          color = paperThemeColor(paper);
+          size = 0.048;
+          alpha = 1;
         } else if (clusterHighlightActive && !(searchActive && searchFilter!.has(paper.i))) {
           color = DIM_COLOR;
           size = DIM_SIZE;
@@ -838,6 +1009,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       searchFilterSet,
       themeColorMap,
       isViewMode,
+      selectedThemeCluster,
     );
   }, [
     papers,
@@ -849,11 +1021,12 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     themeColorMap,
     applyHighlights,
     isViewMode,
+    selectedThemeCluster,
   ]);
 
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene?.themeLabelRefs?.length) return;
+    if (!sceneReady || !scene?.themeLabelRefs?.length) return;
 
     for (const ref of scene.themeLabelRefs) {
       const label = filteredThemeLabels.find((l) => l.theme === ref.theme);
@@ -870,7 +1043,69 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
           : `${formatCount(label.count)} papers`;
       ref.countEl.textContent = countText;
     }
-  }, [filteredThemeLabels, themeFilterActive]);
+  }, [filteredThemeLabels, themeFilterActive, sceneReady]);
+
+  const searchActive = Boolean(searchQuery.trim());
+
+  useEffect(() => {
+    searchActiveRef.current = searchActive;
+  }, [searchActive]);
+
+  const handleThemeClusterClick = useCallback(async (theme: string) => {
+    if (isViewMode) return;
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setSelected(null);
+    setActiveHighlightLevel(null);
+    setClusterName("");
+    setSelectedThemeCluster(theme);
+
+    const filter =
+      searchFilterSet && searchFilterSet.size > 0
+        ? searchFilterSet
+        : new Set(papers.filter((p) => paperMatchesQuery(p, q)).map((p) => p.i));
+
+    setClusterBreakdown(buildThemeClusterBreakdownClient(papers, filter, theme, q));
+    setClusterBreakdownLoading(false);
+
+    try {
+      const data = await fetchKgAtlasClusterBreakdown(theme, q);
+      setClusterBreakdown(data);
+    } catch {
+      // Client breakdown already shown.
+    }
+  }, [searchQuery, isViewMode, searchFilterSet, papers]);
+
+  const closeThemeCluster = useCallback(() => {
+    setSelectedThemeCluster(null);
+    setClusterBreakdown(null);
+  }, []);
+
+  useEffect(() => {
+    themeClusterClickRef.current = handleThemeClusterClick;
+  }, [handleThemeClusterClick]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene?.themeLabelRefs?.length) return;
+
+    const labelsInteractive = !isViewMode && searchActive;
+
+    for (const ref of scene.themeLabelRefs) {
+      const htmlEl = ref.obj.element as HTMLDivElement;
+      htmlEl.style.pointerEvents = labelsInteractive ? "auto" : "none";
+      htmlEl.style.cursor = labelsInteractive ? "pointer" : "default";
+      htmlEl.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+      htmlEl.style.opacity = labelsInteractive ? "1" : "0.92";
+      if (selectedThemeCluster === ref.theme) {
+        htmlEl.style.transform = "translate(-8px,-50%) scale(1.06)";
+      } else {
+        htmlEl.style.transform = "translate(-8px,-50%)";
+      }
+      ref.marker.scale.setScalar(1);
+    }
+  }, [isViewMode, selectedThemeCluster, sceneReady, searchActive]);
 
   useEffect(() => {
     if (!papers.length || !canvasRef.current || !containerRef.current) return;
@@ -968,6 +1203,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     labelRenderer.domElement.style.position = "absolute";
     labelRenderer.domElement.style.inset = "0";
     labelRenderer.domElement.style.pointerEvents = "none";
+    labelRenderer.domElement.style.zIndex = "5";
     container.appendChild(labelRenderer.domElement);
 
     const themeLabelRefs: Array<{
@@ -978,8 +1214,20 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       marker: THREE.Mesh;
     }> = [];
 
+    const onThemeLabelClick = (e: Event) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const theme = (e.currentTarget as HTMLElement).dataset.theme;
+      if (theme && !viewOnlyRef.current && searchActiveRef.current) {
+        themeClusterClickRef.current(theme);
+      }
+    };
+
     for (const label of computeThemeClusterLabels(papers)) {
       const { el, countEl, line, marker } = createThemeLabelElement(label, false);
+      el.style.pointerEvents = "none";
+      el.style.cursor = "default";
+      el.addEventListener("click", onThemeLabelClick);
       const obj = new CSS2DObject(el);
       obj.position.set(label.x, label.y, label.z);
       scene.add(obj);
@@ -1002,11 +1250,25 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       papers,
       frameId: 0,
     };
+    setSceneReady(true);
 
     const raycaster = new THREE.Raycaster();
     raycaster.params.Points = { threshold: 0.035 };
     const mouse = new THREE.Vector2();
     let hoverFrame = 0;
+
+    const pickThemeCluster = (clientX: number, clientY: number): string | null => {
+      if (viewOnlyRef.current || !searchActiveRef.current) return null;
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(themeLabelRefs.map((r) => r.marker));
+      if (hits.length && hits[0].object.userData.theme) {
+        return String(hits[0].object.userData.theme);
+      }
+      return null;
+    };
 
     const pickPaper = (clientX: number, clientY: number): KgAtlasPaper | null => {
       if (viewOnlyRef.current) return null;
@@ -1045,6 +1307,11 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
 
     const onClick = (e: MouseEvent) => {
       if (viewOnlyRef.current) return;
+      const theme = pickThemeCluster(e.clientX, e.clientY);
+      if (theme) {
+        themeClusterClickRef.current(theme);
+        return;
+      }
       const paper = pickPaper(e.clientX, e.clientY);
       if (!paper) return;
       setSelected(paper);
@@ -1080,12 +1347,15 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     window.addEventListener("resize", onResize);
 
     return () => {
+      setSceneReady(false);
       cancelAnimationFrame(sceneRef.current?.frameId ?? 0);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("mouseleave", onLeave);
       window.removeEventListener("resize", onResize);
       for (const ref of themeLabelRefs) {
+        const htmlEl = ref.obj.element as HTMLDivElement;
+        htmlEl.removeEventListener("click", onThemeLabelClick);
         scene.remove(ref.obj);
         scene.remove(ref.line);
         scene.remove(ref.marker);
@@ -1169,6 +1439,8 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     setSearchDepartmentOnly(null);
     setMatchedFaculty([]);
     setMatchedDepartments([]);
+    setSelectedThemeCluster(null);
+    setClusterBreakdown(null);
   };
 
   const enterViewMode = () => {
@@ -1197,7 +1469,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     s.camera.position.addScaledVector(dir, factor > 1 ? -0.35 : 0.35);
   };
 
-  const searchActive = Boolean(searchQuery.trim());
   const highlightActive = activeHighlightLevel != null;
 
   const statusLine = useMemo(() => {
@@ -1210,6 +1481,9 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     }
     if (selected) {
       return "Paper selected · choose Topic, Sub-domain, or Broad theme in the sidebar to highlight";
+    }
+    if (selectedThemeCluster && searchActive) {
+      return `Theme cluster “${selectedThemeCluster}” · department breakdown open · click Clear to reset`;
     }
     if (searchActive) {
       if (searchLoading) {
@@ -1234,10 +1508,10 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         const suffix = matchedFaculty.length > 2 ? ` +${matchedFaculty.length - 2} more` : "";
         return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” (${facNames}${suffix})`;
       }
-      return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” · click a dot, then pick a level in sidebar`;
+      return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” · click a theme cluster for departments`;
     }
     if (clusterIndex) {
-      return `${formatCount(papers.length)} papers · ${clusterIndex.themes.length} themes · ${clusterIndex.subdomains.length} sub-domains · ${clusterIndex.topics.length} topics`;
+      return `${formatCount(papers.length)} papers · ${clusterIndex.themes.length} themes · search to filter, then click a theme for departments`;
     }
     return `All ${formatCount(papers.length)} papers · search, click a dot, then highlight from sidebar`;
   }, [
@@ -1256,6 +1530,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     clusterName,
     clusterIndex,
     papers.length,
+    selectedThemeCluster,
   ]);
 
   const showTooltip = hovered && !selected && !isViewMode;
@@ -1306,12 +1581,15 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   return (
     <div className="relative flex flex-col flex-1 min-h-0 bg-black text-white">
       <div className="absolute top-4 right-4 z-30 pointer-events-auto flex items-center gap-2">
-        {!isViewMode && (searchActive || selected) && (
+        {!isViewMode && (searchActive || selectedThemeCluster) && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={clearHighlights}
+            onClick={() => {
+              clearHighlights();
+              closeThemeCluster();
+            }}
             className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800"
           >
             Clear
@@ -1524,7 +1802,24 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         </div>
       )}
 
-      {selected && !isViewMode && (
+      {selectedThemeCluster && !isViewMode && searchActive && (
+        <AtlasThemeClusterPanel
+          theme={selectedThemeCluster}
+          query={searchQuery.trim()}
+          breakdown={clusterBreakdown}
+          loading={clusterBreakdownLoading}
+          onClose={closeThemeCluster}
+          onPaperClick={(partial) => {
+            const full = papers.find((p) => p.id === partial.id) ?? partial;
+            closeThemeCluster();
+            setSelected(full);
+            setActiveHighlightLevel(null);
+            setClusterName("");
+          }}
+        />
+      )}
+
+      {selected && !isViewMode && !selectedThemeCluster && (
         <AtlasPaperPanel
           paper={selected}
           detail={paperDetail}

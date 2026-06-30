@@ -311,7 +311,7 @@ function findMatchingTaxonomyTerms(query: string, index: AtlasClusterIndex): Tax
 }
 
 /** Inclusive substring match — broader queries always include narrower ones. */
-function paperMatchesQuery(paper: KgAtlasPaper, query: string): boolean {
+export function paperMatchesQuery(paper: KgAtlasPaper, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return false;
 
@@ -407,6 +407,51 @@ export function resolveSearchHighlights(
 ): { indices: Set<number>; matchedTerms: TaxonomyEntry[] } {
   const { visible, matchedTerms } = resolveSearchMatchLevels(query, papers, index);
   return { indices: visible, matchedTerms };
+}
+
+/** Build theme → department paper breakdown on the client (fallback when API unavailable). */
+export function buildThemeClusterBreakdownClient(
+  papers: KgAtlasPaper[],
+  searchFilter: Set<number>,
+  theme: string,
+  query: string,
+  paperLimit = 200,
+): import("./types").KgAtlasClusterBreakdown {
+  const byDept = new Map<string, { paperCount: number; papers: import("./types").KgAtlasClusterPaper[] }>();
+  let totalPapers = 0;
+
+  for (const p of papers) {
+    if (p.theme !== theme || !searchFilter.has(p.i)) continue;
+    if (!paperMatchesQuery(p, query)) continue;
+    totalPapers += 1;
+
+    const dept = p.department?.trim() || "Unassigned";
+    let entry = byDept.get(dept);
+    if (!entry) {
+      entry = { paperCount: 0, papers: [] };
+      byDept.set(dept, entry);
+    }
+    entry.paperCount += 1;
+    if (entry.papers.length < paperLimit) {
+      entry.papers.push({
+        id: p.id,
+        i: p.i,
+        title: p.title,
+        topic: p.topic,
+        citations: p.citations,
+      });
+    }
+  }
+
+  const departments = [...byDept.entries()]
+    .map(([department, entry]) => ({
+      department,
+      paperCount: entry.paperCount,
+      papers: entry.papers,
+    }))
+    .sort((a, b) => b.paperCount - a.paperCount || a.department.localeCompare(b.department));
+
+  return { theme, query, totalPapers, departments };
 }
 
 export function suggestTaxonomyTerms(query: string, index: AtlasClusterIndex, limit = 12): TaxonomyEntry[] {

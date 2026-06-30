@@ -45,6 +45,15 @@ export const fetchKgDepartmentAtlasIndices = (departments: string[]) => {
   );
 };
 
+export const fetchKgAtlasClusterBreakdown = (theme: string, q: string, paperLimit = 200) => {
+  const params = new URLSearchParams({
+    theme,
+    q,
+    paperLimit: String(paperLimit),
+  });
+  return kgFetch<import("./types").KgAtlasClusterBreakdown>(`/atlas/cluster-breakdown?${params}`);
+};
+
 export interface KgPaperMeta {
   link: string;
   document_scopus_id: string;
