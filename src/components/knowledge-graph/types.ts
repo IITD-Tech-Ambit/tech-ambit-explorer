@@ -14,10 +14,32 @@ export interface KgAtlasPaper {
   theme: string;
   subdomain: string;
   topic: string;
+  department?: string;
   citations: number;
   x: number;
   y: number;
   z: number;
+}
+
+export interface KgAtlasDepartmentBreakdown {
+  department: string;
+  paperCount: number;
+  papers: KgAtlasClusterPaper[];
+}
+
+export interface KgAtlasClusterPaper {
+  id: string;
+  i: number;
+  title: string;
+  topic: string;
+  citations: number;
+}
+
+export interface KgAtlasClusterBreakdown {
+  theme: string;
+  query: string;
+  totalPapers: number;
+  departments: KgAtlasDepartmentBreakdown[];
 }
 
 export interface KgAtlasData {
