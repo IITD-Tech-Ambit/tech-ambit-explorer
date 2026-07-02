@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +18,18 @@ const kerberosFromEmail = (email?: string) =>
 const FacultyProfile = () => {
     const { kerberos: urlKerberos } = useParams<{ kerberos: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const kerberos = urlKerberos?.trim().toLowerCase() ?? "";
+
+    // Profiles are linked from many places (Directory, taxonomy Browse, Explore,
+    // Knowledge Graph, chat) — go back to wherever the user actually came from
+    // instead of a hardcoded destination. React Router sets location.key to
+    // 'default' when this tab has no prior in-app history (direct link/refresh).
+    const goBack = () => {
+        if (location.key !== "default") navigate(-1);
+        else navigate("/directory");
+    };
 
     const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyByKerberos(kerberos);
     const { data: summaryData, isLoading: isSummaryLoading } = useFacultyResearchSummary(kerberos);
@@ -49,9 +59,9 @@ const FacultyProfile = () => {
                         <User className="w-9 h-9 text-muted-foreground/50" />
                     </div>
                     <p className="text-muted-foreground text-lg font-medium">Faculty profile not found</p>
-                    <Button variant="outline" onClick={() => navigate("/directory")}>
+                    <Button variant="outline" onClick={goBack}>
                         <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Directory
+                        Back
                     </Button>
                 </div>
                 <Footer />
@@ -113,11 +123,11 @@ const FacultyProfile = () => {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate("/directory")}
+                        onClick={goBack}
                         className="-ml-2 mb-8 text-muted-foreground hover:text-foreground group"
                     >
                         <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-0.5" />
-                        Back to Directory
+                        Back
                     </Button>
 
                     <div className="flex flex-col lg:flex-row items-start gap-8">

@@ -104,6 +104,25 @@ export const resolveFacultiesByScopusIds = async (
     return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
 };
 
+/**
+ * Batch-resolve kerberos ids → IITD Faculty profiles (one round trip for a
+ * page of faculty cards, e.g. taxonomy browse results).
+ */
+export const resolveFacultiesByKerberos = async (
+    kerberosIds: string[]
+): Promise<Record<string, DirectoryFaculty>> => {
+    const ids = [...new Set((kerberosIds || []).filter((id) => typeof id === 'string' && id.trim().length > 0))];
+    if (ids.length === 0) return {};
+    const response = await fetch(`${API_BASE_URL}/by-kerberos/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kerberosIds: ids }),
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Failed to resolve IITD faculty');
+    return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
+};
+
 export const getFacultyResearchSummary = async (
     kerberos: string,
     yearOffset: number = 0,

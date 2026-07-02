@@ -39,6 +39,23 @@ export const queryKeys = {
             [...queryKeys.directory.all, 'groupFaculties', category, departmentId] as const,
     },
 
+    // Taxonomy browse query keys
+    taxonomy: {
+        all: ['taxonomy'] as const,
+        departments: () => [...queryKeys.taxonomy.all, 'departments'] as const,
+        themes: (department?: string) => [...queryKeys.taxonomy.all, 'themes', department ?? ''] as const,
+        domains: (theme?: string, department?: string) =>
+            [...queryKeys.taxonomy.all, 'domains', theme ?? '', department ?? ''] as const,
+        subdomains: (domain: string, theme?: string, department?: string) =>
+            [...queryKeys.taxonomy.all, 'subdomains', domain, theme ?? '', department ?? ''] as const,
+        counts: (filters: Record<string, string | undefined>) =>
+            [...queryKeys.taxonomy.all, 'counts', filters] as const,
+        faculty: (filters: Record<string, string | undefined>, page: number, perPage: number) =>
+            [...queryKeys.taxonomy.all, 'faculty', filters, page, perPage] as const,
+        facultyCards: (kerberosIds: string[]) =>
+            [...queryKeys.taxonomy.all, 'facultyCards', kerberosIds.join(',')] as const,
+    },
+
     // Search query keys
     search: {
         all: ['search'] as const,
