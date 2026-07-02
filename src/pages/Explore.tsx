@@ -8,6 +8,7 @@ import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Co
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
+import ExploreThemeChips from "@/components/explore/taxonomy/ExploreThemeChips";
 
 import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
@@ -566,6 +567,7 @@ const Explore = () => {
     setSearchQuery("");
     setRefinementChain([]);
     setSelectedAuthor(null);
+    setSearchIn([]);
     setCurrentPage(1);
     setAuthorScopedPage(1);
     skipUrlEffect.current = true;
@@ -1034,34 +1036,6 @@ const Explore = () => {
               </div>
             </div>
 
-            {/* Search In: Author toggle — hidden after a search so only the deep search remains active */}
-            {!hasSearched && (
-            <div className="flex items-center gap-2 w-full">
-              <span className="text-xs font-medium text-muted-foreground shrink-0">Search in:</span>
-              {(() => {
-                const isAuthor = searchIn.includes('author') && searchIn.length === 1;
-                return (
-                  <button
-                    onClick={() => setSearchIn(isAuthor ? [] : ['author'])}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 border ${
-                      isAuthor
-                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                        : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Author
-                    {isAuthor && <X className="w-3 h-3 ml-0.5 opacity-70" />}
-                  </button>
-                );
-              })()}
-              <span className="text-[11px] text-muted-foreground">
-                {searchIn.includes('author') && searchIn.length === 1
-                  ? 'Searching by author name only'
-                  : 'Searching all fields'}
-              </span>
-            </div>
-            )}
 
             {/* Recent searches strip (localStorage log) — only visible when no active search */}
             {!hasSearched && searchHistory.length > 0 && (
@@ -1242,14 +1216,20 @@ const Explore = () => {
         {/* Loading State */}
         {isLoading && <ExploreSearchLoader query={activeQuery} />}
 
-        {/* No Search Yet */}
+        {/* No Search Yet — fills the open space with a search prompt plus a
+            quick-start row into taxonomy browsing, instead of sitting empty. */}
         {!hasSearched && !isLoading && (
-          <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
+          <div className="flex flex-col items-center justify-center text-center pt-10 pb-10 sm:pt-16 sm:pb-14">
             <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
               <Search className="h-7 w-7 text-muted-foreground/60" />
             </div>
             <h3 className="text-lg font-semibold mb-1.5 text-foreground">Start Your Search</h3>
             <p className="text-sm text-muted-foreground max-w-xs">Enter a keyword, faculty name, or topic above to explore IIT Delhi's research</p>
+
+            <div className="mt-10 w-full">
+              <p className="text-sm font-medium text-foreground mb-3">Or browse by research area</p>
+              <ExploreThemeChips />
+            </div>
           </div>
         )}
 

@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Lightbulb } from "lucide-react";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
+import TaxonomyBrowse from "./pages/TaxonomyBrowse";
 import Directory from "./pages/Directory";
 import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
@@ -53,6 +54,7 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
+            <Route path="/explore/browse" element={<TaxonomyBrowse />} />
             <Route path="/directory" element={<Directory />} />
             <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
