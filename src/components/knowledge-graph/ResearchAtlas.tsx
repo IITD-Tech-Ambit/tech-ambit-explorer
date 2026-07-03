@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ChevronDown, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
+  Building2, Calendar, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search,
   Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -35,22 +35,29 @@ import {
   broadThemeClusterColor,
   buildAtlasClusterIndex,
   buildThemeClusterBreakdownClient,
+  filterClassifiedAtlasPapers,
   paperMatchesQuery,
   buildDepartmentList,
+  buildDomainColorMapForTheme,
   buildThemeColorMap,
   clusterKey,
   clusterLabel,
+  computeExpandedDomainLayout,
   computeThemeClusterLabels,
+  DOMAINS_PER_PAGE,
   getClusterSet,
+  listThemeDomains,
   matchLevelColor,
   resolveLockedClusterLevels,
   resolveSearchMatchLevels,
   suggestFacultyTerms,
   suggestDepartmentTerms,
   suggestTaxonomyTerms,
+  themeDisplayName,
   typeBadge,
   type AtlasClusterIndex,
   type ClusterLevel,
+  type DomainClusterLabel,
   type MatchLevel,
   type TaxonomyEntry,
   type ThemeClusterLabel,
@@ -65,6 +72,7 @@ const SELECTED_COLOR = new THREE.Color("#67e8f9");
 
 const MATCH_COLORS: Record<MatchLevel, THREE.Color> = {
   theme: new THREE.Color("#f87171"),
+  domain: new THREE.Color("#818cf8"),
   subdomain: new THREE.Color("#fb923c"),
   topic: new THREE.Color("#facc15"),
   paper: new THREE.Color("#4ade80"),
@@ -74,6 +82,7 @@ const MATCH_COLORS: Record<MatchLevel, THREE.Color> = {
 const CLUSTER_HIGHLIGHT_SIZES: Record<MatchLevel, number> = {
   topic: 0.078,
   subdomain: 0.064,
+  domain: 0.058,
   theme: 0.052,
   paper: 0.07,
 };
@@ -157,12 +166,261 @@ function createThemeLabelElement(
   return { el, countEl, line, marker };
 }
 
+function createDomainLabelElement(
+  label: DomainClusterLabel,
+): { el: HTMLDivElement; countEl: HTMLSpanElement; line: THREE.Line; marker: THREE.Mesh } {
+  const el = document.createElement("div");
+  el.className = "atlas-domain-label";
+  el.style.cssText = [
+    "pointer-events:none",
+    "user-select:none",
+    "transform:translate(-8px,-50%)",
+    "text-align:left",
+    "white-space:nowrap",
+    "padding:6px 10px",
+    "cursor:pointer",
+  ].join(";");
+
+  const countText = `${label.count.toLocaleString()} papers`;
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:1px;line-height:1.25;">
+      <span style="
+        font-size:12px;font-weight:600;color:${label.color};
+        letter-spacing:0.01em;
+        text-shadow:0 0 8px rgba(0,0,0,0.95),0 1px 3px rgba(0,0,0,0.9);
+      ">${label.shortLabel}</span>
+      <span class="atlas-domain-count" style="
+        font-size:10px;color:#cbd5e1;font-weight:500;
+        text-shadow:0 0 6px rgba(0,0,0,0.95),0 1px 2px rgba(0,0,0,0.85);
+      ">${countText}</span>
+    </div>
+  `;
+
+  const cluster = new THREE.Vector3(label.clusterX, label.clusterY, label.clusterZ);
+  const anchor = new THREE.Vector3(label.x, label.y, label.z);
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([cluster, anchor]),
+    new THREE.LineBasicMaterial({
+      color: label.color,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+    }),
+  );
+
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.018, 10, 10),
+    new THREE.MeshBasicMaterial({
+      color: label.color,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    }),
+  );
+  marker.position.copy(cluster);
+  marker.userData.domain = label.domain;
+  marker.userData.isDomainMarker = true;
+
+  const countEl = el.querySelector(".atlas-domain-count") as HTMLSpanElement;
+  el.dataset.domain = label.domain;
+  return { el, countEl, line, marker };
+}
+
+function AtlasThemeDomainsPanel({
+  theme,
+  domains,
+  totalPapers,
+  allDomainCount,
+  page,
+  pageCount,
+  onPageChange,
+  mapDomainNames,
+  focusedDomain,
+  hoveredDomain,
+  onFocusDomain,
+  onHoverDomain,
+  onClose,
+}: {
+  theme: string;
+  domains: DomainClusterLabel[];
+  totalPapers: number;
+  allDomainCount: number;
+  page: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
+  mapDomainNames: Set<string>;
+  focusedDomain: string | null;
+  hoveredDomain: string | null;
+  onFocusDomain: (domain: string | null) => void;
+  onHoverDomain: (domain: string | null) => void;
+  onClose: () => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const themeColor = broadThemeClusterColor(theme);
+  const maxCount = domains[0]?.count ?? 1;
+  const q = filter.trim().toLowerCase();
+  const visible = q
+    ? domains.filter((d) => d.fullLabel.toLowerCase().includes(q))
+    : domains;
+
+  return (
+    <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[400px] border-l border-indigo-500/20 bg-slate-950/96 backdrop-blur-md overflow-hidden shadow-2xl flex flex-col">
+      <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-b border-indigo-500/20 bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950">
+        <span className="text-xs font-semibold uppercase tracking-wide text-indigo-300/90">
+          Domain clusters
+        </span>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={onClose}
+          className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="shrink-0 p-4 space-y-3 border-b border-slate-800/80">
+        <div
+          className="rounded-xl border p-3"
+          style={{ borderColor: `${themeColor}44`, backgroundColor: `${themeColor}10` }}
+        >
+          <div className="flex items-start gap-2">
+            <span
+              className="mt-1 h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: themeColor, boxShadow: `0 0 10px ${themeColor}` }}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white leading-snug">{themeDisplayName(theme)}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {formatCount(allDomainCount)} domains · {formatCount(totalPapers)} papers
+                {pageCount > 1 && (
+                  <> · page {page + 1} of {pageCount}</>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter domains…"
+          className="h-9 bg-slate-900/80 border-slate-700 text-sm"
+        />
+        {focusedDomain && (
+          <button
+            type="button"
+            onClick={() => onFocusDomain(null)}
+            className="text-xs text-indigo-300 hover:text-indigo-200 underline-offset-2 hover:underline"
+          >
+            Clear domain focus
+          </button>
+        )}
+      </div>
+
+      <ul className="flex-1 overflow-y-auto p-3 space-y-1.5">
+        {visible.map((d) => {
+          const active = focusedDomain === d.domain;
+          const hover = hoveredDomain === d.domain;
+          const onMap = mapDomainNames.has(d.domain);
+          const pct = Math.round((d.count / maxCount) * 100);
+          return (
+            <li key={d.domain}>
+              <button
+                type="button"
+                onClick={() => onFocusDomain(active ? null : d.domain)}
+                onMouseEnter={() => onHoverDomain(d.domain)}
+                onMouseLeave={() => onHoverDomain(null)}
+                className={cn(
+                  "w-full rounded-xl border px-3 py-2.5 text-left transition-all",
+                  !onMap && "opacity-70",
+                  active
+                    ? "border-indigo-400/50 bg-indigo-950/50 shadow-lg shadow-indigo-900/20"
+                    : hover
+                      ? "border-indigo-500/30 bg-slate-900/80"
+                      : "border-slate-800/60 bg-slate-900/40 hover:border-slate-600/60 hover:bg-slate-900/70",
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <span
+                    className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: d.color, boxShadow: onMap ? `0 0 8px ${d.color}` : undefined }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white leading-snug">{d.fullLabel}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: d.color }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                        {formatCount(d.count)}
+                      </span>
+                    </div>
+                    {!onMap && pageCount > 1 && (
+                      <p className="mt-1 text-[10px] text-slate-500">Click to show on map</p>
+                    )}
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+        {visible.length === 0 && (
+          <li className="py-8 text-center text-sm text-slate-500">No domains match your filter.</li>
+        )}
+      </ul>
+
+      {pageCount > 1 && !q && (
+        <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-800/80 bg-slate-950/90">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={page <= 0}
+            onClick={() => onPageChange(page - 1)}
+            className="h-8 gap-1 border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <span className="text-xs tabular-nums text-slate-400">
+            Map {page * DOMAINS_PER_PAGE + 1}–{Math.min((page + 1) * DOMAINS_PER_PAGE, allDomainCount)}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount - 1}
+            onClick={() => onPageChange(page + 1)}
+            className="h-8 gap-1 border-slate-700 bg-slate-900/80 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function isPaperPickable(
   paper: KgAtlasPaper,
   searchFilter: Set<number> | null,
+  highlightFilter: Set<number> | null,
+  highlightLocked: boolean,
+  expandedTheme: string | null,
+  visibleDomains: Set<string> | null,
 ): boolean {
-  if (!searchFilter) return true;
-  return searchFilter.has(paper.i);
+  if (expandedTheme && paper.theme !== expandedTheme) return false;
+  if (expandedTheme && visibleDomains && paper.domain && !visibleDomains.has(paper.domain)) return false;
+  if (searchFilter && searchFilter.size > 0 && !searchFilter.has(paper.i)) return false;
+  if (highlightLocked && highlightFilter && !highlightFilter.has(paper.i)) return false;
+  return true;
 }
 
 function AtlasThemeClusterPanel({
@@ -275,6 +533,7 @@ function AtlasThemeClusterPanel({
                                 id: p.id,
                                 title: p.title,
                                 theme,
+                                domain: p.domain,
                                 subdomain: "",
                                 topic: p.topic,
                                 citations: p.citations,
@@ -318,8 +577,6 @@ function AtlasPaperPanel({
   detail,
   detailLoading,
   activeHighlightLevel,
-  clusterName,
-  clusterCount,
   levelCounts,
   searchActive,
   onClusterLevelChange,
@@ -329,8 +586,6 @@ function AtlasPaperPanel({
   detail: KgPaperMeta | null;
   detailLoading: boolean;
   activeHighlightLevel: ClusterLevel | null;
-  clusterName: string;
-  clusterCount: number;
   levelCounts: Record<ClusterLevel, number>;
   searchActive: boolean;
   onClusterLevelChange: (level: ClusterLevel) => void;
@@ -339,7 +594,9 @@ function AtlasPaperPanel({
   const linkMeta = detail ? getPaperExternalUrl(detail) : null;
   const citations = detail?.citation_count ?? paper.citations;
   const year = detail?.publication_year;
-  const levels: ClusterLevel[] = ["topic", "subdomain", "theme"];
+  const levels: ClusterLevel[] = ["topic", "subdomain", "domain", "theme"];
+  const highlightName = activeHighlightLevel ? clusterKey(paper, activeHighlightLevel) : "";
+  const highlightCount = activeHighlightLevel ? levelCounts[activeHighlightLevel] : 0;
 
   return (
     <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[400px] border-l border-slate-700/60 bg-slate-950/95 backdrop-blur-md overflow-y-auto shadow-2xl">
@@ -364,9 +621,9 @@ function AtlasPaperPanel({
           {activeHighlightLevel ? (
             <>
               <p className="text-[10px] uppercase tracking-wide text-cyan-400/80 mb-1">
-                Highlighted cluster · {formatCount(clusterCount)} papers
+                Highlighted cluster · {formatCount(highlightCount)} papers
               </p>
-              <p className="text-sm font-semibold text-white leading-snug">{clusterName}</p>
+              <p className="text-sm font-semibold text-white leading-snug">{highlightName}</p>
             </>
           ) : (
             <>
@@ -458,6 +715,7 @@ function AtlasPaperPanel({
         <div className="flex flex-wrap gap-2">
           {([
             { label: paper.theme, type: "theme" as const },
+            { label: paper.domain, type: "domain" as const },
             { label: paper.subdomain, type: "subdomain" as const },
             { label: paper.topic, type: "topic" as const },
           ] as const)
@@ -567,6 +825,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       line: THREE.Line;
       marker: THREE.Mesh;
     }>;
+    domainLabelRefs: Array<{
+      domain: string;
+      obj: CSS2DObject;
+      countEl: HTMLSpanElement;
+      line: THREE.Line;
+      marker: THREE.Mesh;
+    }>;
     papers: KgAtlasPaper[];
     frameId: number;
   } | null>(null);
@@ -576,6 +841,10 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const searchFilterRef = useRef<Set<number> | null>(null);
   const viewOnlyRef = useRef(false);
   const searchActiveRef = useRef(false);
+  const facultySearchRef = useRef(false);
+  const expandedThemeRef = useRef<string | null>(null);
+  const visibleDomainSetRef = useRef<Set<string> | null>(null);
+  const clusterHighlightLockedRef = useRef(false);
   const themeClusterClickRef = useRef<(theme: string) => void>(() => {});
 
   const [papers, setPapers] = useState<KgAtlasPaper[]>([]);
@@ -587,7 +856,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const [searchFilterSet, setSearchFilterSet] = useState<Set<number> | null>(null);
   const [comboOpen, setComboOpen] = useState(false);
   const [searchMatchCount, setSearchMatchCount] = useState(0);
-  const [clusterHighlightCount, setClusterHighlightCount] = useState(0);
   const [matchedTerms, setMatchedTerms] = useState<TaxonomyEntry[]>([]);
   const [matchedFaculty, setMatchedFaculty] = useState<KgAtlasFacultyMatch[]>([]);
   const [matchedDepartments, setMatchedDepartments] = useState<KgAtlasDepartmentMatch[]>([]);
@@ -599,10 +867,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const [hovered, setHovered] = useState<KgAtlasPaper | null>(null);
   const [selected, setSelected] = useState<KgAtlasPaper | null>(null);
   const [activeHighlightLevel, setActiveHighlightLevel] = useState<ClusterLevel | null>(null);
-  const [clusterName, setClusterName] = useState("");
   const [paperDetail, setPaperDetail] = useState<KgPaperMeta | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedThemeCluster, setSelectedThemeCluster] = useState<string | null>(null);
+  const [expandedThemeDomains, setExpandedThemeDomains] = useState<string | null>(null);
+  const [domainPage, setDomainPage] = useState(0);
+  const [focusedDomain, setFocusedDomain] = useState<string | null>(null);
+  const [hoveredDomain, setHoveredDomain] = useState<string | null>(null);
   const [clusterBreakdown, setClusterBreakdown] = useState<KgAtlasClusterBreakdown | null>(null);
   const [clusterBreakdownLoading, setClusterBreakdownLoading] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -619,12 +890,114 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     [papers],
   );
 
+  const panelLevelCounts = useMemo((): Record<ClusterLevel, number> => {
+    if (!selected || !clusterIndex) {
+      return { topic: 0, subdomain: 0, domain: 0, theme: 0 };
+    }
+    const countAtLevel = (level: ClusterLevel) => {
+      const cluster = getClusterSet(selected, level, clusterIndex);
+      if (!searchFilterSet || searchFilterSet.size === 0) return cluster.size;
+      let n = 0;
+      for (const idx of cluster) {
+        if (searchFilterSet.has(idx)) n++;
+      }
+      return n;
+    };
+    return {
+      topic: countAtLevel("topic"),
+      subdomain: countAtLevel("subdomain"),
+      domain: countAtLevel("domain"),
+      theme: countAtLevel("theme"),
+    };
+  }, [selected, clusterIndex, searchFilterSet]);
+
+  const activeClusterSummary = useMemo(() => {
+    if (!selected || !activeHighlightLevel || !clusterIndex) return null;
+    const { visible } = resolveLockedClusterLevels(selected, activeHighlightLevel, clusterIndex);
+    return {
+      level: activeHighlightLevel,
+      name: clusterKey(selected, activeHighlightLevel),
+      count: panelLevelCounts[activeHighlightLevel],
+      indices: visible,
+    };
+  }, [selected, activeHighlightLevel, clusterIndex, panelLevelCounts]);
+
+  const themeCountFilterSet = useMemo((): Set<number> | null => {
+    const hasSearch = Boolean(searchFilterSet && searchFilterSet.size > 0);
+    const cluster = activeClusterSummary?.indices;
+
+    if (hasSearch && cluster) {
+      const combined = new Set<number>();
+      for (const idx of cluster) {
+        if (searchFilterSet!.has(idx)) combined.add(idx);
+      }
+      return combined;
+    }
+    if (cluster) return cluster;
+    if (hasSearch) return searchFilterSet;
+    return null;
+  }, [searchFilterSet, activeClusterSummary]);
+
   const filteredThemeLabels = useMemo(
-    () => applyFilteredThemeCounts(themeLabels, papers, searchFilterSet),
-    [themeLabels, papers, searchFilterSet],
+    () => applyFilteredThemeCounts(themeLabels, papers, themeCountFilterSet),
+    [themeLabels, papers, themeCountFilterSet],
   );
 
-  const themeFilterActive = Boolean(searchFilterSet && searchFilterSet.size > 0);
+  const themeFilterActive = Boolean(themeCountFilterSet && themeCountFilterSet.size > 0);
+
+  const allThemeDomains = useMemo(
+    () => (expandedThemeDomains ? listThemeDomains(papers, expandedThemeDomains) : []),
+    [papers, expandedThemeDomains],
+  );
+
+  const domainPageCount = Math.max(1, Math.ceil(allThemeDomains.length / DOMAINS_PER_PAGE));
+
+  const visiblePageDomains = useMemo(() => {
+    if (!allThemeDomains.length) return [];
+    const safePage = Math.min(domainPage, domainPageCount - 1);
+    const start = safePage * DOMAINS_PER_PAGE;
+    return allThemeDomains.slice(start, start + DOMAINS_PER_PAGE);
+  }, [allThemeDomains, domainPage, domainPageCount]);
+
+  const visibleDomainNames = useMemo(
+    () => visiblePageDomains.map((d) => d.domain),
+    [visiblePageDomains],
+  );
+
+  const visibleDomainSet = useMemo(
+    () => (visibleDomainNames.length ? new Set(visibleDomainNames) : null),
+    [visibleDomainNames],
+  );
+
+  const expandedDomainLayout = useMemo(
+    () =>
+      expandedThemeDomains && visibleDomainNames.length
+        ? computeExpandedDomainLayout(papers, expandedThemeDomains, visibleDomainNames)
+        : null,
+    [papers, expandedThemeDomains, visibleDomainNames],
+  );
+
+  const domainClusterLabels = expandedDomainLayout?.labels ?? [];
+
+  const domainSizeRatios = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!domainClusterLabels.length) return map;
+    const max = domainClusterLabels[0]?.count ?? 1;
+    for (const d of domainClusterLabels) {
+      map.set(d.domain, d.count / max);
+    }
+    return map;
+  }, [domainClusterLabels]);
+
+  const expandedDomainColorMap = useMemo(() => {
+    if (!expandedThemeDomains) return new Map<string, THREE.Color>();
+    const hexMap = buildDomainColorMapForTheme(papers, expandedThemeDomains);
+    const map = new Map<string, THREE.Color>();
+    for (const [domain, hex] of hexMap) {
+      map.set(domain, new THREE.Color(hex));
+    }
+    return map;
+  }, [papers, expandedThemeDomains]);
 
   const themeColorMap = useMemo(() => {
     const hexMap = buildThemeColorMap(papers);
@@ -663,6 +1036,30 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   useEffect(() => {
     viewOnlyRef.current = isViewMode;
   }, [isViewMode]);
+
+  useEffect(() => {
+    facultySearchRef.current = Boolean(searchFacultyOnlyId);
+  }, [searchFacultyOnlyId]);
+
+  useEffect(() => {
+    clusterHighlightLockedRef.current = Boolean(activeHighlightLevel && selected);
+    highlightSetRef.current = activeClusterSummary?.indices ?? new Set();
+  }, [activeHighlightLevel, selected, activeClusterSummary]);
+
+  useEffect(() => {
+    expandedThemeRef.current = expandedThemeDomains;
+  }, [expandedThemeDomains]);
+
+  useEffect(() => {
+    visibleDomainSetRef.current = visibleDomainSet;
+  }, [visibleDomainSet]);
+
+  useEffect(() => {
+    if (searchFacultyOnlyId) {
+      setSelectedThemeCluster(null);
+      setClusterBreakdown(null);
+    }
+  }, [searchFacultyOnlyId]);
 
   useEffect(() => {
     onModeChange?.(atlasMode);
@@ -708,7 +1105,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`${KG_API}/atlas`)
+    fetch(`${KG_API}/atlas`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -718,7 +1115,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       })
       .then((data) => {
         if (cancelled) return;
-        setPapers(data.papers ?? []);
+        setPapers(filterClassifiedAtlasPapers(data.papers ?? []));
       })
       .catch((e) => {
         if (!cancelled) setError(String(e.message || e));
@@ -752,8 +1149,10 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   useEffect(() => {
     setActiveHighlightLevel(null);
     setSelected(null);
-    setClusterName("");
     setSelectedThemeCluster(null);
+    setExpandedThemeDomains(null);
+    setFocusedDomain(null);
+    setHoveredDomain(null);
     setClusterBreakdown(null);
   }, [searchQuery]);
 
@@ -880,8 +1279,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       highlightLevel: ClusterLevel | null,
       searchFilter: Set<number> | null,
       themeColors: Map<string, THREE.Color>,
+      domainColors: Map<string, THREE.Color>,
       viewOnly: boolean,
       activeThemeCluster: string | null,
+      expandedTheme: string | null,
+      activeDomain: string | null,
+      domainSizeRatios: Map<string, number>,
+      visibleDomainSet: Set<string> | null,
     ) => {
       const scene = sceneRef.current;
       if (!scene || !index) return;
@@ -893,7 +1297,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       if (viewOnly) {
         highlightSetRef.current = new Set();
         setShowTierLegend(false);
-        setClusterHighlightCount(0);
 
         for (let i = 0; i < paperList.length; i++) {
           const paper = paperList[i];
@@ -929,20 +1332,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
 
       highlightSetRef.current = activeSet;
 
-      if (highlightLevel && selectedPaper) {
-        const visibleHighlight = [...activeSet].filter(
-          (idx) => !searchActive || searchFilter!.has(idx),
-        ).length;
-        setClusterHighlightCount(visibleHighlight);
-      } else {
-        setClusterHighlightCount(0);
-      }
-
       const hoveredIdx = hoveredPaper?.i ?? -1;
       const selectedIdx = selectedPaper?.i ?? -1;
 
       const paperThemeColor = (paper: KgAtlasPaper) =>
         themeColors.get(paper.theme) ?? BASE_COLOR;
+      const paperDomainColor = (paper: KgAtlasPaper) =>
+        domainColors.get(paper.domain) ?? MATCH_COLORS.domain;
 
       for (let i = 0; i < paperList.length; i++) {
         const paper = paperList[i];
@@ -951,7 +1347,33 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         let size: number;
         let alpha: number;
 
-        if (searchActive && !searchFilter!.has(paper.i)) {
+        if (expandedTheme && !searchActive) {
+          if (paper.theme !== expandedTheme) {
+            color = BLOCKED_COLOR;
+            size = 0.003;
+            alpha = 0.012;
+          } else if (visibleDomainSet && paper.domain && !visibleDomainSet.has(paper.domain)) {
+            color = BLOCKED_COLOR;
+            size = 0.003;
+            alpha = 0.008;
+          } else if (paper.i === selectedIdx) {
+            color = SELECTED_COLOR;
+            size = 0.085;
+            alpha = 1;
+          } else if (paper.i === hoveredIdx) {
+            color = HOVER_COLOR;
+            size = 0.075;
+            alpha = 1;
+          } else if (activeDomain && paper.domain !== activeDomain) {
+            color = DIM_COLOR;
+            size = DIM_SIZE;
+            alpha = 0.22;
+          } else {
+            color = paperDomainColor(paper);
+            size = activeDomain && paper.domain === activeDomain ? 0.048 : BASE_SIZE;
+            alpha = 0.92;
+          }
+        } else if (searchActive && !searchFilter!.has(paper.i)) {
           color = BLOCKED_COLOR;
           size = 0.003;
           alpha = 0.015;
@@ -999,6 +1421,8 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     [],
   );
 
+  const activeDomainFilter = focusedDomain ?? hoveredDomain;
+
   useEffect(() => {
     applyHighlights(
       papers,
@@ -1008,8 +1432,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       activeHighlightLevel,
       searchFilterSet,
       themeColorMap,
+      expandedDomainColorMap,
       isViewMode,
       selectedThemeCluster,
+      expandedThemeDomains,
+      activeDomainFilter,
+      domainSizeRatios,
+      visibleDomainSet,
     );
   }, [
     papers,
@@ -1019,9 +1448,14 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     activeHighlightLevel,
     searchFilterSet,
     themeColorMap,
+    expandedDomainColorMap,
     applyHighlights,
     isViewMode,
     selectedThemeCluster,
+    expandedThemeDomains,
+    activeDomainFilter,
+    domainSizeRatios,
+    visibleDomainSet,
   ]);
 
   useEffect(() => {
@@ -1032,7 +1466,9 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       const label = filteredThemeLabels.find((l) => l.theme === ref.theme);
       if (!label) continue;
 
-      const show = !themeFilterActive || label.count > 0;
+      const show = expandedThemeDomains
+        ? false
+        : (!themeFilterActive || label.count > 0);
       ref.obj.visible = show;
       ref.line.visible = show;
       ref.marker.visible = show;
@@ -1043,7 +1479,96 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
           : `${formatCount(label.count)} papers`;
       ref.countEl.textContent = countText;
     }
-  }, [filteredThemeLabels, themeFilterActive, sceneReady]);
+  }, [filteredThemeLabels, themeFilterActive, sceneReady, expandedThemeDomains]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!sceneReady || !scene) return;
+
+    for (const ref of scene.domainLabelRefs ?? []) {
+      scene.scene.remove(ref.obj);
+      scene.scene.remove(ref.line);
+      scene.scene.remove(ref.marker);
+      ref.line.geometry.dispose();
+      (ref.line.material as THREE.Material).dispose();
+      ref.marker.geometry.dispose();
+      (ref.marker.material as THREE.Material).dispose();
+    }
+
+    const domainLabelRefs: typeof scene.domainLabelRefs = [];
+    if (expandedThemeDomains) {
+      for (const label of domainClusterLabels) {
+        const { el, countEl, line, marker } = createDomainLabelElement(label);
+        const obj = new CSS2DObject(el);
+        obj.position.set(label.x, label.y, label.z);
+        scene.scene.add(obj);
+        scene.scene.add(line);
+        scene.scene.add(marker);
+        domainLabelRefs.push({ domain: label.domain, obj, countEl, line, marker });
+      }
+    }
+    scene.domainLabelRefs = domainLabelRefs;
+  }, [expandedThemeDomains, domainClusterLabels, sceneReady]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!sceneReady || !scene?.domainLabelRefs?.length) return;
+
+    for (const ref of scene.domainLabelRefs) {
+      const label = domainClusterLabels.find((d) => d.domain === ref.domain);
+      if (!label) continue;
+
+      const active = ref.domain === focusedDomain;
+      const hover = ref.domain === hoveredDomain;
+      const htmlEl = ref.obj.element as HTMLDivElement;
+      htmlEl.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+      htmlEl.style.opacity = active || hover ? "1" : "0.94";
+      htmlEl.style.transform = active
+        ? "translate(-8px,-50%) scale(1.06)"
+        : hover
+          ? "translate(-8px,-50%) scale(1.03)"
+          : "translate(-8px,-50%)";
+      ref.marker.scale.setScalar(active ? 1.25 : hover ? 1.12 : 1);
+      ref.countEl.textContent = `${formatCount(label.count)} papers`;
+    }
+  }, [domainClusterLabels, sceneReady, hoveredDomain, focusedDomain]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!sceneReady || !scene?.points) return;
+
+    const posAttr = scene.points.geometry.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i < papers.length; i++) {
+      const p = papers[i];
+      const spread = expandedDomainLayout?.paperPositions.get(p.i);
+      if (spread) {
+        posAttr.setXYZ(i, spread.x, spread.y, spread.z);
+      } else {
+        posAttr.setXYZ(i, p.x, p.y, p.z);
+      }
+    }
+    posAttr.needsUpdate = true;
+  }, [papers, expandedDomainLayout, sceneReady]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!sceneReady || !scene) return;
+    if (expandedThemeDomains && expandedDomainLayout) {
+      const c = expandedDomainLayout.themeCenter;
+      const dist = Math.hypot(c.x, c.y, c.z) || 1;
+      scene.controls.target.set(c.x, c.y, c.z);
+      scene.camera.position.set(
+        c.x + (c.x / dist) * 0.35,
+        c.y + (c.y / dist) * 0.35,
+        c.z + (c.z / dist) * 0.35 + 2.85,
+      );
+      scene.controls.update();
+    } else {
+      scene.camera.position.set(0, 0, 2.4);
+      scene.controls.target.set(0, 0, 0);
+      scene.controls.update();
+    }
+  }, [expandedThemeDomains, expandedDomainLayout, sceneReady]);
 
   const searchActive = Boolean(searchQuery.trim());
 
@@ -1052,13 +1577,24 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   }, [searchActive]);
 
   const handleThemeClusterClick = useCallback(async (theme: string) => {
-    if (isViewMode) return;
+    if (isViewMode || searchFacultyOnlyId) return;
     const q = searchQuery.trim();
-    if (!q) return;
 
     setSelected(null);
     setActiveHighlightLevel(null);
-    setClusterName("");
+
+    if (!q) {
+      setSelectedThemeCluster(null);
+      setClusterBreakdown(null);
+      setFocusedDomain(null);
+      setHoveredDomain(null);
+      setExpandedThemeDomains((prev) => (prev === theme ? null : theme));
+      return;
+    }
+
+    setExpandedThemeDomains(null);
+    setFocusedDomain(null);
+    setHoveredDomain(null);
     setSelectedThemeCluster(theme);
 
     const filter =
@@ -1075,12 +1611,53 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     } catch {
       // Client breakdown already shown.
     }
-  }, [searchQuery, isViewMode, searchFilterSet, papers]);
+  }, [searchQuery, isViewMode, searchFacultyOnlyId, searchFilterSet, papers]);
 
   const closeThemeCluster = useCallback(() => {
     setSelectedThemeCluster(null);
     setClusterBreakdown(null);
   }, []);
+
+  const closeExpandedTheme = useCallback(() => {
+    setExpandedThemeDomains(null);
+    setDomainPage(0);
+    setFocusedDomain(null);
+    setHoveredDomain(null);
+  }, []);
+
+  useEffect(() => {
+    setDomainPage(0);
+    setFocusedDomain(null);
+    setHoveredDomain(null);
+  }, [expandedThemeDomains]);
+
+  useEffect(() => {
+    if (domainPage >= domainPageCount) {
+      setDomainPage(Math.max(0, domainPageCount - 1));
+    }
+  }, [domainPage, domainPageCount]);
+
+  useEffect(() => {
+    if (focusedDomain && visibleDomainSet && !visibleDomainSet.has(focusedDomain)) {
+      setFocusedDomain(null);
+    }
+    if (hoveredDomain && visibleDomainSet && !visibleDomainSet.has(hoveredDomain)) {
+      setHoveredDomain(null);
+    }
+  }, [domainPage, focusedDomain, hoveredDomain, visibleDomainSet]);
+
+  const handleFocusDomain = useCallback(
+    (domain: string | null) => {
+      if (domain) {
+        const idx = allThemeDomains.findIndex((d) => d.domain === domain);
+        if (idx >= 0) {
+          setDomainPage(Math.floor(idx / DOMAINS_PER_PAGE));
+        }
+      }
+      setFocusedDomain(domain);
+    },
+    [allThemeDomains],
+  );
 
   useEffect(() => {
     themeClusterClickRef.current = handleThemeClusterClick;
@@ -1090,22 +1667,24 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     const scene = sceneRef.current;
     if (!scene?.themeLabelRefs?.length) return;
 
-    const labelsInteractive = !isViewMode && searchActive;
+    const labelsInteractive = !isViewMode && !searchFacultyOnlyId;
 
     for (const ref of scene.themeLabelRefs) {
       const htmlEl = ref.obj.element as HTMLDivElement;
-      htmlEl.style.pointerEvents = labelsInteractive ? "auto" : "none";
-      htmlEl.style.cursor = labelsInteractive ? "pointer" : "default";
+      htmlEl.style.pointerEvents = labelsInteractive && !expandedThemeDomains ? "auto" : "none";
+      htmlEl.style.cursor = labelsInteractive && !expandedThemeDomains ? "pointer" : "default";
       htmlEl.style.transition = "opacity 0.2s ease, transform 0.2s ease";
-      htmlEl.style.opacity = labelsInteractive ? "1" : "0.92";
+      htmlEl.style.opacity = labelsInteractive && !expandedThemeDomains ? "1" : expandedThemeDomains ? "0.35" : "0.92";
       if (selectedThemeCluster === ref.theme) {
         htmlEl.style.transform = "translate(-8px,-50%) scale(1.06)";
+      } else if (expandedThemeDomains === ref.theme) {
+        htmlEl.style.transform = "translate(-8px,-50%) scale(1.04)";
       } else {
         htmlEl.style.transform = "translate(-8px,-50%)";
       }
       ref.marker.scale.setScalar(1);
     }
-  }, [isViewMode, selectedThemeCluster, sceneReady, searchActive]);
+  }, [isViewMode, selectedThemeCluster, expandedThemeDomains, sceneReady, searchFacultyOnlyId]);
 
   useEffect(() => {
     if (!papers.length || !canvasRef.current || !containerRef.current) return;
@@ -1218,7 +1797,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       e.stopPropagation();
       e.preventDefault();
       const theme = (e.currentTarget as HTMLElement).dataset.theme;
-      if (theme && !viewOnlyRef.current && searchActiveRef.current) {
+      if (theme && !viewOnlyRef.current && !facultySearchRef.current) {
         themeClusterClickRef.current(theme);
       }
     };
@@ -1240,6 +1819,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       renderer,
       labelRenderer,
       themeLabelRefs,
+      domainLabelRefs: [],
       scene,
       camera,
       controls,
@@ -1258,7 +1838,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     let hoverFrame = 0;
 
     const pickThemeCluster = (clientX: number, clientY: number): string | null => {
-      if (viewOnlyRef.current || !searchActiveRef.current) return null;
+      if (viewOnlyRef.current || facultySearchRef.current || expandedThemeRef.current) return null;
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -1266,6 +1846,21 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       const hits = raycaster.intersectObjects(themeLabelRefs.map((r) => r.marker));
       if (hits.length && hits[0].object.userData.theme) {
         return String(hits[0].object.userData.theme);
+      }
+      return null;
+    };
+
+    const pickDomainCluster = (clientX: number, clientY: number): string | null => {
+      if (!expandedThemeRef.current) return null;
+      const refs = sceneRef.current?.domainLabelRefs;
+      if (!refs?.length) return null;
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(refs.map((r) => r.marker));
+      if (hits.length && hits[0].object.userData.domain) {
+        return String(hits[0].object.userData.domain);
       }
       return null;
     };
@@ -1281,7 +1876,14 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       for (const hit of hits) {
         if (hit.index == null) continue;
         const paper = papers[hit.index];
-        if (isPaperPickable(paper, searchFilterRef.current)) {
+        if (isPaperPickable(
+          paper,
+          searchFilterRef.current,
+          highlightSetRef.current,
+          clusterHighlightLockedRef.current,
+          expandedThemeRef.current,
+          visibleDomainSetRef.current,
+        )) {
           return paper;
         }
       }
@@ -1300,6 +1902,15 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         x: e.clientX - container.getBoundingClientRect().left,
         y: e.clientY - container.getBoundingClientRect().top,
       });
+      if (expandedThemeRef.current) {
+        const domain = pickDomainCluster(e.clientX, e.clientY);
+        setHoveredDomain(domain);
+        const paper = pickPaper(e.clientX, e.clientY);
+        setHovered(paper);
+        setCanvasCursor(paper || domain ? "pointer" : "grab");
+        return;
+      }
+      setHoveredDomain(null);
       const paper = pickPaper(e.clientX, e.clientY);
       setHovered(paper);
       setCanvasCursor(paper ? "pointer" : "grab");
@@ -1307,6 +1918,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
 
     const onClick = (e: MouseEvent) => {
       if (viewOnlyRef.current) return;
+      if (expandedThemeRef.current) {
+        const domain = pickDomainCluster(e.clientX, e.clientY);
+        if (domain) {
+          setFocusedDomain((prev) => (prev === domain ? null : domain));
+          return;
+        }
+      }
       const theme = pickThemeCluster(e.clientX, e.clientY);
       if (theme) {
         themeClusterClickRef.current(theme);
@@ -1316,11 +1934,11 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       if (!paper) return;
       setSelected(paper);
       setActiveHighlightLevel(null);
-      setClusterName("");
     };
 
     const onLeave = () => {
       setHovered(null);
+      setHoveredDomain(null);
       setCanvasCursor("grab");
     };
 
@@ -1364,6 +1982,15 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         ref.marker.geometry.dispose();
         (ref.marker.material as THREE.Material).dispose();
       }
+      for (const ref of sceneRef.current?.domainLabelRefs ?? []) {
+        scene.remove(ref.obj);
+        scene.remove(ref.line);
+        scene.remove(ref.marker);
+        ref.line.geometry.dispose();
+        (ref.line.material as THREE.Material).dispose();
+        ref.marker.geometry.dispose();
+        (ref.marker.material as THREE.Material).dispose();
+      }
       if (labelRenderer.domElement.parentNode === container) {
         container.removeChild(labelRenderer.domElement);
       }
@@ -1375,31 +2002,10 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     };
   }, [papers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClusterLevelChange = (level: ClusterLevel) => {
+  const handleClusterLevelChange = useCallback((level: ClusterLevel) => {
     if (!selected || !clusterIndex) return;
     setActiveHighlightLevel(level);
-    setClusterName(clusterKey(selected, level));
-  };
-
-  const panelLevelCounts = useMemo((): Record<ClusterLevel, number> => {
-    if (!selected || !clusterIndex) {
-      return { topic: 0, subdomain: 0, theme: 0 };
-    }
-    const countAtLevel = (level: ClusterLevel) => {
-      const cluster = getClusterSet(selected, level, clusterIndex);
-      if (!searchFilterSet) return cluster.size;
-      let n = 0;
-      for (const idx of cluster) {
-        if (searchFilterSet.has(idx)) n++;
-      }
-      return n;
-    };
-    return {
-      topic: countAtLevel("topic"),
-      subdomain: countAtLevel("subdomain"),
-      theme: countAtLevel("theme"),
-    };
-  }, [selected, clusterIndex, searchFilterSet]);
+  }, [selected, clusterIndex]);
 
   const pickSuggestion = (term: TaxonomyEntry) => {
     setQuery(term.label);
@@ -1431,7 +2037,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     searchQueryRef.current = "";
     setActiveHighlightLevel(null);
     setSelected(null);
-    setClusterName("");
     setHovered(null);
     searchFilterRef.current = null;
     setSearchFilterSet(null);
@@ -1440,6 +2045,9 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     setMatchedFaculty([]);
     setMatchedDepartments([]);
     setSelectedThemeCluster(null);
+    setExpandedThemeDomains(null);
+    setFocusedDomain(null);
+    setHoveredDomain(null);
     setClusterBreakdown(null);
   };
 
@@ -1473,16 +2081,21 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
 
   const statusLine = useMemo(() => {
     if (loading) return "Loading research papers…";
-    if (selected && highlightActive && clusterName) {
+    if (expandedThemeDomains && !searchActive) {
+      const totalDomains = allThemeDomains.length;
+      const pageInfo = domainPageCount > 1 ? ` · page ${domainPage + 1} of ${domainPageCount}` : "";
+      return `${themeDisplayName(expandedThemeDomains)} · ${formatCount(totalDomains)} domains${pageInfo} · use Previous/Next for more clusters`;
+    }
+    if (selected && highlightActive && activeClusterSummary) {
       if (searchActive) {
-        return `${formatCount(clusterHighlightCount)} in “${clusterName}” · ${formatCount(searchMatchCount)} total match “${searchQuery.trim()}”`;
+        return `${formatCount(activeClusterSummary.count)} in “${activeClusterSummary.name}” · ${formatCount(searchMatchCount)} total match “${searchQuery.trim()}”`;
       }
-      return `${formatCount(clusterHighlightCount)} papers highlighted for “${clusterName}”`;
+      return `${formatCount(activeClusterSummary.count)} papers highlighted for “${activeClusterSummary.name}”`;
     }
     if (selected) {
-      return "Paper selected · choose Topic, Sub-domain, or Broad theme in the sidebar to highlight";
+      return "Paper selected · choose Topic, Sub-domain, Domain, or Broad theme in the sidebar to highlight";
     }
-    if (selectedThemeCluster && searchActive) {
+    if (selectedThemeCluster && searchActive && !searchFacultyOnlyId) {
       return `Theme cluster “${selectedThemeCluster}” · department breakdown open · click Clear to reset`;
     }
     if (searchActive) {
@@ -1496,7 +2109,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         return `${formatCount(searchMatchCount)} papers · ${matchedDepartments[0].department}`;
       }
       if (searchFacultyOnlyId && matchedFaculty.length === 1) {
-        return `${formatCount(searchMatchCount)} papers by ${matchedFaculty[0].name}`;
+        return `${formatCount(searchMatchCount)} papers by ${matchedFaculty[0].name} · click a dot to explore`;
       }
       if (matchedDepartments.length > 0 && matchedFaculty.length === 0) {
         const deptNames = matchedDepartments.slice(0, 2).map((d) => d.department).join(", ");
@@ -1511,7 +2124,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       return `${formatCount(searchMatchCount)} papers match “${searchQuery.trim()}” · click a theme cluster for departments`;
     }
     if (clusterIndex) {
-      return `${formatCount(papers.length)} papers · ${clusterIndex.themes.length} themes · search to filter, then click a theme for departments`;
+      return `${formatCount(papers.length)} papers · ${clusterIndex.themes.length} themes · click a theme to explore its domains`;
     }
     return `All ${formatCount(papers.length)} papers · search, click a dot, then highlight from sidebar`;
   }, [
@@ -1519,7 +2132,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     searchActive,
     searchQuery,
     searchMatchCount,
-    clusterHighlightCount,
     searchLoading,
     searchFacultyOnlyId,
     searchDepartmentOnly,
@@ -1527,13 +2139,23 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     matchedDepartments,
     selected,
     highlightActive,
-    clusterName,
+    activeClusterSummary,
     clusterIndex,
     papers.length,
     selectedThemeCluster,
+    expandedThemeDomains,
+    allThemeDomains.length,
+    domainPage,
+    domainPageCount,
   ]);
 
   const showTooltip = hovered && !selected && !isViewMode;
+  const hoveredDomainEntry = hoveredDomain
+    ? domainClusterLabels.find((d) => d.domain === hoveredDomain)
+    : null;
+  const showDomainTooltip = Boolean(
+    expandedThemeDomains && hoveredDomainEntry && !hovered && !selected && !isViewMode,
+  );
 
   const modeToggle = (
     <div
@@ -1581,14 +2203,18 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   return (
     <div className="relative flex flex-col flex-1 min-h-0 bg-black text-white">
       <div className="absolute top-4 right-4 z-30 pointer-events-auto flex items-center gap-2">
-        {!isViewMode && (searchActive || selectedThemeCluster) && (
+        {!isViewMode && (searchActive || selectedThemeCluster || expandedThemeDomains) && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => {
-              clearHighlights();
-              closeThemeCluster();
+              if (expandedThemeDomains) {
+                closeExpandedTheme();
+              } else {
+                clearHighlights();
+                closeThemeCluster();
+              }
             }}
             className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800"
           >
@@ -1647,7 +2273,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
                   setComboOpen(true);
                 }}
                 onFocus={() => setComboOpen(true)}
-                placeholder="Search faculty, department, theme, sub-domain, topic, or paper…"
+                placeholder="Search faculty, department, theme, domain, sub-domain, topic, or paper…"
                 className="pl-9 h-10 rounded-full border-slate-700/80 bg-slate-900/80 text-white placeholder:text-slate-500 backdrop-blur-sm"
               />
             </div>
@@ -1657,7 +2283,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
                 <p className="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
                   {query.trim()
                     ? `Matching faculty, departments & areas for “${query.trim()}”`
-                    : "Faculty, departments, broad themes, sub-domains & topics"}
+                    : "Faculty, departments, broad themes, domains, sub-domains & topics"}
                 </p>
                 {!hasSuggestions ? (
                   <p className="px-3 py-3 text-sm text-slate-500">No matching faculty, departments, or terms</p>
@@ -1737,7 +2363,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
                     }}
                   />
                   <span className="font-medium text-slate-300">
-                    {clusterLabel(activeHighlightLevel)} · {formatCount(clusterHighlightCount)} papers (large)
+                    {clusterLabel(activeHighlightLevel)} · {formatCount(activeClusterSummary?.count ?? 0)} papers (large)
                   </span>
                 </span>
                 {searchActive ? (
@@ -1770,7 +2396,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-slate-300">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span>Loading {formatCount(69677)} papers…</span>
+            <span>Loading research papers…</span>
           </div>
         </div>
       )}
@@ -1779,6 +2405,22 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
           <div className="max-w-md rounded-xl border border-red-500/30 bg-red-950/40 p-4 text-sm text-red-200">
             {error}
           </div>
+        </div>
+      )}
+
+      {showDomainTooltip && hoveredDomainEntry && (
+        <div
+          className={cn(
+            "absolute z-20 max-w-xs rounded-lg border px-3 py-2 pointer-events-none shadow-xl",
+            "border-indigo-400/40 bg-slate-950/95 backdrop-blur-sm",
+          )}
+          style={{
+            left: Math.min(tooltipPos.x + 14, (containerRef.current?.clientWidth ?? 400) - 280),
+            top: Math.max(tooltipPos.y - 8, 72),
+          }}
+        >
+          <p className="font-semibold text-indigo-200 leading-snug">{hoveredDomainEntry.fullLabel}</p>
+          <p className="mt-1 text-xs text-slate-400">{formatCount(hoveredDomainEntry.count)} papers · click to focus</p>
         </div>
       )}
 
@@ -1795,14 +2437,32 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         >
           <p className="font-semibold text-white leading-snug">{hovered!.title}</p>
           <p className="mt-1 text-xs text-slate-400">
-            {[hovered!.theme, hovered!.subdomain].filter(Boolean).join(" · ")}
+            {[hovered!.theme, hovered!.domain, hovered!.subdomain].filter(Boolean).join(" · ")}
             {hovered!.topic ? ` · ${hovered!.topic}` : ""}
           </p>
           <p className="mt-1 text-[10px] text-slate-500">Click to open details in sidebar</p>
         </div>
       )}
 
-      {selectedThemeCluster && !isViewMode && searchActive && (
+      {expandedThemeDomains && !searchActive && !selected && !selectedThemeCluster && (
+        <AtlasThemeDomainsPanel
+          theme={expandedThemeDomains}
+          domains={allThemeDomains}
+          totalPapers={expandedDomainLayout?.totalPapers ?? 0}
+          allDomainCount={allThemeDomains.length}
+          page={domainPage}
+          pageCount={domainPageCount}
+          onPageChange={setDomainPage}
+          mapDomainNames={visibleDomainSet ?? new Set()}
+          focusedDomain={focusedDomain}
+          hoveredDomain={hoveredDomain}
+          onFocusDomain={handleFocusDomain}
+          onHoverDomain={setHoveredDomain}
+          onClose={closeExpandedTheme}
+        />
+      )}
+
+      {selectedThemeCluster && !isViewMode && searchActive && !searchFacultyOnlyId && (
         <AtlasThemeClusterPanel
           theme={selectedThemeCluster}
           query={searchQuery.trim()}
@@ -1814,7 +2474,6 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
             closeThemeCluster();
             setSelected(full);
             setActiveHighlightLevel(null);
-            setClusterName("");
           }}
         />
       )}
@@ -1825,15 +2484,12 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
           detail={paperDetail}
           detailLoading={detailLoading}
           activeHighlightLevel={activeHighlightLevel}
-          clusterName={clusterName}
-          clusterCount={clusterHighlightCount}
           levelCounts={panelLevelCounts}
           searchActive={searchActive}
           onClusterLevelChange={handleClusterLevelChange}
           onClose={() => {
             setSelected(null);
             setActiveHighlightLevel(null);
-            setClusterName("");
           }}
         />
       )}
