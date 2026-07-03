@@ -12,6 +12,7 @@ export interface KgAtlasPaper {
   id: string;
   title: string;
   theme: string;
+  domain: string;
   subdomain: string;
   topic: string;
   department?: string;
@@ -31,6 +32,7 @@ export interface KgAtlasClusterPaper {
   id: string;
   i: number;
   title: string;
+  domain: string;
   topic: string;
   citations: number;
 }

@@ -42,7 +42,7 @@ export default function ChatPanelHeader({
           "flex items-center gap-3 min-w-0",
           "px-4 py-3",
           isExpanded ? "md:px-5 md:py-3.5" : "md:px-4",
-          "bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/85",
+          "bg-background",
         )}
       >
         {/* Brand icon */}
