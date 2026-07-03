@@ -685,8 +685,11 @@ const ChatbotWidget = () => {
                   width: "min(calc(100vw - 2rem), 420px)",
                   height: "min(600px, calc(100vh - 8rem))",
                   borderRadius: "20px",
+                  // Opaque hsl(var(--background)) base layer underneath the tint —
+                  // without it, the gradient's near-transparent start color let the
+                  // page behind the widget show through the header/greeting area.
                   background:
-                    "linear-gradient(160deg, hsl(var(--primary)/0.02) 0%, hsl(var(--background)) 40%)",
+                    "linear-gradient(160deg, hsl(var(--primary)/0.06) 0%, transparent 40%), hsl(var(--background))",
                   border: "1px solid hsl(var(--border)/0.5)",
                   boxShadow: [
                     "0 32px 80px -12px rgba(0,0,0,0.28)",
