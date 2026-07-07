@@ -1,6 +1,6 @@
 # Research Ambit — Frontend
 
-React SPA for [Research Ambit](https://10.17.8.24) at IIT Delhi. Browse faculty, explore research themes, search publications, view knowledge graphs, and chat with the research assistant.
+React SPA for [Research Ambit](https://researchambit.iitd.ac.in/) at IIT Delhi. Browse faculty, explore research themes, search publications, view knowledge graphs, and chat with the research assistant.
 
 ## Features
 
