@@ -1,4 +1,5 @@
-const API_BASE = `${import.meta.env.VITE_API_URL || "http://localhost:3002/api"}/kg`;
+import { kgApiClient } from "@/lib/api/apiClient";
+import { KG_BASE_URL } from "@/lib/api/endpoints";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -6,16 +7,59 @@ interface ApiEnvelope<T> {
   message?: string;
 }
 
+// These calls (esp. the atlas faculty/department search, fired on every
+// debounced keystroke) don't go through React Query, so without a cache
+// here, re-typing/backspacing to a previously-seen query re-hits the network
+// every time. Small in-memory TTL cache + in-flight de-dupe, keyed by the
+// request path (query params included), fixes that without needing a
+// bigger refactor of the search effect that calls these.
+const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 200;
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+const inflight = new Map<string, Promise<unknown>>();
+
 async function kgFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  const body = (await response.json()) as ApiEnvelope<T> & { message?: string };
-  if (!response.ok || body.success === false) {
-    throw new Error(body.message || `KG request failed (${response.status})`);
+  const cached = responseCache.get(path);
+  if (cached) {
+    if (Date.now() < cached.expiresAt) return cached.data as T;
+    responseCache.delete(path);
   }
-  return body.data;
+
+  const existing = inflight.get(path);
+  if (existing) return existing as Promise<T>;
+
+  const request = (async () => {
+    const { data: body } = await kgApiClient.get<ApiEnvelope<T>>(path);
+    if (body.success === false) {
+      throw new Error(body.message || "KG request failed");
+    }
+    if (responseCache.size >= CACHE_MAX_ENTRIES) {
+      const oldestKey = responseCache.keys().next().value;
+      if (oldestKey !== undefined) responseCache.delete(oldestKey);
+    }
+    responseCache.set(path, { data: body.data, expiresAt: Date.now() + CACHE_TTL_MS });
+    return body.data;
+  })().finally(() => inflight.delete(path));
+
+  inflight.set(path, request);
+  return request;
 }
 
-export const KG_API = API_BASE;
+export const KG_API = KG_BASE_URL;
+
+/**
+ * Full 3D atlas payload — deliberately bypasses the cache/envelope handling
+ * above: the server sends the raw file content (not the {success,data}
+ * envelope every other KG endpoint uses) with its own no-cache/ETag headers,
+ * and the payload is large enough that we always want a fresh fetch rather
+ * than serving a stale in-memory copy.
+ */
+export async function fetchKgAtlas<T = { papers: unknown[] }>(): Promise<T> {
+  const { data } = await kgApiClient.get<T>("/atlas", {
+    headers: { "Cache-Control": "no-cache" },
+  });
+  return data;
+}
 
 export const fetchKgFacultyIndex = () => kgFetch<import("./types").KgFacultyItem[]>("/faculty");
 

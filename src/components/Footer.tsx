@@ -124,7 +124,6 @@ const Footer = () => {
                 { to: "/directory", label: "Directory" },
                 { to: "/knowledge-graph", label: "Knowledge Graph" },
                 { to: "/magazines", label: "Magazines" },
-                { to: "/mindmap", label: "Mind Map" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
                 <li key={link.to}>

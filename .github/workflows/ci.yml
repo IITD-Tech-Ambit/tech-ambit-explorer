@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, prod]
+  push:
+    branches: [main, prod]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # `npm run lint` currently has ~13 pre-existing eslint errors unrelated
+      # to any given change, so it isn't usable as a gate yet. `vite build`
+      # (which includes the TypeScript typecheck) passes cleanly and reflects
+      # real breakage. Swap this for lint too once the existing errors are
+      # cleaned up.
+      - run: npm run build

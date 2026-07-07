@@ -6,7 +6,7 @@
  * IDs — cards are resolved through the directory API (resolveFacultiesByKerberos).
  */
 
-const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
+import { searchApiClient } from '../apiClient';
 
 export interface TaxonomyMeta {
   took_ms: number;
@@ -71,12 +71,8 @@ function buildParams(filters: TaxonomyBrowseFilters, extra: Record<string, strin
 }
 
 async function getJson<T>(path: string, params?: URLSearchParams): Promise<T> {
-  const qs = params && [...params.keys()].length > 0 ? `?${params}` : '';
-  const response = await fetch(`${SEARCH_API_BASE_URL}${path}${qs}`);
-  if (!response.ok) {
-    throw new Error(`Taxonomy request failed (${response.status}): ${response.statusText}`);
-  }
-  return response.json();
+  const { data } = await searchApiClient.get<T>(path, { params });
+  return data;
 }
 
 export const getTaxonomyDepartments = () =>

@@ -1,4 +1,4 @@
-const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/suggestions`;
+import apiClient from '../apiClient';
 
 export interface SuggestionPayload {
     name?: string;
@@ -28,16 +28,18 @@ export const submitSuggestion = async (
     formData.append('message', payload.message);
     if (screenshot) formData.append('screenshot', screenshot);
 
-    // Do NOT set Content-Type header — browser sets it automatically with multipart boundary
-    const response = await fetch(API_BASE_URL, {
-        method: 'POST',
-        body: formData,
-    });
-
-    const data = await response.json();
-
-    if (!data.success) {
-        const detail = data.errors?.[0]?.message || data.message || 'Submission failed.';
-        throw new Error(detail);
+    try {
+        // Do NOT set Content-Type header — axios/browser sets it automatically
+        // with the multipart boundary for FormData bodies.
+        const { data } = await apiClient.post('/suggestions', formData);
+        if (!data.success) {
+            throw new Error(data.errors?.[0]?.message || data.message || 'Submission failed.');
+        }
+    } catch (err: any) {
+        if (err?.response) {
+            const data = err.response.data;
+            throw new Error(data?.errors?.[0]?.message || data?.message || 'Submission failed.');
+        }
+        throw err;
     }
 };

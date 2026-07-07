@@ -1,73 +1,81 @@
-# Welcome to your Lovable project
+# Research Ambit — Frontend
 
-## Project info
+React SPA for [Research Ambit](https://researchambit.iitd.ac.in/) at IIT Delhi. Browse faculty, explore research themes, search publications, view knowledge graphs, and chat with the research assistant.
 
-**URL**: https://lovable.dev/projects/a477d361-4bfe-44cb-9320-b2bb9321a5ad
+## Features
 
-## How can I edit this code?
+| Area | Route | Backend |
+|------|-------|---------|
+| Faculty directory | `/directory` | [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) |
+| Research explore & taxonomy | `/explore` | [opensearch](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) |
+| Knowledge graph | `/knowledge-graph` | research-ambit-main |
+| Faculty profiles | `/faculty/:id` | research-ambit-main |
+| Magazines / CMS | `/magazines` | research-ambit-main |
+| AI chatbot | floating widget | [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) |
 
-There are several ways of editing your application.
+## Stack
 
-**Use Lovable**
+- **Vite** + **React 18** + **TypeScript**
+- **TanStack Query** for data fetching
+- **shadcn/ui** + **Tailwind CSS**
+- **Cytoscape** / **Three.js** for graph visualizations
+- **React Router** for client-side routing
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a477d361-4bfe-44cb-9320-b2bb9321a5ad) and start prompting.
+## Role in the Research Ambit stack
 
-Changes made via Lovable will be committed automatically to this repo.
+```
+tech-ambit-explorer (this repo)     :8080 / nginx
+        │
+        ├── /api/*          → research-ambit-main      :3002
+        ├── /search/*       → opensearch (search API)  :3000
+        └── /chat-api/*     → chatbot-agent            :3003
+```
 
-**Use your preferred IDE**
+## Prerequisites
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- [Node.js](https://nodejs.org/) 20+
+- Running backend services (or point env vars at deployed instances)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Setup
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+git clone https://github.com/IITD-Tech-Ambit/tech-ambit-explorer.git
+cd tech-ambit-explorer
+npm install
+cp .env.example .env
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Dev server runs at **http://localhost:8080** (Vite default may vary — check terminal output).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Environment variables
 
-**Use GitHub Codespaces**
+| Variable | Default (local) | Description |
+|----------|-----------------|-------------|
+| `VITE_API_URL` | `http://localhost:3002/api` | research-ambit-main backend |
+| `VITE_SEARCH_API_URL` | `http://localhost:3000/api/v1` | Hybrid search API |
+| `VITE_CHAT_API_URL` | `http://localhost:3003/api/v1` | Chatbot agent |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+For Docker/nginx production, use relative paths (see `.env.example`).
 
-## What technologies are used for this project?
+## Scripts
 
-This project is built with:
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | Production build to `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment
 
-## How can I deploy this project?
+Build static assets with `npm run build` and serve `dist/` behind nginx. In the full Research Ambit stack, nginx routes `/api`, `/search`, and `/chat-api` to the respective backend containers.
 
-Simply open [Lovable](https://lovable.dev/projects/a477d361-4bfe-44cb-9320-b2bb9321a5ad) and click on Share -> Publish.
+## Related repositories
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Repository | Role |
+|------------|------|
+| [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) | Express backend API |
+| [SEO-Backend-iitd](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) | Hybrid search (OpenSearch) |
+| [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) | RAG chatbot |
+| [classification-pipeline](https://github.com/IITD-Tech-Ambit/classification-pipeline) | Paper classification architecture |

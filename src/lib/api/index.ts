@@ -13,22 +13,8 @@ export { ENDPOINTS, BASE_URL, buildUrl } from './endpoints';
 // Services
 export * from './services/magazineService';
 export * from './services/analyticsService';
-export * from './services/thesisService';
 export * from './services/searchService';
 export * from './services/chatService';
-
-// Re-export specific types for convenience
-export type { 
-  DepartmentCollection, 
-  ThesisData, 
-  Faculty, 
-  PhdThesisData, 
-  ResearchData, 
-  OpenPathResponse 
-} from './types';
-
-// Re-export specific functions
-export { fetchFullResearchDocument } from './services/thesisService';
 
 // Query Keys
 export { queryKeys } from './hooks/queryKeys';
