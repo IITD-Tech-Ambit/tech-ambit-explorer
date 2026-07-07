@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, Compass, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Filter, FileText, Users, Building, Loader2, X, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
 import ExploreThemeChips from "@/components/explore/taxonomy/ExploreThemeChips";
 
-import { useSearchResearch, fetchOpenPath, fetchFullResearchDocument, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
+import { useSearchResearch, type SearchRequest, type SearchDocument, type RelatedFaculty } from "@/lib/api";
 import { useAuthorScopedSearch, useAllFacultyForQuery } from "@/lib/api/hooks/useSearch";
 import { useSuggest } from "@/lib/api/hooks/useSuggest";
 import type { AuthorScopedSearchRequest, SearchAuthor, SuggestAuthor, SuggestPaper, SearchFilters } from "@/lib/api/types";
@@ -206,7 +206,6 @@ function ExploreCardAuthorsLine({
 }
 
 const Explore = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -221,7 +220,6 @@ const Explore = () => {
     const refines = searchParams.getAll('refine');
     return base ? [base, ...refines] : [];
   });
-  const [isNavigating, setIsNavigating] = useState(false);
   const [currentPage, setCurrentPage] = useState(() => {
     const page = searchParams.get('page');
     return page ? parseInt(page, 10) : 1;
@@ -805,30 +803,6 @@ const Explore = () => {
     },
     []
   );
-
-  // Handle navigate to mind map
-  const handleNavigateToMindMap = async (documentId: string) => {
-    setIsNavigating(true);
-    try {
-      // Step 1: Fetch full research document
-      const fullDocument = await fetchFullResearchDocument(documentId);
-      
-      // Step 2: Fetch open path
-      const pathResponse = await fetchOpenPath(fullDocument);
-      
-      // Step 3: Navigate to mind map with path
-      navigate('/mindmap', { state: { navigationPath: pathResponse } });
-    } catch (error) {
-      console.error('Error navigating to mind map:', error);
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Could not open the mind map for this paper.';
-      alert(`Failed to navigate to mind map. ${message}`);
-    } finally {
-      setIsNavigating(false);
-    }
-  };
-
 
   // Filter results based on activeFilter (for display purposes)
   const filteredResults = useMemo(() => {
@@ -2081,24 +2055,6 @@ const Explore = () => {
 
                    return null;
                  })()}
-                 <Button
-                   size="lg"
-                   onClick={() => handleNavigateToMindMap(selectedDocument._id)}
-                   disabled={isNavigating}
-                   className="w-full sm:w-auto gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all font-bold"
-                 >
-                   {isNavigating ? (
-                     <>
-                       <Loader2 className="h-4 w-4 animate-spin" />
-                       Navigating...
-                     </>
-                   ) : (
-                     <>
-                       <Compass className="h-4 w-4" />
-                       Navigate to Mind Map
-                     </>
-                   )}
-                 </Button>
                </div>
             </div>
           </div>

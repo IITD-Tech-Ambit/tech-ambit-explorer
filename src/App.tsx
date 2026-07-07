@@ -13,7 +13,6 @@ import Directory from "./pages/Directory";
 import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
-import Mindmap from "./pages/Mindmap";
 import KnowledgeGraph from "./pages/KnowledgeGraph";
 import Contributors from "./pages/Contributors";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -60,7 +59,6 @@ const App = () => {
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
-            <Route path="/mindmap" element={<Mindmap />} />
             <Route path="/contributors" element={<Contributors />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
