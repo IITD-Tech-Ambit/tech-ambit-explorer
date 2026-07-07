@@ -1,117 +1,81 @@
-# Research Ambit Explorer
+# Research Ambit — Frontend
 
-Frontend web application for [**Research Ambit**](https://github.com/IITD-Tech-Ambit) — IIT Delhi's research discovery portal. Browse faculty, search publications, explore research themes, view the knowledge graph, and chat with an AI research assistant.
+React SPA for [Research Ambit](https://iitd-dev.vercel.app) at IIT Delhi. Browse faculty, explore research themes, search publications, view knowledge graphs, and chat with the research assistant.
 
 ## Features
 
-| Area | What it does |
-|------|----------------|
-| **Explore** | Hybrid search over IIT Delhi publications with filters, author scoping, taxonomy theme chips, and related-faculty discovery |
-| **Taxonomy browse** | Navigate research themes and drill into topic hierarchies |
-| **Directory** | Searchable faculty directory grouped by department, school, centre, and research lab |
-| **Faculty profiles** | Per-faculty pages with publications, metrics, and external profile links |
-| **Knowledge graph** | Interactive 3D research atlas (Research Atlas) linking papers, topics, and IITD faculty |
-| **Magazines** | Browse and read Research Ambit magazine issues |
-| **Research chatbot** | Global RAG chatbot widget (SSE streaming) for natural-language research queries |
-| **Suggestions** | In-app feedback and suggestion submission |
+| Area | Route | Backend |
+|------|-------|---------|
+| Faculty directory | `/directory` | [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) |
+| Research explore & taxonomy | `/explore` | [opensearch](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) |
+| Knowledge graph | `/knowledge-graph` | research-ambit-main |
+| Faculty profiles | `/faculty/:id` | research-ambit-main |
+| Magazines / CMS | `/magazines` | research-ambit-main |
+| AI chatbot | floating widget | [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) |
 
-## Tech stack
+## Stack
 
-- **React 18** + **TypeScript** + **Vite 7**
-- **React Router**, **TanStack Query**, **Axios**
-- **shadcn/ui**, **Tailwind CSS**, **Radix UI**
-- **Three.js** / **Cytoscape** for knowledge-graph visualizations
-- **Recharts** for analytics-style views
+- **Vite** + **React 18** + **TypeScript**
+- **TanStack Query** for data fetching
+- **shadcn/ui** + **Tailwind CSS**
+- **Cytoscape** / **Three.js** for graph visualizations
+- **React Router** for client-side routing
+
+## Role in the Research Ambit stack
+
+```
+tech-ambit-explorer (this repo)     :8080 / nginx
+        │
+        ├── /api/*          → research-ambit-main      :3002
+        ├── /search/*       → opensearch (search API)  :3000
+        └── /chat-api/*     → chatbot-agent            :3003
+```
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+ (matches CI)
-- npm
-- Running backend services for full functionality (see [Related repositories](#related-repositories))
+- [Node.js](https://nodejs.org/) 20+
+- Running backend services (or point env vars at deployed instances)
 
-## Local development
+## Setup
 
 ```bash
 git clone https://github.com/IITD-Tech-Ambit/tech-ambit-explorer.git
 cd tech-ambit-explorer
 npm install
-cp .env.example .env   # adjust URLs if your services use non-default ports
+cp .env.example .env
 npm run dev
 ```
 
-The dev server starts on **http://localhost:8080** (see `vite.config.ts`).
+Dev server runs at **http://localhost:8080** (Vite default may vary — check terminal output).
 
 ### Environment variables
 
-| Variable | Default (local) | Backend |
-|----------|-----------------|---------|
-| `VITE_API_URL` | `http://localhost:3002/api` | [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) — CMS, directory, knowledge graph, magazines |
-| `VITE_SEARCH_API_URL` | `http://localhost:3000/api/v1` | [SEO-Backend-iitd](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) — hybrid OpenSearch + embeddings |
-| `VITE_CHAT_API_URL` | `http://localhost:3003/api/v1` | [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) — agentic RAG chatbot |
+| Variable | Default (local) | Description |
+|----------|-----------------|-------------|
+| `VITE_API_URL` | `http://localhost:3002/api` | research-ambit-main backend |
+| `VITE_SEARCH_API_URL` | `http://localhost:3000/api/v1` | Hybrid search API |
+| `VITE_CHAT_API_URL` | `http://localhost:3003/api/v1` | Chatbot agent |
 
-For Docker/nginx production (paths proxied under one host), use relative URLs:
-
-```env
-VITE_API_URL=/api
-VITE_SEARCH_API_URL=/search/api/v1
-VITE_CHAT_API_URL=/chat-api/api/v1
-```
+For Docker/nginx production, use relative paths (see `.env.example`).
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite dev server with HMR |
-| `npm run build` | Production build (`dist/`) |
-| `npm run preview` | Serve the production build locally |
-| `npm run lint` | Run ESLint |
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | Production build to `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
 
-## Build and deploy
+## Deployment
 
-**Static build**
-
-```bash
-npm run build
-```
-
-Output is written to `dist/` and can be served by any static file host or container.
-
-**Full-stack production**
-
-This frontend is one service in the Tech Ambit stack. Production orchestration (nginx reverse proxy, Docker Compose, TLS) lives in the search/deploy tooling alongside sibling repos on the deployment VM. Typical layout:
-
-- `/` → this frontend (port 80)
-- `/api/` → research-ambit-main
-- `/search/` → SEO-Backend-iitd (search API)
-- `/chat-api/` → chatbot-agent
-
-CI runs `npm ci` and `npm run build` on pushes and pull requests to `main` and `prod`.
-
-## Project structure
-
-```
-src/
-├── pages/           # Route-level views (Explore, Directory, KnowledgeGraph, …)
-├── components/      # UI, chat widget, knowledge-graph atlas, directory cards
-├── lib/api/         # API client, services, hooks, types
-└── hooks/           # Shared React hooks
-```
+Build static assets with `npm run build` and serve `dist/` behind nginx. In the full Research Ambit stack, nginx routes `/api`, `/search`, and `/chat-api` to the respective backend containers.
 
 ## Related repositories
 
 | Repository | Role |
 |------------|------|
-| [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) | Express backend — faculty directory, CMS, magazines, knowledge-graph API |
-| [SEO-Backend-iitd](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) | Hybrid search API (BM25 + semantic embeddings) |
-| [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) | LangGraph/FastAPI research chatbot with SSE streaming |
-| [classification-pipeline](https://github.com/IITD-Tech-Ambit/classification-pipeline) | Publication classification and taxonomy tooling |
-| [Faculty-Data-Parser](https://github.com/IITD-Tech-Ambit/Faculty-Data-Parser) | Faculty data ingestion |
-| [Scopus_Parser](https://github.com/IITD-Tech-Ambit/Scopus_Parser) | Scopus bibliographic parsing |
-
-## Contact
-
-Research Ambit Team, IIT Delhi — [iitdambit@iitd.ac.in](mailto:iitdambit@iitd.ac.in)
-
-## License
-
-See repository license terms. Content and branding are property of IIT Delhi.
+| [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) | Express backend API |
+| [SEO-Backend-iitd](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) | Hybrid search (OpenSearch) |
+| [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) | RAG chatbot |
+| [classification-pipeline](https://github.com/IITD-Tech-Ambit/classification-pipeline) | Paper classification architecture |
