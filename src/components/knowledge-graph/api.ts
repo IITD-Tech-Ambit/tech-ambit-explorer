@@ -6,13 +6,43 @@ interface ApiEnvelope<T> {
   message?: string;
 }
 
+// These calls (esp. the atlas faculty/department search, fired on every
+// debounced keystroke) don't go through React Query, so without a cache
+// here, re-typing/backspacing to a previously-seen query re-hits the network
+// every time. Small in-memory TTL cache + in-flight de-dupe, keyed by the
+// request path (query params included), fixes that without needing a
+// bigger refactor of the search effect that calls these.
+const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 200;
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+const inflight = new Map<string, Promise<unknown>>();
+
 async function kgFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  const body = (await response.json()) as ApiEnvelope<T> & { message?: string };
-  if (!response.ok || body.success === false) {
-    throw new Error(body.message || `KG request failed (${response.status})`);
+  const cached = responseCache.get(path);
+  if (cached) {
+    if (Date.now() < cached.expiresAt) return cached.data as T;
+    responseCache.delete(path);
   }
-  return body.data;
+
+  const existing = inflight.get(path);
+  if (existing) return existing as Promise<T>;
+
+  const request = (async () => {
+    const response = await fetch(`${API_BASE}${path}`);
+    const body = (await response.json()) as ApiEnvelope<T> & { message?: string };
+    if (!response.ok || body.success === false) {
+      throw new Error(body.message || `KG request failed (${response.status})`);
+    }
+    if (responseCache.size >= CACHE_MAX_ENTRIES) {
+      const oldestKey = responseCache.keys().next().value;
+      if (oldestKey !== undefined) responseCache.delete(oldestKey);
+    }
+    responseCache.set(path, { data: body.data, expiresAt: Date.now() + CACHE_TTL_MS });
+    return body.data;
+  })().finally(() => inflight.delete(path));
+
+  inflight.set(path, request);
+  return request;
 }
 
 export const KG_API = API_BASE;
