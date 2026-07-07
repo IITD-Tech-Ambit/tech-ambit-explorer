@@ -1,88 +1,51 @@
+import apiClient from '../apiClient';
 import type { DirectoryResponse, DirectoryFaculty, FacultyResearchSummary, YearPublicationsResponse, GroupedDepartmentsResponse, DepartmentGroupFacultiesResponse, DirectorySearchResult } from '../types';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3002/api'}/directory`;
+interface ApiEnvelope<T> {
+    success: boolean;
+    message?: string;
+    data: T;
+}
 
-export const searchFaculties = async (
-    query: string,
-    limit: number = 10
-): Promise<DirectorySearchResult> => {
-    const params = new URLSearchParams({ q: query, limit: String(limit) });
-    const response = await fetch(`${API_BASE_URL}/search?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Search failed');
+/** Unwrap the { success, data, message } envelope every endpoint here returns. */
+async function unwrap<T>(request: Promise<{ data: ApiEnvelope<T> }>, fallbackError: string): Promise<T> {
+    const { data } = await request;
+    if (!data.success) throw new Error(data.message || fallbackError);
     return data.data;
-};
+}
 
-export const getFaculties = async (
+export const searchFaculties = (query: string, limit: number = 10): Promise<DirectorySearchResult> =>
+    unwrap(apiClient.get('/directory/search', { params: { q: query, limit } }), 'Search failed');
+
+export const getFaculties = (
     page: number = 1,
     limit: number = 9,
     sortBy: string = 'hIndex',
     order: string = 'desc'
-): Promise<DirectoryResponse> => {
-    const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-        sortBy,
-        order
-    });
-    const response = await fetch(`${API_BASE_URL}?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch faculties');
-    return data.data;
-};
+): Promise<DirectoryResponse> =>
+    unwrap(apiClient.get('/directory', { params: { page, limit, sortBy, order } }), 'Failed to fetch faculties');
 
-export const getGroupedFaculties = async (
-    category: string = 'departments'
-): Promise<GroupedDepartmentsResponse> => {
-    const params = new URLSearchParams({ category });
-    const response = await fetch(`${API_BASE_URL}/grouped?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch grouped faculties');
-    return data.data;
-};
+export const getGroupedFaculties = (category: string = 'departments'): Promise<GroupedDepartmentsResponse> =>
+    unwrap(apiClient.get('/directory/grouped', { params: { category } }), 'Failed to fetch grouped faculties');
 
-export const getDepartmentGroupsSummary = async (
-    category: string = 'departments'
-): Promise<GroupedDepartmentsResponse> => {
-    const params = new URLSearchParams({ category, summaryOnly: 'true' });
-    const response = await fetch(`${API_BASE_URL}/grouped?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch department groups');
-    return data.data;
-};
+export const getDepartmentGroupsSummary = (category: string = 'departments'): Promise<GroupedDepartmentsResponse> =>
+    unwrap(apiClient.get('/directory/grouped', { params: { category, summaryOnly: 'true' } }), 'Failed to fetch department groups');
 
-export const getDepartmentGroupFaculties = async (
+export const getDepartmentGroupFaculties = (
     category: string,
     departmentId: string
-): Promise<DepartmentGroupFacultiesResponse> => {
-    const params = new URLSearchParams({ category });
-    const response = await fetch(`${API_BASE_URL}/grouped/${departmentId}/faculties?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch department faculties');
-    return data.data;
-};
+): Promise<DepartmentGroupFacultiesResponse> =>
+    unwrap(apiClient.get(`/directory/grouped/${departmentId}/faculties`, { params: { category } }), 'Failed to fetch department faculties');
 
-export const getFacultyById = async (id: string): Promise<DirectoryFaculty> => {
-    const response = await fetch(`${API_BASE_URL}/${id}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch faculty');
-    return data.data;
-};
+export const getFacultyById = (id: string): Promise<DirectoryFaculty> =>
+    unwrap(apiClient.get(`/directory/${id}`), 'Failed to fetch faculty');
 
-export const getFacultyByKerberos = async (kerberos: string): Promise<DirectoryFaculty> => {
-    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/profile`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch faculty');
-    return data.data;
-};
+export const getFacultyByKerberos = (kerberos: string): Promise<DirectoryFaculty> =>
+    unwrap(apiClient.get(`/directory/faculty/${encodeURIComponent(kerberos)}/profile`), 'Failed to fetch faculty');
 
 /** Resolve directory profile by Scopus author id (paper authors[].author_id). */
-export const getFacultyByScopusId = async (scopusId: string): Promise<DirectoryFaculty> => {
-    const response = await fetch(`${API_BASE_URL}/by-scopus/${encodeURIComponent(scopusId)}`);
-    const data = await response.json();
-    if (!data.success) throw new Error(data.message || 'Failed to fetch faculty');
-    return data.data;
-};
+export const getFacultyByScopusId = (scopusId: string): Promise<DirectoryFaculty> =>
+    unwrap(apiClient.get(`/directory/by-scopus/${encodeURIComponent(scopusId)}`), 'Failed to fetch faculty');
 
 /**
  * Batch-resolve Scopus author ids → IITD Faculty. Only ids matching an IITD
@@ -94,14 +57,11 @@ export const resolveFacultiesByScopusIds = async (
 ): Promise<Record<string, DirectoryFaculty>> => {
     const ids = [...new Set((scopusIds || []).filter((id) => typeof id === 'string' && id.trim().length > 0))];
     if (ids.length === 0) return {};
-    const response = await fetch(`${API_BASE_URL}/by-scopus/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scopusIds: ids }),
-    });
-    const data = await response.json();
-    if (!data.success) throw new Error(data.message || 'Failed to resolve IITD faculty');
-    return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
+    const result = await unwrap<{ matches?: Record<string, DirectoryFaculty> }>(
+        apiClient.post('/directory/by-scopus/batch', { scopusIds: ids }),
+        'Failed to resolve IITD faculty'
+    );
+    return result?.matches || {};
 };
 
 /**
@@ -113,37 +73,30 @@ export const resolveFacultiesByKerberos = async (
 ): Promise<Record<string, DirectoryFaculty>> => {
     const ids = [...new Set((kerberosIds || []).filter((id) => typeof id === 'string' && id.trim().length > 0))];
     if (ids.length === 0) return {};
-    const response = await fetch(`${API_BASE_URL}/by-kerberos/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kerberosIds: ids }),
-    });
-    const data = await response.json();
-    if (!data.success) throw new Error(data.message || 'Failed to resolve IITD faculty');
-    return (data.data?.matches || {}) as Record<string, DirectoryFaculty>;
+    const result = await unwrap<{ matches?: Record<string, DirectoryFaculty> }>(
+        apiClient.post('/directory/by-kerberos/batch', { kerberosIds: ids }),
+        'Failed to resolve IITD faculty'
+    );
+    return result?.matches || {};
 };
 
-export const getFacultyResearchSummary = async (
+export const getFacultyResearchSummary = (
     kerberos: string,
     yearOffset: number = 0,
     yearLimit: number = 5
-): Promise<FacultyResearchSummary> => {
-    const params = new URLSearchParams({ yearOffset: String(yearOffset), yearLimit: String(yearLimit) });
-    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/research-summary?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch research summary');
-    return data.data;
-};
+): Promise<FacultyResearchSummary> =>
+    unwrap(
+        apiClient.get(`/directory/faculty/${encodeURIComponent(kerberos)}/research-summary`, { params: { yearOffset, yearLimit } }),
+        'Failed to fetch research summary'
+    );
 
-export const getFacultyYearPublications = async (
+export const getFacultyYearPublications = (
     kerberos: string,
     year: number,
     skip: number = 0,
     limit: number = 20
-): Promise<YearPublicationsResponse> => {
-    const params = new URLSearchParams({ year: String(year), skip: String(skip), limit: String(limit) });
-    const response = await fetch(`${API_BASE_URL}/faculty/${encodeURIComponent(kerberos)}/publications?${params}`);
-    const data = await response.json();
-    if (!data.success) throw new Error('Failed to fetch year publications');
-    return data.data;
-};
+): Promise<YearPublicationsResponse> =>
+    unwrap(
+        apiClient.get(`/directory/faculty/${encodeURIComponent(kerberos)}/publications`, { params: { year, skip, limit } }),
+        'Failed to fetch year publications'
+    );

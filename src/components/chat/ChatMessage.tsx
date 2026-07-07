@@ -249,6 +249,12 @@ const renderPieChart = (chart: PieChartData, opts?: ChartLayoutOpts) => {
 
 // ── Chart block ──
 
+const chartRenderers: Record<string, (chart: LineChartData | BarChartData | PieChartData, opts?: ChartLayoutOpts) => React.ReactNode> = {
+  line: (chart, opts) => renderLineChart(chart as LineChartData, opts),
+  bar: (chart, opts) => renderBarChart(chart as BarChartData, opts),
+  pie: (chart, opts) => renderPieChart(chart as PieChartData, opts),
+};
+
 const ChartBlock = ({
   chart,
   chartRef,
@@ -285,9 +291,7 @@ const ChartBlock = ({
       </div>
       <div className="w-full min-w-0 max-w-full px-1 pb-3 pt-2 overflow-x-auto">
         <div className="w-full min-w-0" style={{ minWidth: isCompact ? undefined : 0 }}>
-          {chart.chart.chart_type === "line" && renderLineChart(chart.chart as LineChartData, layoutOpts)}
-          {chart.chart.chart_type === "bar" && renderBarChart(chart.chart as BarChartData, layoutOpts)}
-          {chart.chart.chart_type === "pie" && renderPieChart(chart.chart as PieChartData, layoutOpts)}
+          {chartRenderers[chart.chart.chart_type]?.(chart.chart, layoutOpts)}
         </div>
       </div>
     </div>

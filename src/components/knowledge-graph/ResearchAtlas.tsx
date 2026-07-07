@@ -19,6 +19,7 @@ import type {
   KgFacultyItem,
 } from "./types";
 import {
+  fetchKgAtlas,
   fetchKgAtlasClusterBreakdown,
   fetchKgAtlasDepartmentSearch,
   fetchKgAtlasFacultySearch,
@@ -26,7 +27,6 @@ import {
   fetchKgFacultyAtlasIndices,
   fetchKgFacultyIndex,
   fetchKgPaperMeta,
-  KG_API,
   type KgPaperMeta,
 } from "./api";
 import { getPaperExternalUrl } from "./paperLink";
@@ -1105,20 +1105,13 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`${KG_API}/atlas`, { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.message || `Failed to load atlas (${res.status})`);
-        }
-        return res.json();
-      })
+    fetchKgAtlas<{ papers: KgAtlasPaper[] }>()
       .then((data) => {
         if (cancelled) return;
         setPapers(filterClassifiedAtlasPapers(data.papers ?? []));
       })
       .catch((e) => {
-        if (!cancelled) setError(String(e.message || e));
+        if (!cancelled) setError(String(e?.response?.data?.message || e.message || e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
