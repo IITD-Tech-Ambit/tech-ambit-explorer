@@ -400,7 +400,7 @@ const MagazineDetail = () => {
             {showScrollTop && (
                 <button
                     onClick={scrollToTop}
-                    className="fixed bottom-24 right-6 z-50 p-3 sm:p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-300 animate-fade-in"
+                    className="fixed bottom-36 right-5 z-50 p-3 sm:p-4 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-300 animate-fade-in"
                     aria-label="Scroll to top"
                 >
                     <ChevronUp className="h-5 w-5 sm:h-6 sm:w-6" />
