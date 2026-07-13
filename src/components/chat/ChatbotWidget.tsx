@@ -513,7 +513,7 @@ const ChatbotWidget = () => {
                 Login with IITD
               </button>
             </div>
-          ) : quota && quota.remaining === 0 ? (
+          ) : quota && !quota.unlimited && quota.remaining === 0 ? (
             <div
               className={cn(
                 "rounded-2xl px-4 py-3.5 text-center",
@@ -605,7 +605,7 @@ const ChatbotWidget = () => {
               isExp ? "max-w-[780px] mx-auto text-[10px]" : "text-[9px]",
             )}
           >
-            {user && quota && quota.remaining > 0 && (
+            {user && quota && !quota.unlimited && quota.remaining! > 0 && (
               <span className="text-primary/50">{quota.remaining} of {quota.limit} messages left today · </span>
             )}
             Answers may be incomplete · {!isMobile && "Enter to send · "}Shift+Enter for newline

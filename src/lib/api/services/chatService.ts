@@ -74,9 +74,11 @@ export interface ChatStreamCallbacks {
 }
 
 export interface ChatQuota {
-  limit: number;
-  used: number;
-  remaining: number;
+  /** Faculty/staff and whitelisted kerberos IDs have no daily limit — limit/used/remaining are absent. */
+  unlimited: boolean;
+  limit?: number;
+  used?: number;
+  remaining?: number;
 }
 
 /** Per-user daily quota state; null when unavailable (e.g. not logged in). */
