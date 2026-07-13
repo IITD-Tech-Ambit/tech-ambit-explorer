@@ -1,11 +1,16 @@
 import { useState } from "react";
 import Navigation from "@/components/Navigation";
 import ResearchAtlas, { type AtlasMode } from "@/components/knowledge-graph/ResearchAtlas";
+import ResearchAtlasTiles from "@/components/knowledge-graph/ResearchAtlasTiles";
 import { cn } from "@/lib/utils";
+
+// Fast octree LOD streaming renderer (MongoDB-backed tiles) is the default.
+// Set VITE_ATLAS_TILES=false to use the legacy full-payload renderer.
+const USE_TILES = import.meta.env.VITE_ATLAS_TILES !== "false";
 
 const KnowledgeGraph = () => {
   const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
-  const isViewMode = atlasMode === "view";
+  const isViewMode = !USE_TILES && atlasMode === "view";
 
   return (
     <div className="h-screen relative overflow-hidden bg-black">
@@ -27,7 +32,11 @@ const KnowledgeGraph = () => {
           isViewMode ? "top-0" : "top-20",
         )}
       >
-        <ResearchAtlas onModeChange={setAtlasMode} />
+        {USE_TILES ? (
+          <ResearchAtlasTiles />
+        ) : (
+          <ResearchAtlas onModeChange={setAtlasMode} />
+        )}
       </main>
     </div>
   );

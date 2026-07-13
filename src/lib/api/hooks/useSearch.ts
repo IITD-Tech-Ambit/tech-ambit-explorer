@@ -3,10 +3,6 @@ import { queryKeys } from './queryKeys';
 import { searchResearch, getDocumentById, authorScopedSearch, getAllFacultyForQuery } from '../services/searchService';
 import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SearchFilters } from '../types';
 
-/**
- * Hook for searching research documents with React Query
- * Implements hybrid BM25 + semantic search
- */
 export const useSearchResearch = (
     request: SearchRequest | null,
     options?: { enabled?: boolean }
@@ -42,9 +38,6 @@ export const useSearchResearch = (
     });
 };
 
-/**
- * Hook for fetching a single research document by ID
- */
 export const useSearchDocument = (id: string, options?: { enabled?: boolean }) => {
     return useQuery<SearchDocument, Error>({
         queryKey: queryKeys.search.document(id),
@@ -54,10 +47,6 @@ export const useSearchDocument = (id: string, options?: { enabled?: boolean }) =
     });
 };
 
-/**
- * Hook for author-scoped semantic search
- * Searches within a specific author's papers using cosine similarity
- */
 export const useAuthorScopedSearch = (
     request: AuthorScopedSearchRequest | null,
     options?: { enabled?: boolean }

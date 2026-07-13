@@ -26,33 +26,21 @@ export async function getSuggestions(
   return data;
 }
 
-/**
- * Perform a hybrid search using BM25 + semantic embeddings (with optional reranking)
- */
 export async function searchResearch(request: SearchRequest): Promise<SearchResponse> {
   const { data } = await searchApiClient.post<SearchResponse>('/search', request);
   return data;
 }
 
-/**
- * Author-scoped search: semantic similarity within one author's papers
- */
 export async function authorScopedSearch(request: AuthorScopedSearchRequest): Promise<AuthorScopedSearchResponse> {
   const { data } = await searchApiClient.post<AuthorScopedSearchResponse>('/search/author-scope', request);
   return data;
 }
 
-/**
- * Get a single research document by ID
- */
 export async function getDocumentById(id: string): Promise<SearchDocument> {
   const { data } = await searchApiClient.get<{ document: SearchDocument }>(`/document/${id}`);
   return data.document;
 }
 
-/**
- * Get documents by author (Scopus Author ID)
- */
 export async function getDocumentsByAuthor(
   authorId: string,
   page: number = 1,
@@ -64,9 +52,6 @@ export async function getDocumentsByAuthor(
   return data;
 }
 
-/**
- * Check search service health
- */
 export async function checkSearchHealth(): Promise<{
   status: string;
   services: {

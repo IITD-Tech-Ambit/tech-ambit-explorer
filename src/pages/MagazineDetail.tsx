@@ -22,7 +22,6 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// API base URL for images (use centralized config)
 const API_BASE_URL = BASE_URL.replace('/api', ''); // Remove /api suffix for image URLs
 
 const MagazineDetail = () => {
@@ -36,10 +35,8 @@ const MagazineDetail = () => {
     const [comments, setComments] = useState<Comment[]>([]);
     const [showScrollTop, setShowScrollTop] = useState(false);
 
-    // Fetch magazine using custom hook
     const { data: magazine, isLoading, error } = useMagazine(id!);
 
-    // Track scroll position for scroll-to-top button
     useEffect(() => {
         const handleScroll = () => {
             setShowScrollTop(window.scrollY > 400);
@@ -48,22 +45,17 @@ const MagazineDetail = () => {
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
-    // Scroll to top handler
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Initialize likes and comments from fetched magazine data
     useEffect(() => {
         if (magazine) {
             setLikeCount(magazine.likesCount || 0);
             setComments(magazine.comments || []);
-            // You can also check if user has liked (requires user tracking implementation)
-            // For now, we'll keep isLiked as false initially
         }
     }, [magazine]);
 
-    // Like mutation using custom hook
     const likeMutation = useLikeMagazine({
         onSuccess: (data) => {
             setIsLiked(true);
@@ -83,7 +75,6 @@ const MagazineDetail = () => {
         },
     });
 
-    // Dislike mutation using custom hook
     const dislikeMutation = useDislikeMagazine({
         onSuccess: (data) => {
             setIsLiked(false);
@@ -103,7 +94,6 @@ const MagazineDetail = () => {
         },
     });
 
-    // Comment mutation using custom hook
     const commentMutation = useAddComment({
         onSuccess: (newComment) => {
             setComments((prev) => [...prev, newComment]);
@@ -122,14 +112,12 @@ const MagazineDetail = () => {
         },
     });
 
-    // Helper to get the full image URL
     const getImageUrl = (imageUrl: string) => {
         if (!imageUrl) return magazineCover;
         if (imageUrl.startsWith('http')) return imageUrl;
         return `${API_BASE_URL}${imageUrl}`;
     };
 
-    // Format date from ISO string
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', {
@@ -192,10 +180,10 @@ const MagazineDetail = () => {
         <div className="min-h-screen">
             <Navigation />
 
-            {/* Hero Section with Magazine Cover - Responsive */}
+            
             <section className="pt-24 sm:pt-28 pb-8 sm:pb-10">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    {/* Back Button */}
+                    
                     <Button
                         variant="ghost"
                         className="mb-4 sm:mb-6 text-sm sm:text-base"
@@ -206,9 +194,9 @@ const MagazineDetail = () => {
                     </Button>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-10">
-                        {/* Magazine Cover Image - Responsive sidebar */}
+                        
                         <div className="lg:col-span-1">
-                            {/* On mobile: inline, on lg: sticky sidebar */}
+                            
                             <div className="lg:sticky lg:top-28">
                                 <img
                                     src={getImageUrl(magazine.image_url)}
@@ -233,7 +221,7 @@ const MagazineDetail = () => {
                                     </Badge>
                                 </div>
 
-                                {/* Like/Dislike Section */}
+                                
                                 <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-muted rounded-lg">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs sm:text-sm font-medium">
@@ -262,7 +250,7 @@ const MagazineDetail = () => {
                             </div>
                         </div>
 
-                        {/* Magazine Content - Responsive typography */}
+                        
                         <div className="lg:col-span-2">
                             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4">
                                 {magazine.title}
@@ -283,14 +271,13 @@ const MagazineDetail = () => {
                                 </div>
                             </div>
 
-                            {/* Magazine Body Content */}
+                            
                             <article className="prose prose-sm sm:prose-base md:prose-lg dark:prose-invert max-w-none">
                                 <div className="magazine-content markdown-body">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         rehypePlugins={[rehypeRaw, rehypeSanitize]}
                                         components={{
-                                            // Custom styling for images to make them responsive
                                             img: ({ node, ...props }) => (
                                                 <img
                                                     {...props}
@@ -298,13 +285,11 @@ const MagazineDetail = () => {
                                                     loading="lazy"
                                                 />
                                             ),
-                                            // Custom styling for tables to make them responsive
                                             table: ({ node, ...props }) => (
                                                 <div className="overflow-x-auto my-6">
                                                     <table {...props} className="min-w-full divide-y divide-gray-300 dark:divide-gray-700" />
                                                 </div>
                                             ),
-                                            // Custom styling for code blocks
                                             code: ({ node, inline, className, children, ...props }: any) => (
                                                 inline ? (
                                                     <code {...props} className="bg-muted px-1 sm:px-1.5 py-0.5 rounded text-xs sm:text-sm">
@@ -316,7 +301,6 @@ const MagazineDetail = () => {
                                                     </code>
                                                 )
                                             ),
-                                            // Custom styling for blockquotes
                                             blockquote: ({ node, ...props }) => (
                                                 <blockquote {...props} className="border-l-4 border-primary pl-3 sm:pl-4 italic my-4 text-sm sm:text-base" />
                                             ),
@@ -327,7 +311,7 @@ const MagazineDetail = () => {
                                 </div>
                             </article>
 
-                            {/* Comments Section - Responsive */}
+                            
                             <Card className="mt-8 sm:mt-12">
                                 <CardHeader className="p-4 sm:p-6">
                                     <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -336,7 +320,7 @@ const MagazineDetail = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
-                                    {/* Add Comment Form */}
+                                    
                                     <div className="mb-4 sm:mb-6">
                                         <Textarea
                                             placeholder="Write your comment..."
@@ -359,7 +343,7 @@ const MagazineDetail = () => {
                                         </Button>
                                     </div>
 
-                                    {/* Comments List */}
+                                    
                                     {comments.length === 0 ? (
                                         <p className="text-muted-foreground text-center py-6 sm:py-8 text-sm sm:text-base">
                                             No comments yet. Be the first to comment!
@@ -396,7 +380,7 @@ const MagazineDetail = () => {
                 </div>
             </section>
 
-            {/* Scroll to Top Button */}
+            
             {showScrollTop && (
                 <button
                     onClick={scrollToTop}

@@ -3,9 +3,14 @@ import {
   X, Send, Loader2,
   Sparkles, Brain, BookOpen,
   Users, TrendingUp, Building2, Check,
+  LogIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { streamChat, type ChatSource, type ChatChartEvent, type ThinkingStep } from "@/lib/api/services/chatService";
+import {
+  streamChat, fetchChatQuota,
+  type ChatSource, type ChatChartEvent, type ThinkingStep, type ChatQuota,
+} from "@/lib/api/services/chatService";
+import { useAuth } from "@/contexts/AuthContext";
 import ChatMessage, { type ChatMessageData } from "./ChatMessage";
 import ChatPanelHeader from "./ChatPanelHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -28,8 +33,6 @@ const loadMessages = (): ChatMessageData[] => {
     return [];
   }
 };
-
-// ── Thinking indicator ──────────────────────────────────────────────────────
 
 const ThinkingBubble = ({ steps }: { steps: ThinkingStep[] }) => {
   const latest = steps[steps.length - 1];
@@ -73,10 +76,9 @@ const ThinkingBubble = ({ steps }: { steps: ThinkingStep[] }) => {
   );
 };
 
-// ── Main widget ─────────────────────────────────────────────────────────────
-
 const ChatbotWidget = () => {
   const isMobile = useIsMobile();
+  const { user, loading: authLoading, login, refresh } = useAuth();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
@@ -84,6 +86,15 @@ const ChatbotWidget = () => {
   const [messages, setMessages] = useState<ChatMessageData[]>(loadMessages);
   const [isStreaming, setIsStreaming] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
+  const [quota, setQuota] = useState<ChatQuota | null>(null);
+
+  const refreshQuota = useCallback(async () => {
+    setQuota(await fetchChatQuota());
+  }, []);
+
+  useEffect(() => {
+    if (open && user) void refreshQuota();
+  }, [open, user, refreshQuota]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -94,7 +105,9 @@ const ChatbotWidget = () => {
     if (isStreaming) return;
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-30)));
-    } catch { /* storage full */ }
+    } catch {
+      /* storage full */
+    }
   }, [messages, isStreaming]);
 
   useEffect(() => {
@@ -169,14 +182,19 @@ const ChatbotWidget = () => {
             setThinkingSteps([]);
             setIsStreaming(false);
           },
+          onUnauthorized: () => { void refresh(); },
+          onQuotaExceeded: () => {
+            setQuota((q) => (q ? { ...q, used: q.limit, remaining: 0 } : q));
+          },
         },
         controller.signal
       );
 
       setIsStreaming(false);
       setThinkingSteps([]);
+      void refreshQuota();
     },
-    [messages, isStreaming, updateLast]
+    [messages, isStreaming, updateLast, refresh, refreshQuota]
   );
 
   const clearChat = () => {
@@ -215,8 +233,6 @@ const ChatbotWidget = () => {
     isStreaming && thinkingSteps.length === 0 &&
     lastMessage?.role === "assistant" && !lastMessage.content;
 
-  // ── Welcome / empty state ──────────────────────────────────────────────────
-
   const EmptyState = ({ isExp }: { isExp: boolean }) => (
     <div
       className={cn(
@@ -224,9 +240,7 @@ const ChatbotWidget = () => {
         isExp && "gap-8 py-12",
       )}
     >
-      {/* Hero icon with rings */}
       <div className="relative flex items-center justify-center">
-        {/* Outer ambient ring */}
         <div
           className="absolute rounded-full animate-pulse"
           style={{
@@ -235,7 +249,6 @@ const ChatbotWidget = () => {
               "radial-gradient(circle, hsl(var(--primary)/0.08) 0%, transparent 70%)",
           }}
         />
-        {/* Mid ring */}
         <div
           className="absolute rounded-full"
           style={{
@@ -243,7 +256,6 @@ const ChatbotWidget = () => {
             border: "1px solid hsl(var(--primary)/0.1)",
           }}
         />
-        {/* Icon container */}
         <div
           className={cn(
             "relative rounded-2xl flex items-center justify-center",
@@ -260,7 +272,6 @@ const ChatbotWidget = () => {
         </div>
       </div>
 
-      {/* Headline */}
       <div className="space-y-2">
         <h3
           className={cn(
@@ -280,7 +291,6 @@ const ChatbotWidget = () => {
         </p>
       </div>
 
-      {/* Starter cards */}
       <div
         className={cn(
           "grid w-full",
@@ -311,7 +321,6 @@ const ChatbotWidget = () => {
               e.currentTarget.style.boxShadow = "none";
             }}
           >
-            {/* Icon box */}
             <div
               className={cn(
                 "flex-shrink-0 rounded-lg flex items-center justify-center",
@@ -341,7 +350,6 @@ const ChatbotWidget = () => {
         ))}
       </div>
 
-      {/* Footer badge */}
       <div
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
         style={{
@@ -357,8 +365,6 @@ const ChatbotWidget = () => {
     </div>
   );
 
-  // ── Shared panel contents ──────────────────────────────────────────────────
-
   const panelContents = (opts?: { showDragHandle?: boolean; isExpanded?: boolean }) => {
     const isExp = opts?.isExpanded ?? false;
 
@@ -373,7 +379,6 @@ const ChatbotWidget = () => {
           onToggleExpand={!opts?.showDragHandle ? handleToggleExpand : undefined}
         />
 
-        {/* Messages / empty state */}
         <div
           ref={scrollRef}
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
@@ -452,7 +457,7 @@ const ChatbotWidget = () => {
           )}
         </div>
 
-        {/* Input area */}
+        
         <div
           className={cn("flex-shrink-0", isExp ? "px-5 pt-3" : "px-3 pt-2.5")}
           style={{
@@ -462,6 +467,50 @@ const ChatbotWidget = () => {
             paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom, 0px))",
           }}
         >
+          {!user && !authLoading ? (
+            <div
+              className={cn(
+                "flex flex-col items-center gap-2.5 rounded-2xl px-4 py-4 text-center",
+                isExp && "max-w-[780px] mx-auto",
+              )}
+              style={{
+                background: "hsl(var(--muted)/0.3)",
+                border: "1.5px dashed hsl(var(--border)/0.6)",
+              }}
+            >
+              <p className="text-[12px] text-muted-foreground leading-snug">
+                The research assistant is available to IIT Delhi members.
+                Sign in with your IITD account to start chatting (5 messages/day).
+              </p>
+              <button
+                onClick={login}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-medium active:scale-95 transition-all duration-150 touch-manipulation"
+                style={{
+                  background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))",
+                  boxShadow: "0 4px 14px -3px hsl(var(--primary)/0.45)",
+                }}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Login with IITD
+              </button>
+            </div>
+          ) : quota && quota.remaining === 0 ? (
+            <div
+              className={cn(
+                "rounded-2xl px-4 py-3.5 text-center",
+                isExp && "max-w-[780px] mx-auto",
+              )}
+              style={{
+                background: "hsl(var(--muted)/0.3)",
+                border: "1.5px solid hsl(var(--border)/0.55)",
+              }}
+            >
+              <p className="text-[12px] text-muted-foreground leading-snug">
+                You've used all {quota.limit} chat messages for today (0 remaining).
+                Your quota resets at midnight IST.
+              </p>
+            </div>
+          ) : (
           <div
             className={cn(
               "flex items-end gap-2 rounded-2xl px-3 py-2 transition-all duration-150",
@@ -530,12 +579,16 @@ const ChatbotWidget = () => {
               )}
             </button>
           </div>
+          )}
           <p
             className={cn(
               "text-muted-foreground/30 mt-1.5 px-1 text-center",
               isExp ? "max-w-[780px] mx-auto text-[10px]" : "text-[9px]",
             )}
           >
+            {user && quota && quota.remaining > 0 && (
+              <span className="text-primary/50">{quota.remaining} of {quota.limit} messages left today · </span>
+            )}
             Answers may be incomplete · {!isMobile && "Enter to send · "}Shift+Enter for newline
           </p>
         </div>
@@ -543,11 +596,8 @@ const ChatbotWidget = () => {
     );
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
     <>
-      {/* Mobile backdrop */}
       <div
         aria-hidden="true"
         onClick={handleClose}
@@ -561,7 +611,6 @@ const ChatbotWidget = () => {
         }}
       />
 
-      {/* FAB */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close research assistant" : "Open research assistant"}
@@ -582,7 +631,6 @@ const ChatbotWidget = () => {
             : "0 8px 32px -6px hsl(var(--primary)/0.55), 0 2px 8px -2px rgba(0,0,0,0.2)",
         }}
       >
-        {/* Pulse ring — visible when closed and there are messages */}
         {!open && messages.length > 0 && (
           <span
             className="absolute inset-0 rounded-2xl animate-ping opacity-25 pointer-events-none"
@@ -604,13 +652,11 @@ const ChatbotWidget = () => {
             <Sparkles className="w-5 h-5 md:w-4 md:h-4" />
           )}
         </div>
-        {/* Unread dot (closed + has messages) */}
         {!open && messages.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-[1.5px] ring-white/70" />
         )}
       </button>
 
-      {/* Mobile: full-height bottom sheet */}
       <div
         aria-hidden={!open}
         className="md:hidden fixed inset-x-0 bottom-0 z-[160] flex flex-col overflow-hidden"
@@ -626,7 +672,6 @@ const ChatbotWidget = () => {
           pointerEvents: open ? "auto" : "none",
         }}
       >
-        {/* Gradient accent strip at top of sheet */}
         <div
           className="h-[2px] w-full flex-shrink-0"
           style={{
@@ -637,7 +682,6 @@ const ChatbotWidget = () => {
         {panelContents({ showDragHandle: true })}
       </div>
 
-      {/* Desktop expanded backdrop */}
       <div
         aria-hidden="true"
         className="hidden md:block fixed inset-0 z-[158]"
@@ -652,7 +696,6 @@ const ChatbotWidget = () => {
         onClick={() => handleToggleExpand()}
       />
 
-      {/* Desktop panel — compact ↔ expanded */}
       {open && (
         <div
           className="hidden md:flex fixed flex-col overflow-hidden z-[160]"
@@ -702,7 +745,6 @@ const ChatbotWidget = () => {
                 }
           }
         >
-          {/* Gradient accent line — top of modal */}
           <div
             className="h-[2.5px] w-full flex-shrink-0"
             style={{

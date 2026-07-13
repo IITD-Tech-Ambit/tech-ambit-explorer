@@ -29,14 +29,14 @@ export default function ChatPanelHeader({
 
   return (
     <header className="flex-shrink-0 sticky top-0 z-10 w-full select-none">
-      {/* Mobile drag handle */}
+      
       {showDragHandle && (
         <div className="flex justify-center pt-3 pb-1.5 md:hidden" aria-hidden>
           <div className="w-10 h-[3px] rounded-full bg-foreground/10" />
         </div>
       )}
 
-      {/* Main header row */}
+      
       <div
         className={cn(
           "flex items-center gap-3 min-w-0",
@@ -45,7 +45,7 @@ export default function ChatPanelHeader({
           "bg-background",
         )}
       >
-        {/* Brand icon */}
+        
         <div
           className={cn(
             "relative flex items-center justify-center flex-shrink-0 rounded-[14px]",
@@ -65,7 +65,7 @@ export default function ChatPanelHeader({
           />
         </div>
 
-        {/* Title + status */}
+        
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <h2
@@ -101,7 +101,7 @@ export default function ChatPanelHeader({
           </div>
         </div>
 
-        {/* Action row */}
+        
         <div className="flex items-center gap-0.5 flex-shrink-0">
           {hasMessages && (
             <button
@@ -159,7 +159,7 @@ export default function ChatPanelHeader({
         </div>
       </div>
 
-      {/* Divider — gradient in expanded, subtle line in compact */}
+      
       <div
         className="h-px w-full flex-shrink-0"
         style={{

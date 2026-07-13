@@ -3,7 +3,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-//import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Lightbulb } from "lucide-react";
 import Home from "./pages/Home";
@@ -21,9 +20,9 @@ import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
 import ChatbotWidget from "./components/chat/ChatbotWidget";
 import { ThemeProvider } from "./components/theme-provider";
+import { AuthProvider } from "./contexts/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
 
-// Configure React Query with production-ready defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -45,6 +44,7 @@ const App = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -62,12 +62,9 @@ const App = () => {
             <Route path="/contributors" element={<Contributors />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-
-        {/* ── Global floating Suggestions button (below the chatbot FAB) ── */}
         <button
           onClick={() => setSuggestionOpen(true)}
           aria-label="Open suggestions and feedback"
@@ -82,12 +79,9 @@ const App = () => {
           open={suggestionOpen}
           onClose={() => setSuggestionOpen(false)}
         />
-
-        {/* ── Global RAG research chatbot ── */}
         <ChatbotWidget />
       </TooltipProvider>
-      {/* React Query DevTools - only visible in development */}
-      {/* <ReactQueryDevtools initialIsOpen={false} /> */}
+      </AuthProvider>
     </QueryClientProvider>
     </ThemeProvider>
   );

@@ -10,43 +10,36 @@ import { useNavigate } from "react-router-dom";
 import { usePaginatedMagazines, BASE_URL, type Magazine } from "@/lib/api";
 
 
-// API base URL for images (use centralized config)
 const API_BASE_URL = BASE_URL.replace('/api', ''); // Remove /api suffix for image URLs
 
-// Pagination settings - 9 magazines per page
 const MAGAZINES_PER_PAGE = 9;
 
 const Magazines = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch paginated online magazines from server (only loads 9 at a time)
   const { data, isLoading, error } = usePaginatedMagazines(
     currentPage,
     MAGAZINES_PER_PAGE,
     'online'
   );
 
-  // Extract data from server response
   const magazines = data?.magazines || [];
   const pagination = data?.pagination;
   const totalPages = pagination?.totalPages || 1;
   const totalCount = pagination?.totalCount || 0;
 
-  // Helper to get the full image URL
   const getImageUrl = (imageUrl: string) => {
     if (!imageUrl) return magazineCover;
     if (imageUrl.startsWith('http')) return imageUrl;
     return imageUrl;
   };
 
-  // Format date from ISO string
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  // Page navigation
   const goToPage = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -56,16 +49,16 @@ const Magazines = () => {
     <div className="min-h-screen">
       <Navigation />
 
-      {/* Header / Hero - Responsive layout */}
+      
       <section className="pt-24 sm:pt-28 pb-8 sm:pb-10">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Custom responsive hero - stacks on mobile */}
+          
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-center sm:items-start p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary/5 via-accent/5 to-transparent shadow-card border border-border">
-            {/* Magazine Cover - smaller on mobile */}
+            
             <div className="w-28 h-40 sm:w-36 sm:h-52 md:w-40 md:h-56 lg:w-44 lg:h-60 rounded-lg sm:rounded-xl overflow-hidden shadow-elegant flex-shrink-0 border border-border bg-background">
               <img src={magazineCover} alt="Tech Ambit" className="w-full h-full object-cover" />
             </div>
-            {/* Content */}
+            
             <div className="text-center sm:text-left flex-1">
               <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3">Research Ambit Magazine</h1>
               <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-3 sm:mb-4 max-w-2xl">
@@ -80,9 +73,9 @@ const Magazines = () => {
         </div>
       </section>
 
-      {/* Magazines Grid - Responsive */}
+      
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
-        {/* Loading State */}
+        
         {isLoading && (
           <div className="flex flex-col sm:flex-row justify-center items-center py-16 sm:py-20 gap-2 sm:gap-3">
             <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
@@ -90,7 +83,7 @@ const Magazines = () => {
           </div>
         )}
 
-        {/* Error State */}
+        
         {error && (
           <div className="text-center py-16 sm:py-20 px-4">
             <p className="text-destructive text-base sm:text-lg mb-3 sm:mb-4">Failed to load magazines</p>
@@ -98,7 +91,7 @@ const Magazines = () => {
           </div>
         )}
 
-        {/* Empty State */}
+        
         {!isLoading && !error && magazines.length === 0 && (
           <div className="text-center py-16 sm:py-20 px-4">
             <p className="text-base sm:text-lg text-muted-foreground">No magazines available at the moment.</p>
@@ -106,15 +99,15 @@ const Magazines = () => {
           </div>
         )}
 
-        {/* Magazines Grid */}
+        
         {!isLoading && !error && magazines.length > 0 && (
           <>
-            {/* Results info */}
+            
             <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
               Showing {(currentPage - 1) * MAGAZINES_PER_PAGE + 1}-{Math.min(currentPage * MAGAZINES_PER_PAGE, totalCount)} of {totalCount} magazines
             </div>
 
-            {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
               {magazines.map((magazine: Magazine) => (
                 <Card key={magazine._id} className="magazine-card group flex flex-col h-full">
@@ -161,10 +154,10 @@ const Magazines = () => {
               ))}
             </div>
 
-            {/* Pagination Controls - Mobile optimized */}
+            
             {totalPages > 1 && (
               <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-2 mt-8 sm:mt-12">
-                {/* Previous/Next for mobile, full pagination for larger screens */}
+                
                 <div className="flex items-center gap-2 sm:gap-1 w-full sm:w-auto justify-between sm:justify-center">
                   <Button
                     variant="outline"
@@ -178,14 +171,14 @@ const Magazines = () => {
                     <span className="xs:hidden sm:hidden">Prev</span>
                   </Button>
 
-                  {/* Page numbers - hidden on very small screens, show current/total instead */}
+                  
                   <div className="flex items-center gap-1">
-                    {/* Mobile: show current page / total */}
+                    
                     <span className="sm:hidden text-sm text-muted-foreground px-3">
                       {currentPage} / {totalPages}
                     </span>
 
-                    {/* Desktop: show all page numbers */}
+                    
                     <div className="hidden sm:flex items-center gap-1">
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <Button
@@ -219,7 +212,7 @@ const Magazines = () => {
         )}
       </section>
 
-      {/* About Magazine Section - Responsive */}
+      
       <section className="gradient-subtle py-10 sm:py-12 md:py-16">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">

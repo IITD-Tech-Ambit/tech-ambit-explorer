@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, ExternalLink, Loader2, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
 import type { TimelineYear, TimelinePaper } from "@/lib/api/types";
 import { getFacultyYearPublications, getFacultyResearchSummary } from "@/lib/api/services/directoryService";
+import { resolvePaperHref } from "@/lib/paperLink";
 
 interface PublicationTimelineProps {
     timeline: TimelineYear[];
@@ -62,14 +63,7 @@ const PublicationTimeline = ({ timeline: initialTimeline, kerberos, totalYears, 
         }
     }, [kerberos, expandedYears]);
 
-    const getPaperUrl = (paper: TimelinePaper): string | null => {
-        if (paper.link && paper.link.includes("scholar.google.com")) return paper.link;
-        if (paper.document_scopus_id && !paper.document_scopus_id.startsWith("scholar_")) {
-            return `https://www.scopus.com/pages/publications/${paper.document_scopus_id}?origin=resultslist`;
-        }
-        if (paper.link && !/\/api\/documents\//i.test(paper.link)) return paper.link;
-        return null;
-    };
+    const getPaperUrl = (paper: TimelinePaper): string | null => resolvePaperHref(paper);
 
     if (!timeline.length) return null;
 

@@ -1,8 +1,3 @@
-/**
- * Query Keys Factory
- * Centralized query key management for React Query
- * This ensures consistent cache keys across the application
- */
 
 export const queryKeys = {
     // Magazine query keys
