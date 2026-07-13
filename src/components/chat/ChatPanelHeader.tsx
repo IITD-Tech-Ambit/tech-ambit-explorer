@@ -1,5 +1,15 @@
-import { ChevronDown, Maximize2, Minimize2, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, LogOut, Maximize2, Minimize2, Sparkles, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { AuthUser } from "@/lib/api/services/authService";
 
 interface ChatPanelHeaderProps {
   hasMessages: boolean;
@@ -8,6 +18,8 @@ interface ChatPanelHeaderProps {
   showDragHandle?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  user?: AuthUser | null;
+  onLogout?: () => void;
 }
 
 const actionBtn = (size: "sm" | "md") =>
@@ -24,8 +36,12 @@ export default function ChatPanelHeader({
   showDragHandle = false,
   isExpanded = false,
   onToggleExpand,
+  user,
+  onLogout,
 }: ChatPanelHeaderProps) {
   const btnSize = isExpanded || showDragHandle ? "md" : "sm";
+  const avatarSize = isExpanded || showDragHandle ? "w-8 h-8" : "w-7 h-7";
+  const initial = user?.name?.trim()?.[0]?.toUpperCase() || user?.kerberos?.[0]?.toUpperCase() || "?";
 
   return (
     <header className="flex-shrink-0 sticky top-0 z-10 w-full select-none">
@@ -103,6 +119,46 @@ export default function ChatPanelHeader({
 
         
         <div className="flex items-center gap-0.5 flex-shrink-0">
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Account menu"
+                  title={user.name}
+                  className={cn(
+                    "flex items-center justify-center rounded-full flex-shrink-0 mr-0.5",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 touch-manipulation",
+                    "transition-transform duration-150 active:scale-90",
+                  )}
+                >
+                  <Avatar className={avatarSize}>
+                    <AvatarFallback
+                      className="text-white text-[11px] font-semibold"
+                      style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))" }}
+                    >
+                      {initial}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 z-[170]">
+                <DropdownMenuLabel className="flex flex-col gap-0.5">
+                  <span className="text-[13px] font-semibold text-foreground truncate">{user.name}</span>
+                  <span className="text-[11px] font-normal text-muted-foreground truncate">{user.kerberos}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onLogout}
+                  className="text-red-500 focus:text-red-500 focus:bg-red-500/8 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {hasMessages && (
             <button
               type="button"

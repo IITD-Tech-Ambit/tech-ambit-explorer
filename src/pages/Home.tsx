@@ -68,9 +68,9 @@ const Home = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </Button>
               </Link>
-              <Link to="/knowledge-graph" className="w-full sm:w-auto">
+              <Link to="/atlas" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto group text-sm sm:text-base bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300">
-                  Explore Knowledge Graph
+                  Explore Atlas
                   <Globe className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-12 transition-transform duration-300" />
                 </Button>
               </Link>

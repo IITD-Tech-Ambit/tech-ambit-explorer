@@ -203,7 +203,6 @@ export default function ResearchAtlasTiles() {
   const [activeLevel, setActiveLevel] = useState<ClusterLevel | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [cursor, setCursor] = useState("grab");
-  const [pointCount, setPointCount] = useState(0);
 
   const markDirty = useCallback(() => {
     if (engineRef.current) engineRef.current.dirty = true;
@@ -244,7 +243,6 @@ export default function ResearchAtlasTiles() {
         if (cancelled) return;
         treeRef.current = tree;
         dictRef.current = dict;
-        setPointCount(tree.pointCount);
       })
       .catch((err) => { if (!cancelled) setError(String(err?.message || err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -588,8 +586,8 @@ export default function ResearchAtlasTiles() {
       const who = [fac, dept].filter(Boolean).join(" · ");
       return `${formatCount(matchCount)} papers highlighted${who ? ` · ${who}` : ""}`;
     }
-    return `${formatCount(pointCount)} papers · streaming by viewport · scroll to zoom in for detail`;
-  }, [loading, searchQuery, searchLoading, matchCount, matchedFaculty, matchedDepartments, pointCount]);
+    return null;
+  }, [loading, searchQuery, searchLoading, matchCount, matchedFaculty, matchedDepartments]);
 
   const showTooltip = hovered && !selected;
 
@@ -623,11 +621,13 @@ export default function ResearchAtlasTiles() {
                 placeholder="Search faculty, department, theme, domain, topic, or paper…"
                 className="pl-9 h-10 rounded-full border-slate-700/80 bg-slate-900/80 text-white placeholder:text-slate-500 backdrop-blur-sm" />
             </div>
-            <p className="mt-2 text-center text-xs sm:text-sm text-slate-400">
-              <span className="inline-block rounded-full border border-slate-700/60 bg-slate-900/50 px-3 py-1 backdrop-blur-sm">
-                {statusLine}
-              </span>
-            </p>
+            {statusLine && (
+              <p className="mt-2 text-center text-xs sm:text-sm text-slate-400">
+                <span className="inline-block rounded-full border border-slate-700/60 bg-slate-900/50 px-3 py-1 backdrop-blur-sm">
+                  {statusLine}
+                </span>
+              </p>
+            )}
           </div>
         </div>
       </header>

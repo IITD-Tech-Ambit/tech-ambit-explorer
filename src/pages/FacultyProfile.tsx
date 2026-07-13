@@ -23,7 +23,7 @@ const FacultyProfile = () => {
     const kerberos = urlKerberos?.trim().toLowerCase() ?? "";
 
     // Profiles are linked from many places (Directory, taxonomy Browse, Explore,
-    // Knowledge Graph, chat) — go back to wherever the user actually came from
+    // Atlas, chat) — go back to wherever the user actually came from
     // instead of a hardcoded destination. React Router sets location.key to
     // 'default' when this tab has no prior in-app history (direct link/refresh).
     const goBack = () => {

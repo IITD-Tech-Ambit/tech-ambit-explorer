@@ -154,9 +154,9 @@ export const BROAD_THEME_CLUSTERS = [
   "Energy, Sustainability & Climate Change",
 ] as const;
 
-/** Link to Knowledge Graph filtered by a broad theme (footer / cross-page navigation). */
-export function knowledgeGraphThemePath(theme: string): string {
-  return `/knowledge-graph?theme=${encodeURIComponent(theme)}`;
+/** Link to Atlas filtered by a broad theme (footer / cross-page navigation). */
+export function atlasThemePath(theme: string): string {
+  return `/atlas?theme=${encodeURIComponent(theme)}`;
 }
 
 export function broadThemeClusterColor(theme: string): string {

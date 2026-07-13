@@ -1,14 +1,14 @@
 import { useState } from "react";
 import Navigation from "@/components/Navigation";
-import ResearchAtlas, { type AtlasMode } from "@/components/knowledge-graph/ResearchAtlas";
-import ResearchAtlasTiles from "@/components/knowledge-graph/ResearchAtlasTiles";
+import ResearchAtlas, { type AtlasMode } from "@/components/atlas/ResearchAtlas";
+import ResearchAtlasTiles from "@/components/atlas/ResearchAtlasTiles";
 import { cn } from "@/lib/utils";
 
 // Fast octree LOD streaming renderer (MongoDB-backed tiles) is the default.
 // Set VITE_ATLAS_TILES=false to use the legacy full-payload renderer.
 const USE_TILES = import.meta.env.VITE_ATLAS_TILES !== "false";
 
-const KnowledgeGraph = () => {
+const Atlas = () => {
   const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
   const isViewMode = !USE_TILES && atlasMode === "view";
 
@@ -42,4 +42,4 @@ const KnowledgeGraph = () => {
   );
 };
 
-export default KnowledgeGraph;
+export default Atlas;

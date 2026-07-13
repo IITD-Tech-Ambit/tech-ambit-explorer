@@ -78,7 +78,7 @@ const ThinkingBubble = ({ steps }: { steps: ThinkingStep[] }) => {
 
 const ChatbotWidget = () => {
   const isMobile = useIsMobile();
-  const { user, loading: authLoading, login, refresh } = useAuth();
+  const { user, loading: authLoading, login, logout, refresh } = useAuth();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
@@ -210,6 +210,14 @@ const ChatbotWidget = () => {
     setExpanded(false);
   }, []);
 
+  const handleLogout = useCallback(async () => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
+    setThinkingSteps([]);
+    setQuota(null);
+    await logout();
+  }, [logout]);
+
   const handleToggleExpand = useCallback(() => {
     setTransitioning(true);
     setTimeout(() => {
@@ -273,6 +281,16 @@ const ChatbotWidget = () => {
       </div>
 
       <div className="space-y-2">
+        {user && (
+          <p
+            className={cn(
+              "font-medium text-primary/70",
+              isExp ? "text-[13px]" : "text-[11px]",
+            )}
+          >
+            Welcome, {user.name.split(" ")[0]}
+          </p>
+        )}
         <h3
           className={cn(
             "font-bold text-foreground tracking-tight",
@@ -377,6 +395,8 @@ const ChatbotWidget = () => {
           showDragHandle={opts?.showDragHandle}
           isExpanded={isExp}
           onToggleExpand={!opts?.showDragHandle ? handleToggleExpand : undefined}
+          user={user}
+          onLogout={handleLogout}
         />
 
         <div
@@ -480,7 +500,6 @@ const ChatbotWidget = () => {
             >
               <p className="text-[12px] text-muted-foreground leading-snug">
                 The research assistant is available to IIT Delhi members.
-                Sign in with your IITD account to start chatting (5 messages/day).
               </p>
               <button
                 onClick={login}

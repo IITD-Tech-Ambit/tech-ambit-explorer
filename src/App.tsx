@@ -12,7 +12,7 @@ import Directory from "./pages/Directory";
 import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
-import KnowledgeGraph from "./pages/KnowledgeGraph";
+import Atlas from "./pages/Atlas";
 import Contributors from "./pages/Contributors";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -55,7 +55,7 @@ const App = () => {
             <Route path="/explore" element={<Explore />} />
             <Route path="/explore/browse" element={<TaxonomyBrowse />} />
             <Route path="/directory" element={<Directory />} />
-            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
+            <Route path="/atlas" element={<Atlas />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />

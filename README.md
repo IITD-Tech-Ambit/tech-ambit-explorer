@@ -1,6 +1,6 @@
 # Research Ambit — Frontend
 
-React SPA for [Research Ambit](https://researchambit.iitd.ac.in/) at IIT Delhi. Browse faculty, explore research themes, search publications, view knowledge graphs, and chat with the research assistant.
+React SPA for [Research Ambit](https://researchambit.iitd.ac.in/) at IIT Delhi. Browse faculty, explore research themes, search publications, view Atlas, and chat with the research assistant.
 
 ## Features
 
@@ -8,7 +8,7 @@ React SPA for [Research Ambit](https://researchambit.iitd.ac.in/) at IIT Delhi. 
 |------|-------|---------|
 | Faculty directory | `/directory` | [research-ambit-main](https://github.com/IITD-Tech-Ambit/research-ambit-main) |
 | Research explore & taxonomy | `/explore` | [opensearch](https://github.com/IITD-Tech-Ambit/SEO-Backend-iitd) |
-| Knowledge graph | `/knowledge-graph` | research-ambit-main |
+| Atlas | `/atlas` | research-ambit-main |
 | Faculty profiles | `/faculty/:id` | research-ambit-main |
 | Magazines / CMS | `/magazines` | research-ambit-main |
 | AI chatbot | floating widget | [chatbot-agent](https://github.com/IITD-Tech-Ambit/chatbot-agent) |

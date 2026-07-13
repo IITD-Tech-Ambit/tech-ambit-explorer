@@ -6,7 +6,7 @@ export const BASE_URL = API_BASE_URL;
 // search-api (opensearch service) — separate deployment from the main API
 export const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
 
-// Knowledge Graph endpoints live under the main API
+// Atlas (KG) endpoints live under the main API
 export const KG_BASE_URL = `${API_BASE_URL}/kg`;
 
 // Magazine/Content Endpoints

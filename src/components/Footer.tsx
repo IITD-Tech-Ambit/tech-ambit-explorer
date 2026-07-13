@@ -5,8 +5,8 @@ import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import {
   BROAD_THEME_CLUSTERS,
   broadThemeClusterColor,
-  knowledgeGraphThemePath,
-} from "@/components/knowledge-graph/atlasClusters";
+  atlasThemePath,
+} from "@/components/atlas/atlasClusters";
 import LegalLinks from "@/components/LegalLinks";
 
 const Footer = () => {
@@ -122,7 +122,7 @@ const Footer = () => {
               {[
                 { to: "/explore", label: "Explore Research" },
                 { to: "/directory", label: "Directory" },
-                { to: "/knowledge-graph", label: "Knowledge Graph" },
+                { to: "/atlas", label: "Atlas" },
                 { to: "/magazines", label: "Magazines" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
@@ -146,7 +146,7 @@ const Footer = () => {
               {BROAD_THEME_CLUSTERS.map((area) => (
                 <li key={area}>
                   <Link
-                    to={knowledgeGraphThemePath(area)}
+                    to={atlasThemePath(area)}
                     className="group flex items-start text-muted-foreground hover:text-primary transition-all duration-300"
                   >
                     <span
