@@ -14,7 +14,6 @@ import type {
  * Handles all analytics-related API calls (likes, comments)
  */
 
-// Like a magazine/content
 export const likeMagazine = async (contentId: string): Promise<Analytics> => {
     const payload: LikeRequest = { contentId };
     const response = await apiClient.post<ApiResponse<Analytics>>(
@@ -24,7 +23,6 @@ export const likeMagazine = async (contentId: string): Promise<Analytics> => {
     return response.data.data;
 };
 
-// Dislike/Unlike a magazine/content
 export const dislikeMagazine = async (contentId: string): Promise<Analytics> => {
     const payload: LikeRequest = { contentId };
     const response = await apiClient.post<ApiResponse<Analytics>>(
@@ -34,7 +32,6 @@ export const dislikeMagazine = async (contentId: string): Promise<Analytics> => 
     return response.data.data;
 };
 
-// Add a comment to a magazine/content
 export const addComment = async (contentId: string, body: string): Promise<Comment> => {
     const payload: CommentRequest = { contentId, body };
     const response = await apiClient.post<ApiResponse<Comment>>(
@@ -44,7 +41,6 @@ export const addComment = async (contentId: string, body: string): Promise<Comme
     return response.data.data;
 };
 
-// Delete a comment from a magazine/content
 export const deleteComment = async (contentId: string, commentId: string): Promise<void> => {
     const payload: DeleteCommentRequest = { contentId, commentId };
     await apiClient.post(ENDPOINTS.analytics.deleteComment, payload);

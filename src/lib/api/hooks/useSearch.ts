@@ -32,9 +32,9 @@ export const useSearchResearch = (
         queryKey: queryKeys.search.results(normalizedKey),
         queryFn: () => searchResearch(request!),
         enabled: isEnabled,
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-        gcTime: 1000 * 60 * 10,   // Keep in garbage collection for 10 minutes
-        refetchOnMount: false,    // Don't refetch if we have cached data
+        staleTime: 1000 * 60 * 5,
+        gcTime: 1000 * 60 * 10,
+        refetchOnMount: false,
     });
 };
 
@@ -43,7 +43,7 @@ export const useSearchDocument = (id: string, options?: { enabled?: boolean }) =
         queryKey: queryKeys.search.document(id),
         queryFn: () => getDocumentById(id),
         enabled: options?.enabled !== false && !!id,
-        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+        staleTime: 1000 * 60 * 10,
     });
 };
 

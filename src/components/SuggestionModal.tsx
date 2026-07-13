@@ -135,17 +135,14 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
 
     return (
         <>
-            {/* Backdrop */}
             <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm" onClick={handleClose} />
 
-            {/* Modal */}
             <div className="fixed inset-0 z-[201] flex items-center justify-center p-4 pointer-events-none">
                 <div
                     className="relative w-full max-w-lg bg-background rounded-2xl shadow-2xl border border-border/60 overflow-hidden pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
                     onPaste={handlePaste}
                 >
-                    {/* Header */}
                     <div className="flex items-center gap-3 px-6 py-5 bg-gradient-to-r from-primary/10 to-accent/5 border-b border-border/50">
                         <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
                             <Lightbulb className="w-4 h-4 text-primary" />
@@ -167,7 +164,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                         </button>
                     </div>
 
-                    {/* Success state */}
                     {submitted ? (
                         <div className="flex flex-col items-center justify-center px-6 py-14 gap-4 text-center">
                             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -191,7 +187,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                         <form onSubmit={handleSubmit} noValidate>
                             <div className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-auto">
 
-                                {/* Name + Email */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <Field label="Name" optional>
                                         <input
@@ -218,7 +213,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                     </Field>
                                 </div>
 
-                                {/* Category */}
                                 <Field label="Category" error={errors.category}>
                                     <div className="relative">
                                         <select
@@ -238,7 +232,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                     </div>
                                 </Field>
 
-                                {/* Message */}
                                 <Field label="Your Suggestion / Feedback" error={errors.message}>
                                     <textarea
                                         value={form.message}
@@ -258,10 +251,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                     </div>
                                 </Field>
 
-                                {/* Screenshot upload */}
                                 <Field label="Screenshot" optional error={errors.screenshot}>
                                     {screenshotPreview ? (
-                                        /* Preview */
                                         <div className="relative rounded-xl overflow-hidden border border-border/60 bg-muted/20">
                                             <img
                                                 src={screenshotPreview}
@@ -282,7 +273,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                             </div>
                                         </div>
                                     ) : (
-                                        /* Drop zone */
                                         <div
                                             onClick={() => fileInputRef.current?.click()}
                                             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -323,7 +313,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                 </Field>
                             </div>
 
-                            {/* Footer */}
                             <div className="px-6 py-4 border-t border-border/50 bg-muted/20 flex items-center justify-between gap-3">
                                 <p className="text-[11px] text-muted-foreground">
                                     * Category and message are required.

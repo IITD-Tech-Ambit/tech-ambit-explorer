@@ -34,7 +34,6 @@ const Directory = () => {
     const debouncedSearch = useDebounce(searchQuery, 300);
     const isSearching = debouncedSearch.length >= 2;
 
-    // Search query
     const { data: searchData, isLoading: isSearchLoading } = useDirectorySearch(
         debouncedSearch,
         15,
@@ -70,7 +69,7 @@ const Directory = () => {
         setActiveCategory(category);
         setPage(1);
         setOpenAccordions([]);
-        setSearchQuery(''); // Clear search when changing category
+        setSearchQuery('');
     };
 
     const clearSearch = () => {

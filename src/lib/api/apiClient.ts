@@ -15,7 +15,7 @@ import { BASE_URL, SEARCH_API_BASE_URL, KG_BASE_URL } from './endpoints';
 export function createApiClient(baseURL: string): AxiosInstance {
     const client = axios.create({
         baseURL,
-        timeout: 30000, // 30 seconds
+        timeout: 30000,
         withCredentials: true,
         headers: {
             'Content-Type': 'application/json',

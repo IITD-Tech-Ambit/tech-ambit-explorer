@@ -640,7 +640,6 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
     );
   }
 
-  // Assistant message
   return (
     <div className="group/msg flex flex-col gap-2 w-full min-w-0 max-w-full">
       {message.content && (

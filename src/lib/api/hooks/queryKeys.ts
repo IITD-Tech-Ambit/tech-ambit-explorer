@@ -1,6 +1,5 @@
 
 export const queryKeys = {
-    // Magazine query keys
     magazines: {
         all: ['magazines'] as const,
         lists: () => [...queryKeys.magazines.all, 'list'] as const,
@@ -10,13 +9,11 @@ export const queryKeys = {
         detail: (id: string) => [...queryKeys.magazines.details(), id] as const,
     },
     
-    // Analytics query keys
     analytics: {
         all: ['analytics'] as const,
         byContent: (contentId: string) => [...queryKeys.analytics.all, contentId] as const,
     },
 
-    // Directory query keys
     directory: {
         all: ['directory'] as const,
         lists: () => [...queryKeys.directory.all, 'list'] as const,
@@ -34,7 +31,6 @@ export const queryKeys = {
             [...queryKeys.directory.all, 'groupFaculties', category, departmentId] as const,
     },
 
-    // Taxonomy browse query keys
     taxonomy: {
         all: ['taxonomy'] as const,
         departments: () => [...queryKeys.taxonomy.all, 'departments'] as const,
@@ -51,7 +47,6 @@ export const queryKeys = {
             [...queryKeys.taxonomy.all, 'facultyCards', kerberosIds.join(',')] as const,
     },
 
-    // Search query keys
     search: {
         all: ['search'] as const,
         results: (request: Record<string, unknown>) => [...queryKeys.search.all, 'results', request] as const,

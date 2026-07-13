@@ -11,7 +11,6 @@ import type {
  * Handles all magazine/content-related API calls
  */
 
-// Fetch paginated magazines
 export const getPaginatedMagazines = async (
     page: number = 1,
     limit: number = 9,
@@ -31,7 +30,6 @@ export const getPaginatedMagazines = async (
     return response.data.data;
 };
 
-// Fetch single magazine by ID
 export const getMagazineById = async (id: string): Promise<Magazine> => {
     const response = await apiClient.get<ApiResponse<Magazine>>(ENDPOINTS.content.getById(id));
     return response.data.data;
