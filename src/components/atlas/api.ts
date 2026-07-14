@@ -53,10 +53,14 @@ export const KG_API = KG_BASE_URL;
  * envelope every other KG endpoint uses) with its own no-cache/ETag headers,
  * and the payload is large enough that we always want a fresh fetch rather
  * than serving a stale in-memory copy.
+ *
+ * Longer timeout than the client default (30s): a cold-cache atlas read can
+ * take longer, and the gateway/Envoy path now budgets up to 130s for it.
  */
 export async function fetchKgAtlas<T = { papers: unknown[] }>(): Promise<T> {
   const { data } = await kgApiClient.get<T>("/atlas", {
     headers: { "Cache-Control": "no-cache" },
+    timeout: 120_000,
   });
   return data;
 }

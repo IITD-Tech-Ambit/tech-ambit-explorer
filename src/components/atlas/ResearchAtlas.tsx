@@ -879,6 +879,8 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [canvasCursor, setCanvasCursor] = useState("grab");
   const [sceneReady, setSceneReady] = useState(false);
+  const [contextLost, setContextLost] = useState(false);
+  const [rendererEpoch, setRendererEpoch] = useState(0);
 
   const clusterIndex = useMemo(
     () => (papers.length ? buildAtlasClusterIndex(papers) : null),
@@ -1957,12 +1959,29 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
     };
     window.addEventListener("resize", onResize);
 
+    // A GPU driver reset / OOM / multi-tab contention can drop the WebGL
+    // context mid-session. Without this, the canvas just goes black forever
+    // — rebuild the whole scene via rendererEpoch once the browser restores it.
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(sceneRef.current?.frameId ?? 0);
+      setContextLost(true);
+    };
+    const onContextRestored = () => {
+      setContextLost(false);
+      setRendererEpoch((n) => n + 1);
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost, false);
+    canvas.addEventListener("webglcontextrestored", onContextRestored, false);
+
     return () => {
       setSceneReady(false);
       cancelAnimationFrame(sceneRef.current?.frameId ?? 0);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       window.removeEventListener("resize", onResize);
       for (const ref of themeLabelRefs) {
         const htmlEl = ref.obj.element as HTMLDivElement;
@@ -1993,7 +2012,7 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
       renderer.dispose();
       sceneRef.current = null;
     };
-  }, [papers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [papers, rendererEpoch]);
 
   const handleClusterLevelChange = useCallback((level: ClusterLevel) => {
     if (!selected || !clusterIndex) return;
@@ -2385,11 +2404,11 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
         />
       </div>
 
-      {loading && (
+      {(loading || contextLost) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-slate-300">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span>Loading research papers…</span>
+            <span>{contextLost ? "Restoring visualization…" : "Loading research papers…"}</span>
           </div>
         </div>
       )}

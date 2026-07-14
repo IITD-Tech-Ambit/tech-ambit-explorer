@@ -203,6 +203,8 @@ export default function ResearchAtlasTiles() {
   const [activeLevel, setActiveLevel] = useState<ClusterLevel | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [cursor, setCursor] = useState("grab");
+  const [contextLost, setContextLost] = useState(false);
+  const [rendererEpoch, setRendererEpoch] = useState(0);
 
   const markDirty = useCallback(() => {
     if (engineRef.current) engineRef.current.dirty = true;
@@ -490,6 +492,20 @@ export default function ResearchAtlasTiles() {
     };
     window.addEventListener("resize", onResize);
 
+    // Same recovery as ResearchAtlas.tsx: a lost WebGL context otherwise
+    // leaves the canvas frozen with no way to recover short of a reload.
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      cancelAnimationFrame(engineRef.current?.frameId ?? 0);
+      setContextLost(true);
+    };
+    const onContextRestored = () => {
+      setContextLost(false);
+      setRendererEpoch((n) => n + 1);
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost, false);
+    canvas.addEventListener("webglcontextrestored", onContextRestored, false);
+
     engineRef.current = {
       renderer, scene, camera, controls, labelRenderer, tileManager,
       overlay, overlayGeom, baseMaterial, marker, frameId: 0, dirty: true, lastStream: 0,
@@ -521,6 +537,8 @@ export default function ResearchAtlasTiles() {
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       window.removeEventListener("resize", onResize);
       for (const obj of labelObjs) scene.remove(obj);
       tileManager.dispose();
@@ -536,7 +554,7 @@ export default function ResearchAtlasTiles() {
       }
       engineRef.current = null;
     };
-  }, [loading, error, streamNow]);
+  }, [loading, error, streamNow, rendererEpoch]);
 
   useEffect(() => {
     const e = engineRef.current;
@@ -636,10 +654,11 @@ export default function ResearchAtlasTiles() {
         <canvas ref={canvasRef} className="block w-full h-full touch-none" style={{ cursor }} />
       </div>
 
-      {loading && (
+      {(loading || contextLost) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-slate-300">
-            <Loader2 className="h-6 w-6 animate-spin" /><span>Loading research atlas…</span>
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>{contextLost ? "Restoring visualization…" : "Loading research atlas…"}</span>
           </div>
         </div>
       )}
