@@ -84,3 +84,34 @@ export interface KgAtlasDepartmentSearchResult {
   matchCount: number;
   indices: number[];
 }
+
+export interface KgAtlasSuggestTerm {
+  kind: "theme" | "topic" | string;
+  key: string;
+  label: string;
+  paperCount: number;
+  facultyCount: number;
+  deptCount: number;
+}
+
+export interface KgAtlasSuggestFaculty {
+  facultyId: string;
+  name: string;
+  department: string;
+  paperCount: number;
+  atlasCount: number;
+}
+
+export interface KgAtlasSuggestDepartment {
+  department: string;
+  facultyCount: number;
+  paperCount: number;
+}
+
+export interface KgAtlasSuggestResult {
+  query: string;
+  themes: KgAtlasSuggestTerm[];
+  topics: KgAtlasSuggestTerm[];
+  faculty: KgAtlasSuggestFaculty[];
+  departments: KgAtlasSuggestDepartment[];
+}

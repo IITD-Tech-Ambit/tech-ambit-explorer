@@ -80,6 +80,73 @@ export const fetchKgFacultyAtlasIndices = (facultyIds: string[]) => {
   );
 };
 
+export const fetchKgAtlasSuggest = (q: string, limit = 8) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (q.trim()) params.set("q", q.trim());
+  return kgFetch<import("./types").KgAtlasSuggestResult>(`/atlas/suggest?${params}`);
+};
+
+/** Fallback when /atlas/suggest is unavailable (stale gRPC / 501). Uses existing read APIs. */
+export async function fetchKgAtlasSuggestFallback(q: string, limit = 8): Promise<import("./types").KgAtlasSuggestResult> {
+  const query = q.trim();
+  const termParams = new URLSearchParams({ limit: String(Math.max(limit * 4, 16)) });
+  if (query) termParams.set("q", query);
+
+  const termPromise = kgFetch<Array<{ key?: string; term?: string; type?: string; paperCount?: number; facultyCount?: number; deptCount?: number }>>(
+    `/explore/terms?${termParams}`,
+  ).catch(() => [] as Array<{ key?: string; term?: string; type?: string; paperCount?: number; facultyCount?: number; deptCount?: number }>);
+
+  const [terms, facMatches, deptMatches, facultyIndex] = await Promise.all([
+    termPromise,
+    query
+      ? fetchKgAtlasFacultySearch(query, limit).then((r) => r.matches ?? []).catch(() => [] as import("./types").KgAtlasFacultyMatch[])
+      : Promise.resolve([] as import("./types").KgAtlasFacultyMatch[]),
+    query
+      ? fetchKgAtlasDepartmentSearch(query, Math.ceil(limit / 2)).then((r) => r.matches ?? []).catch(() => [] as import("./types").KgAtlasDepartmentMatch[])
+      : Promise.resolve([] as import("./types").KgAtlasDepartmentMatch[]),
+    query ? Promise.resolve([] as import("./types").KgFacultyItem[]) : fetchKgFacultyIndex().catch(() => [] as import("./types").KgFacultyItem[]),
+  ]);
+
+  const themes = [];
+  const topics = [];
+  for (const row of terms) {
+    const mapped = {
+      kind: row.type ?? "",
+      key: row.key ?? "",
+      label: row.term ?? "",
+      paperCount: row.paperCount ?? 0,
+      facultyCount: row.facultyCount ?? 0,
+      deptCount: row.deptCount ?? 0,
+    };
+    if (row.type === "theme" && themes.length < limit) themes.push(mapped);
+    else if (row.type === "topic" && topics.length < limit) topics.push(mapped);
+  }
+
+  const faculty = (query ? facMatches : facultyIndex.slice(0, limit)).map((f) => ({
+    facultyId: f.facultyId,
+    name: f.name,
+    department: f.department,
+    paperCount: f.paperCount ?? 0,
+    atlasCount: "atlasCount" in f ? (f as import("./types").KgAtlasFacultyMatch).atlasCount ?? 0 : 0,
+  }));
+
+  const departments = deptMatches.slice(0, Math.ceil(limit / 2)).map((d) => ({
+    department: d.department,
+    facultyCount: d.facultyCount ?? 0,
+    paperCount: d.atlasCount ?? 0,
+  }));
+
+  return { query, themes, topics, faculty, departments };
+}
+
+export async function fetchKgAtlasSuggestSafe(q: string, limit = 8): Promise<import("./types").KgAtlasSuggestResult> {
+  try {
+    return await fetchKgAtlasSuggest(q, limit);
+  } catch {
+    return fetchKgAtlasSuggestFallback(q, limit);
+  }
+}
+
 export const fetchKgAtlasDepartmentSearch = (q: string, limit = 12) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (q.trim()) params.set("q", q.trim());
@@ -100,6 +167,36 @@ export const fetchKgAtlasClusterBreakdown = (theme: string, q: string, paperLimi
     paperLimit: String(paperLimit),
   });
   return kgFetch<import("./types").KgAtlasClusterBreakdown>(`/atlas/cluster-breakdown?${params}`);
+};
+
+export interface KgAtlasRefinePoint {
+  i: number;
+  id: string;
+  title: string;
+  theme: string;
+  department: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface KgAtlasRefineResult {
+  baseQuery: string;
+  query: string;
+  baseCount: number;
+  matchCount: number;
+  indices: number[];
+  points: KgAtlasRefinePoint[];
+}
+
+/** Server-side nested search: refine `q` within papers matching `baseQ`. */
+export const fetchKgAtlasRefine = (baseQ: string, q: string, limit = 8000) => {
+  const params = new URLSearchParams({
+    baseQ: baseQ.trim(),
+    limit: String(limit),
+  });
+  if (q.trim()) params.set("q", q.trim());
+  return kgFetch<KgAtlasRefineResult>(`/atlas/refine?${params}`);
 };
 
 export interface KgPaperMeta {

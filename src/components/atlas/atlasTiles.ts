@@ -140,22 +140,44 @@ export function decodeTile(nodeKey: string, buffer: ArrayBuffer, bbox: AtlasBoun
   };
 }
 
-/** Exact coords for atlas indices (chunked to keep GET URLs bounded). */
+/** Exact coords + theme for atlas indices (chunked to keep GET URLs bounded). */
+export interface AtlasPointCoord {
+  i: number;
+  x: number;
+  y: number;
+  z: number;
+  id: string;
+  theme: string;
+  title: string;
+  department: string;
+}
+
 export async function fetchAtlasPointCoords(
   indices: number[],
-): Promise<Map<number, [number, number, number]>> {
-  const out = new Map<number, [number, number, number]>();
+): Promise<Map<number, AtlasPointCoord>> {
+  const out = new Map<number, AtlasPointCoord>();
   const CHUNK = 500;
   const chunks: Promise<void>[] = [];
   for (let i = 0; i < indices.length; i += CHUNK) {
     const slice = indices.slice(i, i + CHUNK);
     chunks.push(
       kgApiClient
-        .get<Envelope<{ points: { i: number; x: number; y: number; z: number }[] }>>(
+        .get<Envelope<{ points: AtlasPointCoord[] }>>(
           `/atlas/points?indices=${slice.join(",")}`,
         )
         .then(({ data }) => {
-          for (const p of data.data.points) out.set(p.i, [p.x, p.y, p.z]);
+          for (const p of data.data.points) {
+            out.set(p.i, {
+              i: p.i,
+              x: p.x,
+              y: p.y,
+              z: p.z,
+              id: p.id ?? "",
+              theme: p.theme ?? "",
+              title: p.title ?? "",
+              department: p.department ?? "",
+            });
+          }
         }),
     );
   }
