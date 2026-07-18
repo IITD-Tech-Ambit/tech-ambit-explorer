@@ -16,7 +16,7 @@ const TermsOfService = () => (
       {
         title: "2. Purpose of the Portal",
         paragraphs: [
-          "Research Ambit is provided as a research discovery and institutional showcase platform. It aggregates and presents information about IIT Delhi faculty, departments, publications, research themes, magazines, knowledge graphs, and related academic content to support exploration, collaboration, and public understanding of research at the Institute.",
+          "Research Ambit is provided as a research discovery and institutional showcase platform. It aggregates and presents information about IIT Delhi faculty, departments, publications, research themes, magazines, Atlas, and related academic content to support exploration, collaboration, and public understanding of research at the Institute.",
         ],
       },
       {

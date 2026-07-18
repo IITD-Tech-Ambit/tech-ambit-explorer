@@ -10,7 +10,6 @@ import type { Magazine, PaginatedMagazinesResponse } from '../types';
  * Custom React Query hooks for magazine operations
  */
 
-// Hook to fetch paginated magazines
 export const usePaginatedMagazines = (
     page: number = 1,
     limit: number = 9,
@@ -20,12 +19,11 @@ export const usePaginatedMagazines = (
     return useQuery<PaginatedMagazinesResponse, Error>({
         queryKey: queryKeys.magazines.list({ page, limit, status }),
         queryFn: () => getPaginatedMagazines(page, limit, status),
-        staleTime: 3 * 60 * 1000, // 3 minutes
+        staleTime: 3 * 60 * 1000,
         ...options,
     });
 };
 
-// Hook to fetch a single magazine by ID
 export const useMagazine = (
     id: string,
     options?: Omit<UseQueryOptions<Magazine, Error>, 'queryKey' | 'queryFn'>
@@ -34,7 +32,7 @@ export const useMagazine = (
         queryKey: queryKeys.magazines.detail(id),
         queryFn: () => getMagazineById(id),
         enabled: !!id,
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000,
         ...options,
     });
 };

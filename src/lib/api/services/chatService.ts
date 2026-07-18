@@ -23,7 +23,6 @@ export interface ChatSource {
   faculty_name: string | null;
 }
 
-// Chart data structures matching backend sse_events.py
 export interface DataPoint { x: string | number; y: number }
 export interface ChartSeries { label: string; data: DataPoint[] }
 
@@ -67,8 +66,30 @@ export interface ChatStreamCallbacks {
   onError: (message: string) => void;
   /** Thinking insight while the backend processes — do NOT expose tool names */
   onThinking?: (step: ThinkingStep) => void;
-  /** Structured chart data for frontend rendering */
   onChart?: (chart: ChatChartEvent) => void;
+  /** Session missing/expired (gateway 401) — caller should show the login prompt */
+  onUnauthorized?: () => void;
+  /** Daily message quota exhausted (429) */
+  onQuotaExceeded?: (message: string) => void;
+}
+
+export interface ChatQuota {
+  /** Faculty/staff and whitelisted kerberos IDs have no daily limit — limit/used/remaining are absent. */
+  unlimited: boolean;
+  limit?: number;
+  used?: number;
+  remaining?: number;
+}
+
+/** Per-user daily quota state; null when unavailable (e.g. not logged in). */
+export async function fetchChatQuota(): Promise<ChatQuota | null> {
+  try {
+    const res = await fetch(`${CHAT_API_BASE_URL}/quota`, { credentials: 'include' });
+    if (!res.ok) return null;
+    return (await res.json()) as ChatQuota;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -86,6 +107,7 @@ export async function streamChat(
     response = await fetch(`${CHAT_API_BASE_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ message, history }),
       signal,
     });
@@ -96,7 +118,18 @@ export async function streamChat(
   }
 
   if (!response.ok || !response.body) {
-    if (response.status === 503) {
+    if (response.status === 401) {
+      callbacks.onUnauthorized?.();
+      callbacks.onError('Please log in with your IITD account to use the chat assistant.');
+    } else if (response.status === 429) {
+      let message = 'You have used all your chat messages for today. Your quota resets at midnight IST.';
+      try {
+        const data = await response.json();
+        if (data?.message) message = data.message;
+      } catch { /* keep default message */ }
+      callbacks.onQuotaExceeded?.(message);
+      callbacks.onError(message);
+    } else if (response.status === 503) {
       callbacks.onError('The chat service is currently unavailable.');
     } else {
       callbacks.onError('The chat service returned an error. Please try again.');

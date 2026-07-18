@@ -40,7 +40,7 @@ const Navigation = () => {
   const navItems = [
     { name: "Explore", path: "/explore" },
     { name: "Directory", path: "/directory" },
-    { name: "Knowledge Graph", path: "/knowledge-graph" },
+    { name: "Atlas", path: "/atlas" },
     { name: "Magazines", path: "/magazines" },
     { name: "Contributors", path: "/contributors" },
   ];

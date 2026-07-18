@@ -1,4 +1,3 @@
-// API Response Types
 export interface ApiResponse<T> {
     success: boolean;
     message: string;
@@ -6,7 +5,6 @@ export interface ApiResponse<T> {
     timestamp: string;
 }
 
-// Magazine/Content Types
 export interface Magazine {
     _id: string;
     title: string;
@@ -27,7 +25,6 @@ export interface Magazine {
     commentsCount?: number;
 }
 
-// Comment Types
 export interface Comment {
     _id: string;
     body: string;
@@ -37,13 +34,11 @@ export interface Comment {
     updatedAt: string;
 }
 
-// Like Types
 export interface Like {
     user: string | null;
     ip_address: string;
 }
 
-// Analytics Types
 export interface Analytics {
     _id: string;
     content: string;
@@ -53,7 +48,6 @@ export interface Analytics {
     updatedAt: string;
 }
 
-// Pagination Types
 export interface Pagination {
     currentPage: number;
     totalPages: number;
@@ -68,7 +62,6 @@ export interface PaginatedMagazinesResponse {
     pagination: Pagination;
 }
 
-// Request Types
 export interface LikeRequest {
     contentId: string;
 }
@@ -83,7 +76,6 @@ export interface DeleteCommentRequest {
     commentId: string;
 }
 
-// Search API Types
 export interface SearchAuthor {
     author_name?: string;
     name?: string;
@@ -186,7 +178,6 @@ export interface SearchRequest {
     refine_chain?: string[];
 }
 
-// Suggest / Typeahead Types
 export interface SuggestAuthor {
     id: string;
     scopus_id: string;
@@ -219,7 +210,6 @@ export interface SuggestResponse {
     };
 }
 
-// Directory/Faculty Types
 export interface DirectoryDepartment {
     _id: string;
     name: string;
@@ -258,14 +248,12 @@ export interface DirectoryResponse {
     pagination: DirectoryPagination;
 }
 
-// Directory search response
 export interface DirectorySearchResult {
     faculties: DirectoryFaculty[];
     departments: DirectoryDepartment[];
     total: number;
 }
 
-// Grouped departments response
 export interface GroupedDepartmentFaculty {
     _id: string;
     name: string;
@@ -347,7 +335,6 @@ export interface YearPublicationsResponse {
     limit: number;
 }
 
-// Author-Scoped Search Types
 export interface AuthorScopedSearchRequest {
     query: string;
     author_id: string;

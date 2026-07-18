@@ -2,31 +2,28 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig, AxiosResp
 import { BASE_URL, SEARCH_API_BASE_URL, KG_BASE_URL } from './endpoints';
 
 /**
- * Build an axios instance with the same auth-header injection, dev logging,
- * and error handling as the default client, pointed at a different backend
- * base URL. Used for the search-api and KG services (separate deployments
- * from the main API), so every backend call goes through one consistent
- * client instead of each service hand-rolling its own fetch + base URL.
+ * Build an axios instance with the same cookie-credential handling, dev
+ * logging, and error handling as the default client, pointed at a different
+ * backend base URL. Used for the search-api and KG services (separate
+ * deployments from the main API), so every backend call goes through one
+ * consistent client instead of each service hand-rolling its own fetch +
+ * base URL.
+ *
+ * Auth: the IITD session lives in an httpOnly cookie set by auth-service
+ * (never in localStorage), so every request just sends credentials.
  */
 export function createApiClient(baseURL: string): AxiosInstance {
     const client = axios.create({
         baseURL,
-        timeout: 30000, // 30 seconds
+        timeout: 30000,
+        withCredentials: true,
         headers: {
             'Content-Type': 'application/json',
         },
     });
 
-    // Request Interceptor
     client.interceptors.request.use(
         (config: InternalAxiosRequestConfig) => {
-            // Add authentication token if available
-            const token = localStorage.getItem('authToken');
-            if (token && config.headers) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-
-            // Log request in development
             if (import.meta.env.DEV) {
                 console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data);
             }
@@ -39,10 +36,8 @@ export function createApiClient(baseURL: string): AxiosInstance {
         }
     );
 
-    // Response Interceptor
     client.interceptors.response.use(
         (response: AxiosResponse) => {
-            // Log response in development
             if (import.meta.env.DEV) {
                 console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
             }
@@ -50,20 +45,16 @@ export function createApiClient(baseURL: string): AxiosInstance {
             return response;
         },
         (error: AxiosError) => {
-            // Handle different error scenarios
             if (error.response) {
-                // Server responded with error status
                 const status = error.response.status;
                 const message = (error.response.data as any)?.message || error.message;
 
                 console.error(`[API Error ${status}]`, message);
 
-                // Handle specific status codes
                 switch (status) {
                     case 401:
-                        // Unauthorized - clear token and redirect to login
-                        localStorage.removeItem('authToken');
-                        // You can add redirect logic here if needed
+                        // Session cookie missing/expired — AuthContext owns
+                        // re-authentication (login is a full-page redirect).
                         break;
                     case 403:
                         console.error('Access forbidden');
@@ -78,10 +69,8 @@ export function createApiClient(baseURL: string): AxiosInstance {
                         console.error('An error occurred');
                 }
             } else if (error.request) {
-                // Request made but no response received
                 console.error('[API Error] No response received', error.request);
             } else {
-                // Error in setting up the request
                 console.error('[API Error] Request setup failed', error.message);
             }
 
@@ -92,16 +81,12 @@ export function createApiClient(baseURL: string): AxiosInstance {
     return client;
 }
 
-// Default client — the main API (research-ambit-main)
 const apiClient: AxiosInstance = createApiClient(BASE_URL);
 
-// search-api (opensearch service) — separate deployment
 export const searchApiClient: AxiosInstance = createApiClient(SEARCH_API_BASE_URL);
 
-// Knowledge Graph endpoints (served by the main API under /kg)
 export const kgApiClient: AxiosInstance = createApiClient(KG_BASE_URL);
 
-// Retry logic helper (optional, can be enabled for specific requests)
 export const retryRequest = async <T>(
     fn: () => Promise<T>,
     retries: number = 3,

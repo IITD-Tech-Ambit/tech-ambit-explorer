@@ -24,6 +24,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { resolvePaperHref } from "@/lib/paperLink";
 
 export interface ChatMessageData {
   role: "user" | "assistant";
@@ -60,7 +61,6 @@ type ChartLayoutOpts = {
   isCompact: boolean;
 };
 
-// ── Chart renderers ──
 
 const renderLineChart = (chart: LineChartData, opts?: ChartLayoutOpts) => {
   const compact = opts?.isCompact ?? false;
@@ -247,7 +247,6 @@ const renderPieChart = (chart: PieChartData, opts?: ChartLayoutOpts) => {
   );
 };
 
-// ── Chart block ──
 
 const chartRenderers: Record<string, (chart: LineChartData | BarChartData | PieChartData, opts?: ChartLayoutOpts) => React.ReactNode> = {
   line: (chart, opts) => renderLineChart(chart as LineChartData, opts),
@@ -298,42 +297,21 @@ const ChartBlock = ({
   );
 };
 
-// ── Source link resolution — mirrors Explore page 4-strategy logic ──
-
-function resolvePaperHref(source: ChatSource): string | null {
-  const link = source.link ?? "";
-  const scopusId = source.document_scopus_id ?? "";
-  const eid = source.document_eid ?? "";
-  const isScholarId = (id: string) => id.startsWith("scholar_");
-
-  if (link.includes("scholar.google.com")) return link;
-  if (scopusId && !isScholarId(scopusId))
-    return `https://www.scopus.com/pages/publications/${scopusId}?origin=resultslist`;
-  if (eid && !isScholarId(eid))
-    return `https://www.scopus.com/record/display.uri?eid=${encodeURIComponent(eid)}&origin=resultslist`;
-  if (link && !/\/api\/documents\//i.test(link)) return link;
-  return null;
-}
-
 const SourceItem = ({ source }: { source: ChatSource }) => {
   const href = resolvePaperHref(source);
   const authors = source.authors.slice(0, 2).join(", ") + (source.authors.length > 2 ? ` +${source.authors.length - 2}` : "");
 
   const content = (
     <div className="group/item flex items-start gap-3 px-4 py-3 hover:bg-primary/[0.03] transition-colors duration-150">
-      {/* Index badge */}
       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center mt-0.5 ring-1 ring-primary/15">
         {source.index}
       </span>
 
-      {/* Body */}
       <div className="flex-1 min-w-0 space-y-1.5">
-        {/* Title */}
         <p className="text-[12px] font-medium text-foreground leading-snug line-clamp-2 group-hover/item:text-primary transition-colors duration-150">
           {source.title}
         </p>
 
-        {/* Meta row */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {source.publication_year && (
             <span className="text-[10px] text-muted-foreground/70 font-medium">
@@ -345,7 +323,6 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
               {authors}
             </span>
           )}
-          {/* IIT Delhi faculty badge */}
           {source.faculty_name && source.kerberos && (
             <a
               href={`/faculty/${source.kerberos}`}
@@ -362,7 +339,7 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
         </div>
       </div>
 
-      {/* External link arrow */}
+      
       {href && (
         <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
       )}
@@ -389,13 +366,13 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
         boxShadow: "0 1px 6px -2px rgba(0,0,0,0.07)",
       }}
     >
-      {/* Header toggle */}
+      
       <button
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2.5 px-3.5 py-2.5 transition-colors duration-150 text-left hover:bg-muted/30"
         style={{ borderBottom: open ? "1px solid hsl(var(--border)/0.35)" : "none" }}
       >
-        {/* Icon */}
+        
         <div
           className="w-[22px] h-[22px] rounded-lg flex items-center justify-center flex-shrink-0"
           style={{
@@ -416,7 +393,7 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
         />
       </button>
 
-      {/* Items */}
+      
       {open && (
         <div className="divide-y" style={{ borderColor: "hsl(var(--border)/0.25)" }}>
           {sources.map((s) => (
@@ -428,7 +405,6 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
   );
 };
 
-// ── Markdown link renderer ──
 // Faculty links (/faculty/kerberos) → pill chip; everything else → styled external link
 
 const MarkdownLink = ({
@@ -477,7 +453,6 @@ const MarkdownLink = ({
   );
 };
 
-// ── Chart → PNG export ──
 
 async function chartToPng(container: HTMLDivElement): Promise<Blob | null> {
   // Target the Recharts SVG specifically — querySelector("svg") would find the
@@ -541,7 +516,6 @@ async function chartToPng(container: HTMLDivElement): Promise<Blob | null> {
   });
 }
 
-// ── Action button bar ──
 
 const btnCls =
   "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 transition-all";
@@ -637,7 +611,6 @@ const AssistantActions = ({
   );
 };
 
-// ── Main component ──
 
 const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -667,7 +640,6 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
     );
   }
 
-  // Assistant message
   return (
     <div className="group/msg flex flex-col gap-2 w-full min-w-0 max-w-full">
       {message.content && (
@@ -683,7 +655,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
               : undefined
           }
         >
-          {/* Thin left accent bar */}
+          
           {!message.error && (
             <div
               className="absolute left-0 top-3 bottom-3 w-[2.5px] rounded-r-full"

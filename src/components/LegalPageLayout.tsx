@@ -17,7 +17,7 @@ interface LegalPageLayoutProps {
   sections: LegalSection[];
 }
 
-const LegalPageLayout = ({ title, subtitle, lastUpdated, sections }: LegalPageLayoutProps) => (
+const LegalPageLayout = ({ title, subtitle, lastUpdated: _lastUpdated, sections }: LegalPageLayoutProps) => (
   <div className="min-h-screen page-bg">
     <Navigation />
 
@@ -32,7 +32,6 @@ const LegalPageLayout = ({ title, subtitle, lastUpdated, sections }: LegalPageLa
       <header className="mb-10">
         <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">{title}</h1>
         <p className="text-muted-foreground text-lg leading-relaxed">{subtitle}</p>
-        {/* <p className="text-sm text-muted-foreground mt-4">Last updated: {lastUpdated}</p> */}
       </header>
 
       <article className="space-y-8">

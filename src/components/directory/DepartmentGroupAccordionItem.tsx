@@ -94,7 +94,6 @@ const DepartmentGroupAccordionItem = ({
                         <Icon className="w-5 h-5 text-primary" />
                     </div>
                     <div className="text-left min-w-0 flex-1">
-                        {/* Department name + Website pill */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-base">{deptGroup.department.name}</h3>
                             {deptUrl && (
@@ -112,7 +111,6 @@ const DepartmentGroupAccordionItem = ({
                             )}
                         </div>
 
-                        {/* Faculty count + HOD chip */}
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <p className="text-xs text-muted-foreground">
                                 {deptGroup.stats.totalFaculty} faculty member{deptGroup.stats.totalFaculty !== 1 ? "s" : ""}

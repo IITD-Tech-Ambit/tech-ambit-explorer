@@ -18,14 +18,6 @@ const getInitials = (name: string) => {
         .join("") || "IITD";
 };
 
-/*const formatTenure = (year?: number | null) => {
-    if (!year) return null;
-    const currentYear = new Date().getFullYear();
-    if (year >= currentYear) return "Joined this year";
-    const diff = currentYear - year;
-    return diff === 1 ? "1 year at IIT Delhi" : `${diff} years at IIT Delhi`;
-};*/
-
 const Stat = ({
     icon: Icon,
     label,
@@ -47,7 +39,6 @@ const Stat = ({
 );
 
 const FacultyCard = ({ faculty, onClick }: FacultyCardProps) => {
-    //const tenure = formatTenure(faculty.workingFromYear);
     const initials = getInitials(faculty.name);
 
     return (
@@ -104,12 +95,6 @@ const FacultyCard = ({ faculty, onClick }: FacultyCardProps) => {
                                 {faculty.email}
                             </a>
                         )}
-                        {/* {tenure && (
-                            <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Clock3 className="w-3 h-3" />
-                                {tenure}
-                            </div>
-                        )} */}
                     </div>
                 </div>
 

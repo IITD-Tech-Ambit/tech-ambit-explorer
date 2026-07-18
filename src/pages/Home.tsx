@@ -11,7 +11,6 @@ import heroSlide4 from "@/assets/hero-slide-4.png";
 import heroSlide5 from "@/assets/hero-slide-5.png";
 import researchCollage from "@/assets/iit-delhi-aerial.png";
 
-/** Place your MP4 at: public/videos/campus-research.mp4 */
 const CAMPUS_VIDEO_SRC = "/videos/campus-research.mp4";
 
 const HERO_SLIDES = [
@@ -27,19 +26,19 @@ const Home = () => {
     <div className="min-h-screen home-page-bg">
       <Navigation />
 
-      {/* Hero Section - Enhanced with glassmorphism and better gradients */}
+      
       <section className="relative min-h-[60vh] sm:min-h-[70vh] md:min-h-[80vh] lg:h-[90vh] flex items-center justify-center overflow-hidden pt-24 pb-12 sm:pt-28 sm:pb-16 md:pt-20 md:pb-0">
-        {/* Background slideshow */}
+        
         <div className="absolute inset-0">
           <HeroSlideshow slides={HERO_SLIDES} />
-          {/* Multi-layer gradient overlay for depth */}
+          
           <div className="absolute inset-0 z-[1] bg-gradient-to-r from-slate-900/80 via-slate-900/50 to-slate-900/30 dark:from-slate-950/90 dark:via-slate-950/70 dark:to-slate-950/50" />
           <div className="absolute inset-0 z-[1] bg-gradient-to-t from-slate-900/60 via-transparent to-slate-900/20 dark:from-slate-950/80" />
-          {/* Accent gradient overlay */}
+          
           <div className="absolute inset-0 z-[1] bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
         </div>
 
-        {/* Animated floating shapes in background */}
+        
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 left-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-1/4 right-10 w-80 h-80 bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
@@ -47,9 +46,8 @@ const Home = () => {
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-xs sm:max-w-xl md:max-w-2xl lg:max-w-3xl animate-fade-in">
-            {/* Badge */}
+            
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-sm mb-6">
-              {/* <Sparkles className="h-4 w-4 text-amber-400" /> */}
               <span>Discover Research Excellence</span>
             </div>
             
@@ -70,9 +68,9 @@ const Home = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </Button>
               </Link>
-              <Link to="/knowledge-graph" className="w-full sm:w-auto">
+              <Link to="/atlas" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto group text-sm sm:text-base bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300">
-                  Explore Knowledge Graph
+                  Explore Atlas
                   <Globe className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-12 transition-transform duration-300" />
                 </Button>
               </Link>
@@ -80,7 +78,7 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Scroll indicator */}
+        
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden md:flex flex-col items-center gap-2 text-white/60 z-10 pointer-events-none">
           <span className="text-xs uppercase tracking-widest">Scroll to explore</span>
           <div className="w-6 h-10 rounded-full border-2 border-white/30 flex items-start justify-center p-2">
@@ -89,14 +87,14 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Featured Research Section - Enhanced with better dark mode support */}
+      
       <section className="relative py-16 sm:py-20 md:py-24 overflow-hidden">
-        {/* Background decoration */}
+        
         <div className="absolute inset-0 bg-gradient-to-b from-muted/30 via-muted/50 to-background dark:from-slate-900/50 dark:via-slate-800/30 dark:to-background" />
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-border to-transparent" />
         <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-border to-transparent" />
         
-        {/* Decorative blobs */}
+        
         <div className="absolute top-20 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-20 left-0 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
         
@@ -104,7 +102,6 @@ const Home = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16 items-center">
             <div className="order-2 lg:order-1">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-                {/* <Sparkles className="h-4 w-4" /> */}
                 <span>Research Excellence</span>
               </div>
               <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-foreground leading-tight">
@@ -119,7 +116,7 @@ const Home = () => {
                 human knowledge and creating solutions for tomorrow's challenges.
               </p>
               
-              {/* Feature list with icons */}
+              
               <ul className="space-y-4 mb-8">
                 {[
                   { text: "500+ Active Research Projects", color: "from-blue-500 to-indigo-500" },

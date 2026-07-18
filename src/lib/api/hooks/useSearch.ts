@@ -3,10 +3,6 @@ import { queryKeys } from './queryKeys';
 import { searchResearch, getDocumentById, authorScopedSearch, getAllFacultyForQuery } from '../services/searchService';
 import type { SearchRequest, SearchResponse, SearchDocument, AuthorScopedSearchRequest, AuthorScopedSearchResponse, AllFacultyForQueryResponse, SearchFilters } from '../types';
 
-/**
- * Hook for searching research documents with React Query
- * Implements hybrid BM25 + semantic search
- */
 export const useSearchResearch = (
     request: SearchRequest | null,
     options?: { enabled?: boolean }
@@ -36,28 +32,21 @@ export const useSearchResearch = (
         queryKey: queryKeys.search.results(normalizedKey),
         queryFn: () => searchResearch(request!),
         enabled: isEnabled,
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-        gcTime: 1000 * 60 * 10,   // Keep in garbage collection for 10 minutes
-        refetchOnMount: false,    // Don't refetch if we have cached data
+        staleTime: 1000 * 60 * 5,
+        gcTime: 1000 * 60 * 10,
+        refetchOnMount: false,
     });
 };
 
-/**
- * Hook for fetching a single research document by ID
- */
 export const useSearchDocument = (id: string, options?: { enabled?: boolean }) => {
     return useQuery<SearchDocument, Error>({
         queryKey: queryKeys.search.document(id),
         queryFn: () => getDocumentById(id),
         enabled: options?.enabled !== false && !!id,
-        staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+        staleTime: 1000 * 60 * 10,
     });
 };
 
-/**
- * Hook for author-scoped semantic search
- * Searches within a specific author's papers using cosine similarity
- */
 export const useAuthorScopedSearch = (
     request: AuthorScopedSearchRequest | null,
     options?: { enabled?: boolean }

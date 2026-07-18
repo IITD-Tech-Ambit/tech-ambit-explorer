@@ -3,7 +3,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-//import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Lightbulb } from "lucide-react";
 import Home from "./pages/Home";
@@ -13,7 +12,7 @@ import Directory from "./pages/Directory";
 import FacultyProfile from "./pages/FacultyProfile";
 import Magazines from "./pages/Magazines";
 import MagazineDetail from "./pages/MagazineDetail";
-import KnowledgeGraph from "./pages/KnowledgeGraph";
+import Atlas from "./pages/Atlas";
 import Contributors from "./pages/Contributors";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -21,9 +20,9 @@ import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
 import ChatbotWidget from "./components/chat/ChatbotWidget";
 import { ThemeProvider } from "./components/theme-provider";
+import { AuthProvider } from "./contexts/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
 
-// Configure React Query with production-ready defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -45,6 +44,7 @@ const App = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -55,19 +55,16 @@ const App = () => {
             <Route path="/explore" element={<Explore />} />
             <Route path="/explore/browse" element={<TaxonomyBrowse />} />
             <Route path="/directory" element={<Directory />} />
-            <Route path="/knowledge-graph" element={<KnowledgeGraph />} />
+            <Route path="/atlas" element={<Atlas />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
             <Route path="/contributors" element={<Contributors />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-
-        {/* ── Global floating Suggestions button (below the chatbot FAB) ── */}
         <button
           onClick={() => setSuggestionOpen(true)}
           aria-label="Open suggestions and feedback"
@@ -82,12 +79,9 @@ const App = () => {
           open={suggestionOpen}
           onClose={() => setSuggestionOpen(false)}
         />
-
-        {/* ── Global RAG research chatbot ── */}
         <ChatbotWidget />
       </TooltipProvider>
-      {/* React Query DevTools - only visible in development */}
-      {/* <ReactQueryDevtools initialIsOpen={false} /> */}
+      </AuthProvider>
     </QueryClientProvider>
     </ThemeProvider>
   );

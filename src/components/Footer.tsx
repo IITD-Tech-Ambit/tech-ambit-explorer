@@ -5,8 +5,8 @@ import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import {
   BROAD_THEME_CLUSTERS,
   broadThemeClusterColor,
-  knowledgeGraphThemePath,
-} from "@/components/knowledge-graph/atlasClusters";
+  atlasThemePath,
+} from "@/components/atlas/atlasClusters";
 import LegalLinks from "@/components/LegalLinks";
 
 const Footer = () => {
@@ -46,7 +46,7 @@ const Footer = () => {
       ref={footerRef}
       className="relative bg-gradient-to-b from-muted/30 via-card to-background dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-950 border-t border-border/50 mt-20 overflow-hidden"
     >
-      {/* Animated glow cursor effect */}
+      
       <div
         className="pointer-events-none absolute transition-opacity duration-300"
         style={{
@@ -61,12 +61,12 @@ const Footer = () => {
         }}
       />
       
-      {/* Decorative top border gradient */}
+      
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       
       <div className="container mx-auto px-4 py-16 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          {/* Brand Section */}
+          
           <div className="lg:col-span-1">
             <Link to="/" className="flex items-center space-x-3 mb-6 group w-fit">
               {!logoError ? (
@@ -89,7 +89,7 @@ const Footer = () => {
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
               Central research repository connecting departments, labs, and innovative projects at IIT Delhi.
             </p>
-            {/* Social Links */}
+            
             <div className="flex items-center space-x-3">
               <a 
                 href="https://x.com/iitdelhi" 
@@ -115,14 +115,14 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* Quick Links */}
+          
           <div>
             <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Quick Links</h3>
             <ul className="space-y-3 text-sm">
               {[
                 { to: "/explore", label: "Explore Research" },
                 { to: "/directory", label: "Directory" },
-                { to: "/knowledge-graph", label: "Knowledge Graph" },
+                { to: "/atlas", label: "Atlas" },
                 { to: "/magazines", label: "Magazines" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
@@ -139,14 +139,14 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Research Areas */}
+          
           <div>
             <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Research Areas</h3>
             <ul className="space-y-3 text-sm">
               {BROAD_THEME_CLUSTERS.map((area) => (
                 <li key={area}>
                   <Link
-                    to={knowledgeGraphThemePath(area)}
+                    to={atlasThemePath(area)}
                     className="group flex items-start text-muted-foreground hover:text-primary transition-all duration-300"
                   >
                     <span
@@ -160,7 +160,7 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Contact */}
+          
           <div>
             <h3 className="font-semibold mb-6 text-sm uppercase tracking-wider text-foreground">Contact</h3>
             <ul className="space-y-4 text-sm">
@@ -203,7 +203,7 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* Bottom Bar */}
+        
         <div className="border-t border-border/30 dark:border-slate-800 mt-12 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
@@ -224,7 +224,7 @@ const Footer = () => {
         </div>
       </div>
       
-      {/* Decorative corner gradients - Enhanced for dark mode */}
+      
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-primary/5 dark:from-primary/10 to-transparent pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-64 h-64 bg-gradient-to-tl from-accent/5 dark:from-accent/10 to-transparent pointer-events-none" />
     </footer>

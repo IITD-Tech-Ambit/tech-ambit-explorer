@@ -15,7 +15,6 @@ const NavigateModal = ({ isOpen, onClose, onSubmit }: NavigateModalProps) => {
   if (!isOpen) return null;
 
   const handleSubmit = () => {
-    // Validate JSON
     try {
       if (!inputData.trim()) {
         setError('Please paste document data');
@@ -37,13 +36,11 @@ const NavigateModal = ({ isOpen, onClose, onSubmit }: NavigateModalProps) => {
 
   return (
     <>
-      {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
         onClick={handleClose}
       />
-      
-      {/* Card */}
+
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90vw] max-w-4xl max-h-[85vh] overflow-auto bg-gradient-to-br from-background to-muted/30 rounded-xl shadow-2xl border-2 border-primary/20">
         <div className="sticky top-0 bg-gradient-to-r from-primary/10 via-primary/5 to-background/95 backdrop-blur-sm border-b-2 border-primary/20 z-10">
           <div className="flex items-start justify-between p-6">
@@ -68,7 +65,6 @@ const NavigateModal = ({ isOpen, onClose, onSubmit }: NavigateModalProps) => {
         </div>
 
         <div className="p-8 space-y-6">
-          {/* Text Area */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground">
               Document JSON Data
@@ -92,7 +88,6 @@ const NavigateModal = ({ isOpen, onClose, onSubmit }: NavigateModalProps) => {
             )}
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <Button
               variant="outline"

@@ -135,13 +135,13 @@ const MemberCard = ({
       large ? "px-10 py-12" : "px-8 py-10"
     )}
   >
-    {/* Animated hover glow */}
+    
     <div className="pointer-events-none absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-gradient-to-br from-blue-500/5 via-primary/5 to-teal-500/5" />
 
-    {/* Top decorative stripe */}
+    
     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 rounded-b-full bg-gradient-to-r from-blue-500 via-primary to-teal-400 opacity-60 group-hover:w-32 group-hover:opacity-100 transition-all duration-500" />
 
-    {/* Avatar with gradient ring */}
+    
     {member.avatar && (
       <div
         className={cn(
@@ -159,7 +159,7 @@ const MemberCard = ({
       </div>
     )}
 
-    {/* Name */}
+    
     <h3
       className={cn(
         "font-bold text-center bg-gradient-to-r from-blue-400 via-primary to-teal-400 bg-clip-text text-transparent",
@@ -169,10 +169,10 @@ const MemberCard = ({
       {member.name}
     </h3>
 
-    {/* Role */}
+    
     <p className="text-muted-foreground text-sm mb-5 font-medium">{member.role}</p>
 
-    {/* Social links */}
+    
     <div className="flex items-center gap-3">
       {member.linkedin && (
         <a
@@ -227,14 +227,14 @@ const ContributorCard = ({
         "px-6 py-8 overflow-hidden"
       )}
     >
-      {/* Hover gradient overlay */}
+      
       <div className={cn("absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-700", a.bg)} />
 
-      {/* Decorative corner */}
+      
       <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary/8 to-transparent rounded-bl-[3rem] opacity-80" />
       <div className="absolute bottom-0 left-0 w-16 h-16 bg-gradient-to-tr from-accent/5 to-transparent rounded-tr-[2rem] opacity-60" />
 
-      {/* Graduation icon */}
+      
       <div className={cn(
         "relative z-10 w-16 h-16 rounded-2xl mb-5 flex items-center justify-center",
         "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800",
@@ -244,18 +244,18 @@ const ContributorCard = ({
         <GraduationCap className={cn("w-7 h-7", a.icon)} />
       </div>
 
-      {/* Name */}
+      
       <h3 className="relative z-10 font-bold text-lg text-center text-foreground mb-1.5 group-hover:text-primary transition-colors duration-300">
         {member.name}
       </h3>
 
-      {/* Role badge */}
+      
       <span className="relative z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20 mb-3">
         <Star className="w-3 h-3" />
         {member.role}
       </span>
 
-      {/* Entry number — mailto link */}
+      
       {member.entryNumber && (
         <a
           href={`mailto:${member.entryNumber}`}
@@ -268,7 +268,7 @@ const ContributorCard = ({
         </a>
       )}
 
-      {/* LinkedIn button */}
+      
       {member.linkedin && (
         <a
           href={member.linkedin}
@@ -314,14 +314,14 @@ const Contributors = () => {
     <div className="min-h-screen page-bg">
       <Navigation />
 
-      {/* ─── Hero ─── */}
+      
       <section className="relative pt-32 pb-28 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent dark:from-primary/10" />
         <div className="absolute top-16 left-10 w-80 h-80 bg-blue-500/8 rounded-full blur-3xl animate-pulse" />
         <div className="absolute top-32 right-10 w-96 h-96 bg-teal-500/6 rounded-full blur-3xl animate-pulse delay-1000" />
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[600px] h-[200px] bg-primary/4 rounded-full blur-3xl" />
 
-        {/* Floating decorative dots */}
+        
         <div className="absolute top-24 left-[15%] w-2 h-2 rounded-full bg-blue-400/40 animate-bounce delay-300" />
         <div className="absolute top-40 right-[20%] w-3 h-3 rounded-full bg-teal-400/30 animate-bounce delay-700" />
         <div className="absolute bottom-20 left-[25%] w-2 h-2 rounded-full bg-primary/30 animate-bounce delay-500" />
@@ -343,7 +343,7 @@ const Contributors = () => {
               and research excellence at IIT Delhi.
             </p>
 
-            {/* Stats row */}
+            
             <div className="flex flex-wrap items-center justify-center gap-8 mt-12">
               {[
                 { label: "Team Members", value: `${3 + phaseContributors.length}+` },
@@ -364,7 +364,7 @@ const Contributors = () => {
         </div>
       </section>
 
-      {/* ─── Dean in Charge ─── */}
+      
       <section className="relative py-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/15 to-transparent dark:via-slate-900/15" />
         <div className="container mx-auto px-4 relative z-10">
@@ -382,7 +382,7 @@ const Contributors = () => {
         </div>
       </section>
 
-      {/* ─── Mentors in Charge ─── */}
+      
       <section className="relative py-20">
         <div className="absolute inset-0 bg-gradient-to-b from-muted/15 via-muted/25 to-transparent dark:from-slate-900/20 dark:via-slate-800/15" />
         <div className="absolute top-1/2 left-0 w-72 h-72 bg-primary/5 rounded-full blur-3xl -translate-y-1/2" />
@@ -399,7 +399,7 @@ const Contributors = () => {
         </div>
       </section>
 
-      {/* ─── Current Phase Contributors ─── */}
+      
       <section className="relative py-20 pb-28">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/3 to-transparent dark:via-primary/5" />
         <div className="container mx-auto px-4 relative z-10">
