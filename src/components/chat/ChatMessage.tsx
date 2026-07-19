@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, isValidElement, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useElementWidth } from "@/hooks/use-element-width";
@@ -6,9 +6,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
   ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
-  UserRound,
+  UserRound, Lightbulb,
 } from "lucide-react";
-import type { ChatSource, ChatChartEvent, LineChartData, BarChartData, PieChartData } from "@/lib/api/services/chatService";
+import { isIPSource, type ChatSource, type ChatChartEvent, type LineChartData, type BarChartData, type PieChartData } from "@/lib/api/services/chatService";
 import {
   ResponsiveContainer,
   LineChart,
@@ -39,6 +39,8 @@ export interface ChatMessageProps {
   onRetry?: () => void;
   onEdit?: (text: string) => void;
   isLast?: boolean;
+  /** Opens the shared IP/patent detail modal for a clicked patent source card. */
+  onOpenIPSource?: (source: ChatSource) => void;
 }
 
 const CHART_COLORS = [
@@ -297,8 +299,15 @@ const ChartBlock = ({
   );
 };
 
-const SourceItem = ({ source }: { source: ChatSource }) => {
-  const href = resolvePaperHref(source);
+const SourceItem = ({
+  source,
+  onOpenIPSource,
+}: {
+  source: ChatSource;
+  onOpenIPSource?: (source: ChatSource) => void;
+}) => {
+  const isIP = isIPSource(source);
+  const href = isIP ? null : resolvePaperHref(source);
   const authors = source.authors.slice(0, 2).join(", ") + (source.authors.length > 2 ? ` +${source.authors.length - 2}` : "");
 
   const content = (
@@ -313,6 +322,11 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
         </p>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {isIP && source.document_type && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide text-secondary-foreground bg-secondary/70 flex-shrink-0">
+              {source.document_type}
+            </span>
+          )}
           {source.publication_year && (
             <span className="text-[10px] text-muted-foreground/70 font-medium">
               {source.publication_year}
@@ -340,11 +354,21 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
       </div>
 
       
-      {href && (
+      {isIP ? (
+        <Lightbulb className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
+      ) : href && (
         <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
       )}
     </div>
   );
+
+  if (isIP) {
+    return (
+      <button type="button" onClick={() => onOpenIPSource?.(source)} className="block w-full text-left">
+        {content}
+      </button>
+    );
+  }
 
   return href ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className="block">
@@ -355,7 +379,13 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
   );
 };
 
-const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
+const SourcesBlock = ({
+  sources,
+  onOpenIPSource,
+}: {
+  sources: ChatSource[];
+  onOpenIPSource?: (source: ChatSource) => void;
+}) => {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -397,7 +427,7 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
       {open && (
         <div className="divide-y" style={{ borderColor: "hsl(var(--border)/0.25)" }}>
           {sources.map((s) => (
-            <SourceItem key={s.id || s.title} source={s} />
+            <SourceItem key={s.id || s.title} source={s} onOpenIPSource={onOpenIPSource} />
           ))}
         </div>
       )}
@@ -405,12 +435,51 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
   );
 };
 
-// Faculty links (/faculty/kerberos) → pill chip; everything else → styled external link
+// Faculty links (/faculty/kerberos) → pill chip; IP/patent citations → open the
+// shared detail modal instead of navigating; everything else → styled external link
+
+function extractText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (isValidElement(node)) return extractText((node.props as { children?: ReactNode }).children);
+  return "";
+}
+
+function normalizeTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[…]|\.{2,}$/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// The LLM cites IP filings by title in prose (patents/IP results carry no `url`
+// field, unlike papers), so inline links can only be resolved back to a source
+// by matching their visible text against `message.sources` — not by href.
+function findIPSourceMatch(sources: ChatSource[] | undefined, linkText: string): ChatSource | undefined {
+  const norm = normalizeTitle(linkText);
+  if (!sources?.length || norm.length < 8) return undefined;
+
+  const ipSources = sources.filter(isIPSource);
+  const exact = ipSources.find((s) => normalizeTitle(s.title) === norm);
+  if (exact) return exact;
+
+  return ipSources.find((s) => {
+    const st = normalizeTitle(s.title);
+    return st.length >= 8 && (st.startsWith(norm) || norm.startsWith(st));
+  });
+}
 
 const MarkdownLink = ({
   href,
   children,
-}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+  sources,
+  onOpenIPSource,
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+  sources?: ChatSource[];
+  onOpenIPSource?: (source: ChatSource) => void;
+}) => {
   const isFaculty = href?.startsWith("/faculty/");
 
   if (isFaculty) {
@@ -431,6 +500,32 @@ const MarkdownLink = ({
         <UserRound className="w-3 h-3 flex-shrink-0 opacity-80" />
         <span>{children}</span>
         <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-50" />
+      </a>
+    );
+  }
+
+  const ipMatch = findIPSourceMatch(sources, extractText(children));
+
+  if (ipMatch) {
+    const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      onOpenIPSource?.(ipMatch);
+    };
+
+    return (
+      <a
+        href={href}
+        onClick={handleClick}
+        className="
+          inline-flex items-baseline gap-0.5 cursor-pointer
+          text-primary underline decoration-primary/30 underline-offset-2
+          hover:decoration-primary/70 hover:text-primary/90
+          transition-colors duration-150
+        "
+      >
+        <span>{children}</span>
+        <Lightbulb className="w-3 h-3 flex-shrink-0 self-center opacity-50 ml-0.5" />
       </a>
     );
   }
@@ -612,8 +707,16 @@ const AssistantActions = ({
 };
 
 
-const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => {
+const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatMessageProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
+
+  const LinkRenderer = useMemo(
+    () =>
+      (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+        <MarkdownLink {...props} sources={message.sources} onOpenIPSource={onOpenIPSource} />
+      ),
+    [message.sources, onOpenIPSource]
+  );
 
   if (message.role === "user") {
     return (
@@ -689,7 +792,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              components={{ a: MarkdownLink }}
+              components={{ a: LinkRenderer }}
             >
               {message.content}
             </ReactMarkdown>
@@ -700,7 +803,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
       {message.chart && <ChartBlock chart={message.chart} chartRef={chartRef} />}
 
       {message.sources && message.sources.length > 0 && (
-        <SourcesBlock sources={message.sources} />
+        <SourcesBlock sources={message.sources} onOpenIPSource={onOpenIPSource} />
       )}
 
       {!message.error && (message.content || message.chart) && (
