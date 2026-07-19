@@ -15,8 +15,23 @@ export interface AuthUser {
 
 const AUTH_BASE = `${BASE_URL}/auth`;
 
+// Secure-by-default: only an explicit VITE_ENABLE_AUTH=false disables the OAuth
+// gate. MUST remain true/unset in production.
+const AUTH_ENABLED = import.meta.env.VITE_ENABLE_AUTH !== 'false';
+
+const DEV_USER: AuthUser = {
+    sub: 'dev-0000000',
+    user_id: 'devuser',
+    email: 'devuser@iitd.ac.in',
+    name: 'Dev User',
+    kerberos: 'devuser',
+    department: 'Computer Science and Engineering',
+    category: 'student',
+};
+
 /** Current session, or null when not logged in. */
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
+    if (!AUTH_ENABLED) return DEV_USER;
     try {
         const res = await fetch(`${AUTH_BASE}/me`, { credentials: 'include' });
         if (!res.ok) return null;
@@ -29,6 +44,7 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
 
 /** Full-page redirect into the IITD OAuth flow. */
 export function redirectToLogin(): void {
+    if (!AUTH_ENABLED) return;
     window.location.href = `${AUTH_BASE}/login`;
 }
 
