@@ -62,8 +62,8 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
     const trimmed = query.trim();
     const tooShort = trimmed.length < 2;
 
-    const inventors = useMemo(() => data?.groups.inventors ?? [], [data]);
-    const documents = useMemo(() => data?.groups.documents ?? [], [data]);
+    const inventors = useMemo(() => data?.groups?.inventors ?? [], [data]);
+    const documents = useMemo(() => data?.groups?.documents ?? [], [data]);
     const intent: IPSuggestIntent = data?.intent ?? "mixed";
     const inventorsFirst = intent !== "document";
 

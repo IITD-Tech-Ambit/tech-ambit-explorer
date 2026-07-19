@@ -66,8 +66,8 @@ export const SearchSuggestions = forwardRef<SearchSuggestionsHandle, SearchSugge
     const trimmed = query.trim();
     const showRecent = trimmed.length < 2;
 
-    const authors = useMemo(() => data?.groups.authors ?? [], [data]);
-    const papers = useMemo(() => data?.groups.papers ?? [], [data]);
+    const authors = useMemo(() => data?.groups?.authors ?? [], [data]);
+    const papers = useMemo(() => data?.groups?.papers ?? [], [data]);
     const intent: SuggestIntent = data?.intent ?? "mixed";
     const authorsFirst = intent !== "paper";
 
