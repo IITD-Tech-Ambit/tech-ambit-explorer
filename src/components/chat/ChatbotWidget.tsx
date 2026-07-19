@@ -112,7 +112,8 @@ const ChatbotWidget = () => {
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el || messages.length === 0) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages, thinkingSteps, open, expanded]);
 
   useEffect(() => {
@@ -244,7 +245,7 @@ const ChatbotWidget = () => {
   const EmptyState = ({ isExp }: { isExp: boolean }) => (
     <div
       className={cn(
-        "flex flex-col items-center justify-center h-full gap-6 px-5 py-8 text-center",
+        "flex flex-col items-center justify-center min-h-full overflow-hidden gap-3 px-5 py-3 text-center",
         isExp && "gap-8 py-12",
       )}
     >
@@ -312,7 +313,7 @@ const ChatbotWidget = () => {
       <div
         className={cn(
           "grid w-full",
-          isExp ? "grid-cols-2 gap-2.5 max-w-lg" : "grid-cols-2 gap-2 max-w-[300px]",
+          isExp ? "grid-cols-2 gap-2.5 max-w-lg" : "grid-cols-2 gap-1.5 max-w-[300px]",
         )}
       >
         {STARTER_QUESTIONS.map(({ q, icon: Icon }) => (
@@ -322,7 +323,7 @@ const ChatbotWidget = () => {
             className={cn(
               "group flex items-start text-left rounded-xl transition-all duration-200",
               "hover:scale-[1.02] active:scale-[0.97] touch-manipulation",
-              isExp ? "gap-2.5 p-3.5" : "gap-2 p-2.5",
+              isExp ? "gap-2.5 p-3.5" : "gap-2 p-2",
             )}
             style={{
               background: "hsl(var(--muted)/0.3)",
