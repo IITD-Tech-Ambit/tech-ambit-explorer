@@ -1,9 +1,16 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, ChevronLeft, ChevronRight } from "lucide-react";
 import FacultyCard from "@/components/directory/FacultyCard";
-import { useTaxonomyFaculty, useTaxonomyFacultyCards } from "@/lib/api/hooks/useTaxonomy";
+import TaxonomyFacultyPapersModal from "@/components/explore/taxonomy/TaxonomyFacultyPapersModal";
+import TaxonomyExploreDocumentOverlay from "@/components/explore/taxonomy/TaxonomyExploreDocumentOverlay";
+import {
+    useTaxonomyFaculty,
+    useTaxonomyFacultyCards,
+    useTaxonomyFacultyPapers,
+} from "@/lib/api/hooks/useTaxonomy";
 import type { TaxonomyBrowseFilters } from "@/lib/api/services/taxonomyService";
 import type { DirectoryFaculty } from "@/lib/api/types";
 
@@ -14,6 +21,12 @@ interface TaxonomyFacultySectionProps {
 }
 
 const PER_PAGE = 12;
+const PAPERS_PREVIEW = 2;
+
+type PapersModalState = {
+    kerberos: string;
+    facultyName: string;
+} | null;
 
 const CardsSkeleton = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -47,14 +60,51 @@ const UnresolvedFacultyCard = ({ kerberos, onClick }: { kerberos: string; onClic
     </button>
 );
 
+const TaxonomyFacultyCard = ({
+    faculty,
+    kerberos,
+    filters,
+    onClick,
+    onShowAllPapers,
+    onPaperSelect,
+}: {
+    faculty: DirectoryFaculty;
+    kerberos: string;
+    filters: TaxonomyBrowseFilters;
+    onClick: () => void;
+    onShowAllPapers: () => void;
+    onPaperSelect: (paperId: string) => void;
+}) => {
+    const papersQuery = useTaxonomyFacultyPapers(
+        kerberos,
+        { theme: filters.theme, domain: filters.domain, subdomain: filters.subdomain },
+        1,
+        PAPERS_PREVIEW
+    );
+
+    return (
+        <FacultyCard
+            faculty={faculty}
+            onClick={onClick}
+            areaPapers={papersQuery.data?.results ?? []}
+            areaPapersTotal={papersQuery.data?.pagination.total ?? 0}
+            areaPapersLoading={papersQuery.isLoading}
+            onAreaPapersOverflowClick={onShowAllPapers}
+            onAreaPaperClick={(paper) => onPaperSelect(paper.id)}
+        />
+    );
+};
+
 /**
  * Faculty results for the current browse configuration: fetches the kerberos
  * page from the taxonomy API, batch-resolves profiles via the directory API,
- * and renders the same FacultyCard used across the portal. Card click goes to
- * /faculty/:kerberos, exactly like the Directory section.
+ * and renders FacultyCard with area papers. Preview titles and +N list items
+ * both open the Explore paper detail modal.
  */
 const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFacultySectionProps) => {
     const navigate = useNavigate();
+    const [papersModal, setPapersModal] = useState<PapersModalState>(null);
+    const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
 
     const facultyQuery = useTaxonomyFaculty(filters, page, PER_PAGE);
     const kerberosPage = facultyQuery.data?.kerberos_list ?? [];
@@ -101,10 +151,19 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
                         {kerberosPage.map((kerberos) => {
                             const faculty: DirectoryFaculty | undefined = cardsQuery.data?.[kerberos];
                             return faculty ? (
-                                <FacultyCard
+                                <TaxonomyFacultyCard
                                     key={kerberos}
                                     faculty={faculty}
+                                    kerberos={kerberos}
+                                    filters={filters}
                                     onClick={() => openProfile(kerberos)}
+                                    onShowAllPapers={() =>
+                                        setPapersModal({
+                                            kerberos,
+                                            facultyName: faculty.name,
+                                        })
+                                    }
+                                    onPaperSelect={setSelectedPaperId}
                                 />
                             ) : (
                                 <UnresolvedFacultyCard
@@ -143,6 +202,26 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
                     )}
                 </>
             )}
+
+            {papersModal && (
+                <TaxonomyFacultyPapersModal
+                    open
+                    onClose={() => setPapersModal(null)}
+                    kerberos={papersModal.kerberos}
+                    facultyName={papersModal.facultyName}
+                    filters={{
+                        theme: filters.theme,
+                        domain: filters.domain,
+                        subdomain: filters.subdomain,
+                    }}
+                    onPaperSelect={setSelectedPaperId}
+                />
+            )}
+
+            <TaxonomyExploreDocumentOverlay
+                paperId={selectedPaperId}
+                onClose={() => setSelectedPaperId(null)}
+            />
         </section>
     );
 };

@@ -12,6 +12,8 @@ type Props = {
   highlightTokens: string[];
   onClose: () => void;
   onAuthorClick: (scopusAuthorId: string, name: string) => void;
+  /** Extra classes for the full-screen overlay (e.g. higher z-index when stacked). */
+  overlayClassName?: string;
 };
 
 export function ExploreDocumentModal({
@@ -20,13 +22,14 @@ export function ExploreDocumentModal({
   highlightTokens,
   onClose,
   onAuthorClick,
+  overlayClassName,
 }: Props) {
   const paperLink = getPaperExternalUrl(selectedDocument);
   const authorRows = getExploreModalAuthorRows(selectedDocument.authors, selectedAuthor);
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 ${overlayClassName ?? ""}`}
       onClick={onClose}
     >
       <div

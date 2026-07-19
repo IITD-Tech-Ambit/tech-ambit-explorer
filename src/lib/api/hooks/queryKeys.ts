@@ -45,6 +45,12 @@ export const queryKeys = {
             [...queryKeys.taxonomy.all, 'faculty', filters, page, perPage] as const,
         facultyCards: (kerberosIds: string[]) =>
             [...queryKeys.taxonomy.all, 'facultyCards', kerberosIds.join(',')] as const,
+        facultyPapers: (
+            kerberos: string,
+            filters: Record<string, string | undefined>,
+            page: number,
+            perPage: number
+        ) => [...queryKeys.taxonomy.all, 'facultyPapers', kerberos, filters, page, perPage] as const,
     },
 
     search: {
