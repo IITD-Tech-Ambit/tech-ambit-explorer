@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { BASE_URL, SEARCH_API_BASE_URL, KG_BASE_URL } from './endpoints';
+import { BASE_URL, SEARCH_API_BASE_URL, KG_BASE_URL, IP_SEARCH_API_BASE_URL } from './endpoints';
 
 /**
  * Build an axios instance with the same cookie-credential handling, dev
@@ -86,6 +86,8 @@ const apiClient: AxiosInstance = createApiClient(BASE_URL);
 export const searchApiClient: AxiosInstance = createApiClient(SEARCH_API_BASE_URL);
 
 export const kgApiClient: AxiosInstance = createApiClient(KG_BASE_URL);
+
+export const ipSearchApiClient: AxiosInstance = createApiClient(IP_SEARCH_API_BASE_URL);
 
 export const retryRequest = async <T>(
     fn: () => Promise<T>,

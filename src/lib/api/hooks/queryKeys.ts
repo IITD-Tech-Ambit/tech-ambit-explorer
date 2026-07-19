@@ -56,4 +56,10 @@ export const queryKeys = {
         facultyForQuery: (query: string) =>
             [...queryKeys.search.all, 'facultyForQuery', query] as const,
     },
+
+    ipSearch: {
+        all: ['ipSearch'] as const,
+        results: (request: Record<string, unknown>) => [...queryKeys.ipSearch.all, 'results', request] as const,
+        document: (id: string) => [...queryKeys.ipSearch.all, 'document', id] as const,
+    },
 } as const;

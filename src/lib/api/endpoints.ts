@@ -4,6 +4,11 @@ export const BASE_URL = API_BASE_URL;
 // search-api (opensearch service) — separate deployment from the main API
 export const SEARCH_API_BASE_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:3000/api/v1';
 
+// IP/Patents search — lives on the same SEO-Backend-iitd service as the main
+// search-api, but isn't gRPC-bridged through api-gateway yet, so it's reached
+// directly (its own base URL) instead of through SEARCH_API_BASE_URL.
+export const IP_SEARCH_API_BASE_URL = import.meta.env.VITE_IP_SEARCH_API_URL || 'http://localhost:3001/api/v1';
+
 // Atlas (KG) endpoints live under the main API
 export const KG_BASE_URL = `${API_BASE_URL}/kg`;
 
@@ -19,6 +24,13 @@ export const ENDPOINTS = {
         dislike: '/content/dislike',
         comment: '/content/comment',
         deleteComment: '/content/uncomment',
+    },
+
+    ip: {
+        search: '/ip/search',
+        health: '/ip/search/health',
+        document: (id: string) => `/ip/document/${id}`,
+        suggest: '/ip/suggest',
     },
 } as const;
 
