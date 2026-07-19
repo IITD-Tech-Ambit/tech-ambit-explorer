@@ -6,9 +6,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
   ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
-  UserRound,
+  UserRound, Lightbulb,
 } from "lucide-react";
-import type { ChatSource, ChatChartEvent, LineChartData, BarChartData, PieChartData } from "@/lib/api/services/chatService";
+import { isIPSource, type ChatSource, type ChatChartEvent, type LineChartData, type BarChartData, type PieChartData } from "@/lib/api/services/chatService";
 import {
   ResponsiveContainer,
   LineChart,
@@ -39,6 +39,8 @@ export interface ChatMessageProps {
   onRetry?: () => void;
   onEdit?: (text: string) => void;
   isLast?: boolean;
+  /** Opens the shared IP/patent detail modal for a clicked patent source card. */
+  onOpenIPSource?: (source: ChatSource) => void;
 }
 
 const CHART_COLORS = [
@@ -297,8 +299,15 @@ const ChartBlock = ({
   );
 };
 
-const SourceItem = ({ source }: { source: ChatSource }) => {
-  const href = resolvePaperHref(source);
+const SourceItem = ({
+  source,
+  onOpenIPSource,
+}: {
+  source: ChatSource;
+  onOpenIPSource?: (source: ChatSource) => void;
+}) => {
+  const isIP = isIPSource(source);
+  const href = isIP ? null : resolvePaperHref(source);
   const authors = source.authors.slice(0, 2).join(", ") + (source.authors.length > 2 ? ` +${source.authors.length - 2}` : "");
 
   const content = (
@@ -313,6 +322,11 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
         </p>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {isIP && source.document_type && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide text-secondary-foreground bg-secondary/70 flex-shrink-0">
+              {source.document_type}
+            </span>
+          )}
           {source.publication_year && (
             <span className="text-[10px] text-muted-foreground/70 font-medium">
               {source.publication_year}
@@ -340,11 +354,21 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
       </div>
 
       
-      {href && (
+      {isIP ? (
+        <Lightbulb className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
+      ) : href && (
         <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
       )}
     </div>
   );
+
+  if (isIP) {
+    return (
+      <button type="button" onClick={() => onOpenIPSource?.(source)} className="block w-full text-left">
+        {content}
+      </button>
+    );
+  }
 
   return href ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className="block">
@@ -355,7 +379,13 @@ const SourceItem = ({ source }: { source: ChatSource }) => {
   );
 };
 
-const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
+const SourcesBlock = ({
+  sources,
+  onOpenIPSource,
+}: {
+  sources: ChatSource[];
+  onOpenIPSource?: (source: ChatSource) => void;
+}) => {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -397,7 +427,7 @@ const SourcesBlock = ({ sources }: { sources: ChatSource[] }) => {
       {open && (
         <div className="divide-y" style={{ borderColor: "hsl(var(--border)/0.25)" }}>
           {sources.map((s) => (
-            <SourceItem key={s.id || s.title} source={s} />
+            <SourceItem key={s.id || s.title} source={s} onOpenIPSource={onOpenIPSource} />
           ))}
         </div>
       )}
@@ -612,7 +642,7 @@ const AssistantActions = ({
 };
 
 
-const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => {
+const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatMessageProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   if (message.role === "user") {
@@ -700,7 +730,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast }: ChatMessageProps) => 
       {message.chart && <ChartBlock chart={message.chart} chartRef={chartRef} />}
 
       {message.sources && message.sources.length > 0 && (
-        <SourcesBlock sources={message.sources} />
+        <SourcesBlock sources={message.sources} onOpenIPSource={onOpenIPSource} />
       )}
 
       {!message.error && (message.content || message.chart) && (

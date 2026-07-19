@@ -21,6 +21,13 @@ export interface ChatSource {
   document_eid: string | null;
   kerberos: string | null;
   faculty_name: string | null;
+  /** Present only for patent/IP sources (see `ips_to_sources` in the chatbot-agent) — absent for papers. */
+  application_number?: string | null;
+}
+
+/** IP/patent sources are the only ones carrying an application number. */
+export function isIPSource(source: ChatSource): boolean {
+  return !!source.application_number;
 }
 
 export interface DataPoint { x: string | number; y: number }

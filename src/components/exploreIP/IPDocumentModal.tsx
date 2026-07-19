@@ -9,6 +9,8 @@ type Props = {
   highlightTokens: string[];
   onClose: () => void;
   onInventorClick: (name: string, kerberos: string) => void;
+  /** Extra classes for the full-screen overlay (e.g. higher z-index when stacked). */
+  overlayClassName?: string;
 };
 
 function formatDate(value?: string) {
@@ -18,10 +20,16 @@ function formatDate(value?: string) {
   return d.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
 }
 
-export function IPDocumentModal({ document: doc, highlightTokens, onClose, onInventorClick }: Props) {
+export function IPDocumentModal({
+  document: doc,
+  highlightTokens,
+  onClose,
+  onInventorClick,
+  overlayClassName,
+}: Props) {
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 ${overlayClassName ?? ""}`}
       onClick={onClose}
     >
       <div

@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import ChatMessage, { type ChatMessageData } from "./ChatMessage";
 import ChatPanelHeader from "./ChatPanelHeader";
+import { ChatIPSourceModal } from "./ChatIPSourceModal";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const STORAGE_KEY = "research-ambit-chat-v2";
@@ -87,6 +88,7 @@ const ChatbotWidget = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const [quota, setQuota] = useState<ChatQuota | null>(null);
+  const [selectedIPSourceId, setSelectedIPSourceId] = useState<string | null>(null);
 
   const refreshQuota = useCallback(async () => {
     setQuota(await fetchChatQuota());
@@ -446,6 +448,7 @@ const ChatbotWidget = () => {
                     onEdit={onEdit}
                     onRetry={onRetry}
                     isLast={isLastMsg}
+                    onOpenIPSource={(source) => setSelectedIPSourceId(source.id)}
                   />
                 );
               })}
@@ -776,6 +779,11 @@ const ChatbotWidget = () => {
           {panelContents({ isExpanded: expanded })}
         </div>
       )}
+
+      <ChatIPSourceModal
+        sourceId={selectedIPSourceId}
+        onClose={() => setSelectedIPSourceId(null)}
+      />
     </>
   );
 };
