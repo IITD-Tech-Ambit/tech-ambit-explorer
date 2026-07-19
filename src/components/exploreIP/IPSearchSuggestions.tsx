@@ -3,13 +3,6 @@ import { FileText, Loader2, Search, UserCircle, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { IPSuggestResponse, SuggestIPInventor, SuggestIPDocument, IPSuggestIntent } from "@/lib/api/types";
 
-/**
- * IP/patent typeahead dropdown. Mirrors `SearchSuggestions.tsx` (Scopus explore) exactly in
- * styling, debounce, keyboard nav, and click behavior -- sourced from `ip_documents`
- * (inventors + documents) instead of authors_suggest/research_documents. There is no
- * "recent searches" fallback here (the IP explore page has no search-history feature yet):
- * short queries simply render nothing, same as an empty match set would.
- */
 export interface IPSearchSuggestionsHandle {
   /** Returns true if the key was handled (Arrow/Enter/Esc on an item), so the input skips its default. */
   handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => boolean;
@@ -120,7 +113,7 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
               selectItem(flat[activeIndex]);
               return true;
             }
-            return false; // let the parent run a normal search
+              return false;
           case "Escape":
             e.preventDefault();
             onClose();

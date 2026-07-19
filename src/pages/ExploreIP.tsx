@@ -14,10 +14,9 @@ import { IPSearchSuggestions } from "@/components/exploreIP/IPSearchSuggestions"
 import { useIPExploreState } from "@/hooks/explore/useIPExploreState";
 import { useState } from "react";
 
-/** Real, verified example queries — pulled from indexed patent titles/abstracts so the empty state is never a dead end. */
 const EXAMPLE_IP_SEARCHES = ["microgrid", "battery storage", "solar cell", "biodegradable materials", "wireless sensor", "machine learning"];
 
-/** Top real `field_of_invention` facet values (by volume) with a natural-language query that pairs with the filter for a relevant, filtered result set. */
+/** Facet value + keyword query so "browse by field" chips apply a real field_of_invention filter. */
 const IP_FIELD_SHORTCUTS = [
   { label: "Electrical", value: "ELECTRICAL", query: "electrical" },
   { label: "Chemical", value: "CHEMICAL", query: "chemical" },
@@ -44,13 +43,8 @@ const ExploreIP = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  /** Faculty inventor names always navigate straight to their profile — same as author names on the Scopus explore page. */
   const openFacultyProfile = (kerberos: string) => {
     window.open(`/faculty/${kerberos}`, "_blank", "noopener");
-  };
-
-  const handleInventorProfileClick = (_name: string, kerberos: string) => {
-    openFacultyProfile(kerberos);
   };
 
   return (
@@ -353,7 +347,7 @@ const ExploreIP = () => {
                 results={results}
                 highlightTokens={highlightTokens}
                 onSelectDocument={setSelectedDocument}
-                onInventorClick={handleInventorProfileClick}
+                onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
               />
 
               {pagination && (
@@ -369,7 +363,7 @@ const ExploreIP = () => {
           document={selectedDocument}
           highlightTokens={highlightTokens}
           onClose={() => setSelectedDocument(null)}
-          onInventorClick={handleInventorProfileClick}
+          onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
         />
       )}
 

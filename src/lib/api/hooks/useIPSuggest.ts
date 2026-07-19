@@ -14,11 +14,8 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 /**
- * Blended IP typeahead hook. Mirrors useSuggest.ts (Scopus) exactly:
- * - ~120ms debounce on keystrokes.
- * - React Query passes an AbortSignal to the fetch so stale keystrokes are cancelled.
- * - keepPreviousData avoids dropdown flicker while the next page of suggestions loads.
- * - Disabled for empty / very short queries.
+ * IP typeahead: ~120ms debounce, AbortSignal cancellation, keepPreviousData to avoid flicker.
+ * Disabled for empty / very short queries.
  */
 export function useIPSuggest(
   query: string,

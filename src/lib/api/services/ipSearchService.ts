@@ -9,9 +9,8 @@ const EMPTY_IP_SUGGEST: IPSuggestResponse = {
 };
 
 /**
- * Blended, intent-aware IP typeahead: returns Inventor + Document suggestion groups plus a
- * predicted intent. Mirrors `getSuggestions` in searchService.ts. AbortController-aware so
- * stale keystrokes can be cancelled.
+ * Blended IP typeahead: Inventor + Document groups plus predicted intent.
+ * AbortController-aware so stale keystrokes can be cancelled.
  */
 export async function getIPSuggestions(
   q: string,

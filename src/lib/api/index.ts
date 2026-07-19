@@ -16,6 +16,7 @@ export * from './hooks/useMagazines';
 export * from './hooks/useMagazineAnalytics';
 export * from './hooks/useSearch';
 export * from './hooks/useIPSearch';
+export * from './hooks/useIPSuggest';
 export * from './hooks/useSuggest';
 export * from './hooks/useDirectory';
 export * from './hooks/useTaxonomy';

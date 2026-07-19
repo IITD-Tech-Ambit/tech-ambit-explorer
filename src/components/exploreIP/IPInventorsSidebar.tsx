@@ -17,12 +17,6 @@ type Props = {
   onToggle: () => void;
 };
 
-/**
- * Faculty/related-inventors sidebar for the IP explore page. Reuses the
- * generic PeopleSectionUI building blocks from the Scopus Explore page (they
- * only take name/count/callbacks, no Scopus-specific typing) so the visual
- * language matches exactly without duplicating markup.
- */
 export function IPInventorsSidebar({
   relatedFaculty,
   selectedInventor,

@@ -383,8 +383,7 @@ export interface AllFacultyForQueryResponse {
     };
 }
 
-// IP / Patents search types (mirrors ipSearchRequestSchema / ipSearchResponseSchema
-// in SEO-Backend-iitd/src/schemas/ipSearch.js — that file is ground truth).
+// IP / Patents — ground truth: SEO-Backend-iitd/src/schemas/ipSearch.js
 
 export interface IPInventor {
     name: string;
@@ -508,8 +507,7 @@ export interface IPSearchHealthResponse {
     timestamp: string;
 }
 
-// IP typeahead — mirrors SuggestAuthor/SuggestPaper/SuggestResponse above, sourced from
-// ip_documents instead of authors_suggest/research_documents.
+// IP typeahead (ip_documents)
 export interface SuggestIPInventor {
     id: string;
     name: string;

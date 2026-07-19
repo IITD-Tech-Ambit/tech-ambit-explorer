@@ -11,15 +11,9 @@ type IPSort = "relevance" | "date" | "normalized";
 export type SelectedInventor = { name: string; kerberos: string };
 
 /**
- * URL + filter/search state for the IP/Patents explore experience. Mirrors the
- * shape of useExploreSearchState (Scopus Explore) including the multi-step
- * refinement chain (newest term drives ranking; prior terms narrow via
- * refine_chain, oldest -> newest) — the IP backend accepts the same
- * `refine_chain` contract as `/search`. No author-scoped endpoint, since the
- * backend doesn't expose one for /ip/search; the typeahead suggest endpoint
- * (`/ip/suggest`) mirrors the scopus one, sourced from `ip_documents`.
- * `filters.kerberos` doubles as the "scope to this inventor" mechanism when a
- * related faculty row (or a faculty inventor suggestion) is selected.
+ * URL + refinement chain + search/filter state for IP/Patents Explore.
+ * Multi-step refinement: newest term drives ranking; prior terms narrow via refine_chain.
+ * Inventor scope uses filters.kerberos (no author-scoped endpoint).
  * URL shape: ?q=<base>&refine=<r1>&refine=<r2>...
  */
 export function useIPExploreState() {
@@ -58,8 +52,7 @@ export function useIPExploreState() {
   const priorChain = refinementChain.slice(0, -1);
   const hasSearched = refinementChain.length > 0;
 
-  // Tokens to highlight in result titles/abstracts — every word across the whole
-  // refinement chain (not just the newest term), mirroring useExploreResults.ts.
+  // Highlight every word across the whole chain (not just the newest term).
   const highlightTokens = useMemo(() => {
     const src = refinementChain.join(" ").trim();
     if (!src) return [] as string[];
@@ -123,7 +116,7 @@ export function useIPExploreState() {
     return f;
   }, [yearFrom, yearTo, typeOfIp, fieldOfInvention, country, selectedInventor]);
 
-  // Build search request: newest term is `query`, prior terms are `refine_chain`.
+  // Newest term is `query`; prior terms are `refine_chain`.
   const searchRequest = useMemo<IPSearchRequest | null>(() => {
     if (!activeQuery.trim()) return null;
     return {
@@ -174,14 +167,7 @@ export function useIPExploreState() {
     [searchQuery, refinementChain, writeUrl]
   );
 
-  /**
-   * Fires a fresh (single-step) search directly from a term (empty-state
-   * example chip / field shortcut) instead of reading the (possibly stale)
-   * `searchQuery` input state — mirrors `startFreshSearch` in
-   * useExploreSearchState. Resets any active refinement chain. Optionally
-   * pins a `field_of_invention` facet filter so "browse by field" chips are
-   * a real filtered search, not just a keyword guess.
-   */
+  /** Fresh single-step search from a term (empty-state chips); optionally pins field_of_invention. */
   const startFreshSearch = useCallback(
     (term: string, opts?: { fieldOfInvention?: string }) => {
       const trimmed = term.trim();
@@ -206,7 +192,6 @@ export function useIPExploreState() {
     }
   };
 
-  // Close the suggestions dropdown on an outside click — mirrors useExploreSearchState.
   useEffect(() => {
     if (!showSuggestions) return;
     const handler = (e: MouseEvent) => {
@@ -223,12 +208,7 @@ export function useIPExploreState() {
     setCurrentPage(1);
   }, []);
 
-  /**
-   * Selecting an inventor suggestion: if already mid-search and the inventor is IIT Delhi
-   * faculty (has a kerberos), scope the current results to them (same mechanism as clicking
-   * a related-faculty sidebar row); otherwise start a fresh name search — mirrors
-   * `selectAuthorSuggestion` in useExploreSearchState.
-   */
+  /** Mid-search faculty inventors scope via kerberos; otherwise start a fresh name search. */
   const selectInventorSuggestion = useCallback(
     (inventor: SuggestIPInventor) => {
       setShowSuggestions(false);
@@ -242,7 +222,6 @@ export function useIPExploreState() {
     [hasSearched, startFreshSearch, selectInventor]
   );
 
-  /** Selecting a document suggestion starts a fresh title search — mirrors `selectPaperSuggestion`. */
   const selectDocumentSuggestion = useCallback(
     (document: SuggestIPDocument) => {
       setShowSuggestions(false);
@@ -292,7 +271,6 @@ export function useIPExploreState() {
     setCurrentPage(1);
   }, []);
 
-  /** Jump back to an earlier step in the refinement chain (clicking a non-newest chip). */
   const goToChainLevel = useCallback(
     (index: number) => {
       if (index < 0 || index >= refinementChain.length - 1) return;
@@ -319,13 +297,7 @@ export function useIPExploreState() {
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
 
-  /**
-   * Cut a single term out of the chain at any position (not just the newest) —
-   * the remaining terms keep their relative order, so the effective search
-   * (newest term as `query`, everything else as `refine_chain`) recomputes as
-   * if that term had never been added. Removing the last remaining term is
-   * equivalent to a full `clearAll`.
-   */
+  /** Remove a term at any index; empty chain clears the search. */
   const removeRefinementTerm = useCallback(
     (index: number) => {
       if (index < 0 || index >= refinementChain.length) return;

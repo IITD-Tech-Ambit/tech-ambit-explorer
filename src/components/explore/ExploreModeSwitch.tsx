@@ -1,14 +1,7 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-/**
- * Entry point at the top of both Explore experiences (Scopus papers and
- * IP/Patents) so either is one click away from the other. Styled as a plain
- * text tab pair — same visual language as the primary nav links in
- * `Navigation.tsx` (text-primary + bg-primary/8 + underline bar when active,
- * no border/shadow/background container) — so it reads as an "eyebrow" line
- * sitting directly on the hero, not a separate boxed widget stacked above it.
- */
+/** Tab pair switching between Scopus papers and IP/Patents explore. */
 export function ExploreModeSwitch({ active }: { active: "papers" | "ip" }) {
   return (
     <div role="tablist" aria-label="Explore mode" className="inline-flex items-center gap-1 animate-fade-in">
