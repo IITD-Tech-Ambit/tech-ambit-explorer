@@ -17,6 +17,7 @@ import {
 } from "@/components/explore/PeopleSectionUI";
 import { ExploreDocumentModal } from "@/components/explore/ExploreDocumentModal";
 import { ExplorePaperList } from "@/components/explore/ExplorePaperList";
+import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { useExploreSearchState } from "@/hooks/explore/useExploreSearchState";
 import { useExplorePeople } from "@/hooks/explore/useExplorePeople";
 import { useExploreResults } from "@/hooks/explore/useExploreResults";
@@ -77,6 +78,10 @@ const Explore = () => {
       
       <section className="gradient-subtle pt-16 sm:pt-20 pb-6 sm:pb-10 section-bg">
         <div className="container mx-auto px-4">
+          <div className="mb-1.5 sm:mb-2">
+            <ExploreModeSwitch active="papers" />
+          </div>
+
           <h1 className="text-2xl sm:text-4xl font-bold mb-2 sm:mb-3 animate-fade-in">
             Explore Research
           </h1>

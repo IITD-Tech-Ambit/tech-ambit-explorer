@@ -382,3 +382,160 @@ export interface AllFacultyForQueryResponse {
         cache_hit: boolean;
     };
 }
+
+// IP / Patents — ground truth: SEO-Backend-iitd/src/schemas/ipSearch.js
+
+export interface IPInventor {
+    name: string;
+    is_faculty: boolean;
+    kerberos: string | null;
+    faculty_ref: string | null;
+    raw_name?: string;
+    address?: string;
+}
+
+export interface IPDocument {
+    _id: string;
+    application_number: string;
+    title: string;
+    abstract?: string;
+    type_of_ip: string;
+    field_of_invention?: string;
+    classification?: string[];
+    inventors: IPInventor[];
+    applicants: string[];
+    country?: string;
+    department?: string | null;
+    application_status?: string | null;
+    publication_year?: number;
+    filing_date?: string;
+    publication_date?: string;
+    open_search_id?: string;
+    rerank_score?: number;
+    fused_score?: number;
+}
+
+export interface IPFacetValue {
+    value: string | number;
+    count: number;
+}
+
+export interface IPSearchFacets {
+    years?: IPFacetValue[];
+    type_of_ip?: IPFacetValue[];
+    field_of_invention?: IPFacetValue[];
+    country?: IPFacetValue[];
+    classification?: IPFacetValue[];
+}
+
+export interface IPRelatedFaculty {
+    _id: string;
+    name: string;
+    email?: string;
+    expert_id?: string;
+    kerberos?: string | null;
+    department: {
+        _id: string;
+        name: string;
+    } | null;
+    ipCount: number;
+}
+
+export interface IPSearchPagination {
+    page: number;
+    per_page: number;
+    total: number;
+    ranked_window?: number;
+    total_pages: number;
+}
+
+export interface IPSearchResponse {
+    results: IPDocument[];
+    related_faculty?: IPRelatedFaculty[];
+    facets: IPSearchFacets;
+    pagination: IPSearchPagination;
+    mode?: 'basic' | 'advanced';
+    match_tier?: 'phrase' | 'terms';
+    suggestions?: string[];
+    fuzzy_fallback?: boolean;
+    message?: string;
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+}
+
+export interface IPSearchFilters {
+    year_from?: number;
+    year_to?: number;
+    type_of_ip?: string;
+    type_of_ip_list?: string[];
+    field_of_invention?: string;
+    classification?: string[];
+    department?: string;
+    country?: string;
+    kerberos?: string;
+    primary_inventor_only?: boolean;
+}
+
+export type IPSearchInField = 'title' | 'abstract' | 'inventor' | 'field_of_invention' | 'classification';
+
+export interface IPSearchRequest {
+    query: string;
+    page?: number;
+    per_page?: number;
+    sort?: 'relevance' | 'date' | 'normalized';
+    filters?: IPSearchFilters;
+    search_in?: IPSearchInField[];
+    mode?: 'basic' | 'advanced';
+    refine_within?: string;
+    refine_chain?: string[];
+    rerank?: boolean;
+}
+
+export interface IPDocumentResponse {
+    document: IPDocument;
+}
+
+export interface IPSearchHealthResponse {
+    status: string;
+    checks: {
+        opensearch: boolean;
+        embedding: boolean;
+        redis: boolean;
+    };
+    timestamp: string;
+}
+
+// IP typeahead (ip_documents)
+export interface SuggestIPInventor {
+    id: string;
+    name: string;
+    is_faculty: boolean;
+    kerberos: string;
+    score: number;
+}
+
+export interface SuggestIPDocument {
+    id: string;
+    title: string;
+    year: number;
+    type_of_ip: string;
+    lead_inventor: string;
+    score: number;
+}
+
+export type IPSuggestIntent = 'inventor' | 'document' | 'mixed';
+
+export interface IPSuggestResponse {
+    intent: IPSuggestIntent;
+    confidence: number;
+    groups: {
+        inventors: SuggestIPInventor[];
+        documents: SuggestIPDocument[];
+    };
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+}
