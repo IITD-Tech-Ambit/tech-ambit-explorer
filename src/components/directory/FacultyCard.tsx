@@ -1,14 +1,30 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Award, BookOpen, Clock3, Mail, User, ArrowUpRight } from "lucide-react";
+import { Award, BookOpen, Mail, ArrowUpRight, FileText } from "lucide-react";
 import type { DirectoryFaculty } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+export interface FacultyCardAreaPaper {
+    id: string;
+    title: string;
+    link?: string | null;
+    publication_year?: number | null;
+}
 
 interface FacultyCardProps {
     faculty: DirectoryFaculty;
     onClick: () => void;
+    /** When set (taxonomy browse), replace research-area tags with papers in that area. */
+    areaPapers?: FacultyCardAreaPaper[];
+    /** Total papers in the current browse context (theme/domain/…). */
+    areaPapersTotal?: number;
+    areaPapersLoading?: boolean;
+    /** Opens the full area-papers list (from the +N badge). */
+    onAreaPapersOverflowClick?: () => void;
+    /** Opens the Explore paper detail card for a preview paper. */
+    onAreaPaperClick?: (paper: FacultyCardAreaPaper) => void;
 }
+
 const getInitials = (name: string) => {
     return name
         .split(" ")
@@ -38,8 +54,19 @@ const Stat = ({
     </div>
 );
 
-const FacultyCard = ({ faculty, onClick }: FacultyCardProps) => {
+const FacultyCard = ({
+    faculty,
+    onClick,
+    areaPapers,
+    areaPapersTotal,
+    areaPapersLoading = false,
+    onAreaPapersOverflowClick,
+    onAreaPaperClick,
+}: FacultyCardProps) => {
     const initials = getInitials(faculty.name);
+    const showAreaPapers = areaPapers !== undefined;
+    const totalInArea = areaPapersTotal ?? areaPapers?.length ?? 0;
+    const overflow = Math.max(0, totalInArea - 2);
 
     return (
         <Card
@@ -103,26 +130,86 @@ const FacultyCard = ({ faculty, onClick }: FacultyCardProps) => {
                     <Stat icon={BookOpen} label="citations" value={faculty.citationCount ?? 0} />
                 </div>
 
-                {faculty.research_areas && faculty.research_areas.length > 0 && (
-                    <div className="mt-auto pt-3 border-t border-dashed border-border/80 flex flex-wrap gap-1.5">
-                        {faculty.research_areas.slice(0, 4).map((area, idx) => (
-                            <Badge
-                                key={`${area}-${idx}`}
-                                variant="secondary"
-                                className={cn(
-                                    "text-[11px] px-2 py-0.5 bg-primary/10 text-primary",
-                                    "hover:bg-primary/20"
-                                )}
+                {showAreaPapers ? (
+                    <div className="mt-auto pt-3 border-t border-dashed border-border/80 space-y-2">
+                        {areaPapersLoading ? (
+                            <div className="space-y-2">
+                                <div className="h-8 rounded-lg bg-muted/60 animate-pulse" />
+                                <div className="h-8 rounded-lg bg-muted/60 animate-pulse" />
+                            </div>
+                        ) : (areaPapers?.length ?? 0) === 0 ? (
+                            <p className="text-xs text-muted-foreground">No papers in this area</p>
+                        ) : (
+                            <ul className="space-y-1.5">
+                                {areaPapers!.slice(0, 2).map((paper) => {
+                                    const title =
+                                        paper.title.length > 72
+                                            ? `${paper.title.slice(0, 72)}…`
+                                            : paper.title;
+                                    return (
+                                        <li key={paper.id}>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onAreaPaperClick?.(paper);
+                                                }}
+                                                className={cn(
+                                                    "w-full flex items-start gap-2 rounded-lg px-2 py-1.5 text-left",
+                                                    "bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                                                )}
+                                            >
+                                                <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                <span className="text-[11px] leading-snug line-clamp-2">
+                                                    {title}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                        {!areaPapersLoading && overflow > 0 && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAreaPapersOverflowClick?.();
+                                }}
+                                className="inline-flex"
+                                aria-label={`Show all ${totalInArea} papers in this area`}
                             >
-                                {area.length > 24 ? area.slice(0, 24) + "…" : area}
-                            </Badge>
-                        ))}
-                        {faculty.research_areas.length > 4 && (
-                            <Badge variant="outline" className="text-[10px] px-2 py-0.5">
-                                +{faculty.research_areas.length - 4}
-                            </Badge>
+                                <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-2 py-0.5 cursor-pointer hover:bg-primary/10 hover:border-primary/40 transition-colors"
+                                >
+                                    +{overflow}
+                                </Badge>
+                            </button>
                         )}
                     </div>
+                ) : (
+                    faculty.research_areas && faculty.research_areas.length > 0 && (
+                        <div className="mt-auto pt-3 border-t border-dashed border-border/80 flex flex-wrap gap-1.5">
+                            {faculty.research_areas.slice(0, 4).map((area, idx) => (
+                                <Badge
+                                    key={`${area}-${idx}`}
+                                    variant="secondary"
+                                    className={cn(
+                                        "text-[11px] px-2 py-0.5 bg-primary/10 text-primary",
+                                        "hover:bg-primary/20"
+                                    )}
+                                >
+                                    {area.length > 24 ? area.slice(0, 24) + "…" : area}
+                                </Badge>
+                            ))}
+                            {faculty.research_areas.length > 4 && (
+                                <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+                                    +{faculty.research_areas.length - 4}
+                                </Badge>
+                            )}
+                        </div>
+                    )
                 )}
             </CardContent>
         </Card>

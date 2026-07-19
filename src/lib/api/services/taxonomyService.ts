@@ -101,3 +101,32 @@ export const getTaxonomyFaculty = (filters: TaxonomyBrowseFilters, page: number,
     '/taxonomy/faculty',
     buildParams(filters, { page, per_page: perPage })
   );
+
+export interface TaxonomyFacultyPaper {
+  id: string;
+  title: string;
+  abstract?: string | null;
+  link?: string | null;
+  publication_year?: number | null;
+  document_type?: string | null;
+  citation_count?: number;
+  topics?: string[];
+}
+
+export interface TaxonomyFacultyPapersResponse {
+  results: TaxonomyFacultyPaper[];
+  pagination: TaxonomyPagination;
+  meta?: TaxonomyMeta;
+}
+
+/** Papers for one faculty member within the current browse filters (theme/domain/…). */
+export const getTaxonomyFacultyPapers = (
+  kerberos: string,
+  filters: Pick<TaxonomyBrowseFilters, 'theme' | 'domain' | 'subdomain'>,
+  page = 1,
+  perPage = 2
+) =>
+  getJson<TaxonomyFacultyPapersResponse>(
+    `/taxonomy/faculty/${encodeURIComponent(kerberos)}/papers`,
+    buildParams(filters, { page, per_page: perPage })
+  );

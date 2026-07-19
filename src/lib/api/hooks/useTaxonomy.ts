@@ -7,6 +7,7 @@ import {
   getTaxonomySubdomains,
   getTaxonomyCounts,
   getTaxonomyFaculty,
+  getTaxonomyFacultyPapers,
   type TaxonomyBrowseFilters,
 } from '../services/taxonomyService';
 import { resolveFacultiesByKerberos } from '../services/directoryService';
@@ -84,6 +85,23 @@ export function useTaxonomyFacultyCards(kerberosIds: string[]) {
     queryKey: queryKeys.taxonomy.facultyCards(kerberosIds),
     queryFn: () => resolveFacultiesByKerberos(kerberosIds),
     enabled: kerberosIds.length > 0,
+    staleTime: TAXONOMY_STALE_TIME,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** First page of papers for one faculty under the current browse filters. */
+export function useTaxonomyFacultyPapers(
+  kerberos: string | undefined,
+  filters: Pick<TaxonomyBrowseFilters, 'theme' | 'domain' | 'subdomain'>,
+  page = 1,
+  perPage = 2,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.taxonomy.facultyPapers(kerberos ?? '', { ...filters }, page, perPage),
+    queryFn: () => getTaxonomyFacultyPapers(kerberos!, filters, page, perPage),
+    enabled: enabled && !!kerberos,
     staleTime: TAXONOMY_STALE_TIME,
     placeholderData: keepPreviousData,
   });
