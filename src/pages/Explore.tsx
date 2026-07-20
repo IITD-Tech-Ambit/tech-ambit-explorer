@@ -4,7 +4,6 @@ import { Search, Filter, FileText, Users, Loader2, X, ChevronDown, ChevronRight,
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
-import ExploreThemeChips from "@/components/explore/taxonomy/ExploreThemeChips";
 import { SearchSuggestions } from "@/components/SearchSuggestions";
 import {
   PeopleSectionHeader,
@@ -421,11 +420,6 @@ const Explore = () => {
             </div>
             <h3 className="text-lg font-semibold mb-1.5 text-foreground">Start Your Search</h3>
             <p className="text-sm text-muted-foreground max-w-xs">Enter a keyword, faculty name, or topic above to explore IIT Delhi's research</p>
-
-            <div className="mt-10 w-full">
-              <p className="text-sm font-medium text-foreground mb-3">Or browse by research area</p>
-              <ExploreThemeChips />
-            </div>
           </div>
         )}
 

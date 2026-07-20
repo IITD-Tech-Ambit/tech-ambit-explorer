@@ -803,7 +803,13 @@ function AtlasPaperPanel({
   );
 }
 
-export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: AtlasMode) => void }) {
+export default function ResearchAtlas({
+  mode,
+  onModeChange,
+}: {
+  mode?: AtlasMode;
+  onModeChange?: (mode: AtlasMode) => void;
+} = {}) {
   const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -850,7 +856,16 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   const [papers, setPapers] = useState<KgAtlasPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
+  const [internalMode, setInternalMode] = useState<AtlasMode>("interactive");
+  const atlasMode = mode ?? internalMode;
+  const setAtlasMode = useCallback(
+    (next: AtlasMode | ((prev: AtlasMode) => AtlasMode)) => {
+      const resolved = typeof next === "function" ? next(atlasMode) : next;
+      if (mode === undefined) setInternalMode(resolved);
+      onModeChange?.(resolved);
+    },
+    [atlasMode, mode, onModeChange],
+  );
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilterSet, setSearchFilterSet] = useState<Set<number> | null>(null);
@@ -1064,8 +1079,9 @@ export default function ResearchAtlas({ onModeChange }: { onModeChange?: (mode: 
   }, [searchFacultyOnlyId]);
 
   useEffect(() => {
-    onModeChange?.(atlasMode);
-  }, [atlasMode, onModeChange]);
+    // Mode is owned/controlled by the parent when `mode` is provided.
+    if (mode === undefined) onModeChange?.(atlasMode);
+  }, [atlasMode, onModeChange, mode]);
 
   useEffect(() => {
     const container = containerRef.current;
