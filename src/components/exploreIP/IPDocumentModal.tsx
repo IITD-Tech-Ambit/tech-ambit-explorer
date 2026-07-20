@@ -46,12 +46,12 @@ export function IPDocumentModal({
               >
                 {doc.type_of_ip}
               </Badge>
-              {doc.field_of_invention && (
+              {doc.department?.name && (
                 <Badge
                   variant="outline"
                   className="px-3 py-0.5 bg-background/50 backdrop-blur-sm rounded-full uppercase tracking-wider text-[10px] text-muted-foreground border-border/50"
                 >
-                  {doc.field_of_invention}
+                  {doc.department.name}
                 </Badge>
               )}
               {doc.country && (
