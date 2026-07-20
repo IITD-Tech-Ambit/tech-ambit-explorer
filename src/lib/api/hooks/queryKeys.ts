@@ -37,8 +37,6 @@ export const queryKeys = {
         themes: (department?: string) => [...queryKeys.taxonomy.all, 'themes', department ?? ''] as const,
         domains: (theme?: string, department?: string) =>
             [...queryKeys.taxonomy.all, 'domains', theme ?? '', department ?? ''] as const,
-        subdomains: (domain: string, theme?: string, department?: string) =>
-            [...queryKeys.taxonomy.all, 'subdomains', domain, theme ?? '', department ?? ''] as const,
         counts: (filters: Record<string, string | undefined>) =>
             [...queryKeys.taxonomy.all, 'counts', filters] as const,
         faculty: (filters: Record<string, string | undefined>, page: number, perPage: number) =>

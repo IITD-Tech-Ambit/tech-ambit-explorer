@@ -78,16 +78,18 @@ const TaxonomyNodeCard = ({ node, icon: Icon, onClick, detail, accentColor, magn
                         }}
                     />
                 </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                         <FileText className="w-3.5 h-3.5 text-primary/70" />
                         <span className="font-medium text-foreground">{formatCount(node.paper_count)}</span>
                         papers
                     </span>
-                    <span className="inline-flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-accent" />
-                        <span className="font-medium text-foreground">{formatCount(node.faculty_count)}</span>
-                        faculty
+                    <span
+                        className={cn("inline-flex items-center gap-1.5 text-sm font-medium", !accentColor && "text-primary")}
+                        style={accentColor ? { color: accentColor } : undefined}
+                    >
+                        <Users className="w-3.5 h-3.5" />
+                        Browse {formatCount(node.faculty_count)} experts
                     </span>
                 </div>
             </div>
