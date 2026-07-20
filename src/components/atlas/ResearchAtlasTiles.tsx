@@ -18,7 +18,8 @@ import { allNodeKeys, themeColorHex, TileManager } from "./atlasOctree";
 import { themeDisplayName } from "./atlasClusters";
 import {
   fetchKgAtlasDepartmentSearch, fetchKgAtlasFacultySearch, fetchKgAtlasSuggestSafe,
-  fetchKgAtlasClusterBreakdown, fetchKgAtlasRefine, fetchKgFacultyAtlasIndices, fetchKgFacultyIndex, fetchKgPaperMeta, type KgPaperMeta,
+  fetchKgAtlasClusterBreakdown, fetchKgAtlasRefine, fetchKgDepartmentAtlasIndices,
+  fetchKgFacultyAtlasIndices, fetchKgFacultyIndex, fetchKgPaperMeta, type KgPaperMeta,
 } from "./api";
 import { getPaperExternalUrl } from "./paperLink";
 import type {
@@ -202,6 +203,62 @@ function drillOverviewCameraZ(domainCount: number): number {
   return 5.6;
 }
 
+const KEYWORD_STOPWORDS = new Set([
+  "the", "a", "an", "of", "and", "or", "for", "to", "in", "on", "at", "with",
+  "by", "using", "used", "use", "based", "via", "from", "into", "over", "under",
+  "new", "novel", "study", "studies", "analysis", "approach", "approaches",
+  "effect", "effects", "role", "review", "toward", "towards", "between", "their",
+  "its", "this", "that", "these", "those", "as", "is", "are", "be", "we", "our",
+]);
+
+/**
+ * Short keyword/phrase completions from paper titles within the current overlay
+ * (e.g. "carbon" → "carbon dioxide", "carbon fiber"). Mirrors backend suggest.
+ */
+function extractKeywordSuggestionsFromPoints(
+  query: string,
+  points: AtlasPointCoord[],
+  limit = 8,
+): SuggestItem[] {
+  const q = query.trim().toLowerCase();
+  const qTokens = q.split(/[^a-z0-9]+/).filter(Boolean);
+  if (!qTokens.length || !points.length) return [];
+  const head = qTokens[qTokens.length - 1];
+  if (head.length < 2) return [];
+
+  const counts = new Map<string, number>();
+  const bump = (phrase: string) => counts.set(phrase, (counts.get(phrase) ?? 0) + 1);
+
+  for (const p of points) {
+    const words = String(p.title ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+    for (let i = 0; i < words.length; i++) {
+      if (!words[i].startsWith(head) || words[i].length < 2) continue;
+      let phrase = words[i];
+      bump(phrase);
+      for (let len = 1; len <= 2; len++) {
+        const next = words[i + len];
+        if (!next || KEYWORD_STOPWORDS.has(next) || next.length < 2) break;
+        phrase = `${phrase} ${next}`;
+        bump(phrase);
+      }
+    }
+  }
+
+  return [...counts.entries()]
+    .filter(([term]) => !KEYWORD_STOPWORDS.has(term) && term !== q)
+    .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([term, count]) => ({
+      group: "keyword" as const,
+      label: term,
+      sub: "in current results",
+      count,
+    }));
+}
+
 function classifySearchEntity(
   q: string,
   faculty: KgAtlasFacultyMatch[],
@@ -223,9 +280,68 @@ function classifySearchEntity(
   return "text";
 }
 
+/** Resolve atlas paper indices for a faculty name (optional department disambiguation). */
+async function facultyAtlasIndicesForQuery(query: string, deptHint = ""): Promise<number[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const fac = await fetchKgAtlasFacultySearch(q, 20).catch(() => ({
+    matches: [] as KgAtlasFacultyMatch[],
+    indices: [] as number[],
+  }));
+  let facultyId = "";
+  const exact = (fac.matches ?? []).find((f) => f.name.toLowerCase() === q.toLowerCase());
+  if (exact) facultyId = exact.facultyId;
+  else if ((fac.matches ?? []).length === 1) facultyId = fac.matches![0].facultyId;
+  else if (deptHint.trim()) {
+    const deptLower = deptHint.trim().toLowerCase();
+    const inDept = (fac.matches ?? []).find((f) =>
+      (f.department || "").toLowerCase().includes(deptLower)
+      || deptLower.includes((f.department || "").toLowerCase()),
+    );
+    if (inDept) facultyId = inDept.facultyId;
+    else if ((fac.matches ?? [])[0]) facultyId = fac.matches![0].facultyId;
+  } else if ((fac.matches ?? [])[0]) {
+    facultyId = fac.matches![0].facultyId;
+  }
+  let indices = fac.indices ?? [];
+  if (facultyId) {
+    const res = await fetchKgFacultyAtlasIndices([facultyId]).catch(() => null);
+    if (res?.indices?.length) indices = res.indices;
+  }
+  return indices;
+}
+
+/** Faculty papers within an already-loaded primary set (department / theme overlay). */
+async function pointsIntersectingFacultyInBase(
+  facultyQuery: string,
+  baseSet: Set<number>,
+  basePoints: AtlasPointCoord[],
+  deptHint = "",
+): Promise<AtlasPointCoord[]> {
+  const facIndices = await facultyAtlasIndicesForQuery(facultyQuery, deptHint);
+  const keep = new Set(facIndices.filter((i) => baseSet.has(i)));
+  if (!keep.size) return [];
+  const byIndex = new Map(basePoints.map((p) => [p.i, p]));
+  const points: AtlasPointCoord[] = [];
+  const missing: number[] = [];
+  for (const i of keep) {
+    const p = byIndex.get(i);
+    if (p) points.push(p);
+    else missing.push(i);
+  }
+  if (missing.length) {
+    const coords = await fetchAtlasPointCoords(missing);
+    for (const i of missing) {
+      const p = coords.get(i);
+      if (p) points.push(p);
+    }
+  }
+  return points;
+}
+
 /** One row in the search suggestion dropdown (flattened for keyboard nav). */
 interface SuggestItem {
-  group: "keyword" | "paper" | "theme" | "topic" | "faculty" | "department";
+  group: "keyword" | "paper" | "theme" | "topic" | "domain" | "faculty" | "department";
   label: string;
   sub: string;
   count: number;
@@ -239,6 +355,7 @@ const SUGGEST_BADGE: Record<SuggestItem["group"], { text: string; className: str
   paper: { text: "Paper", className: "bg-sky-950 text-sky-300" },
   theme: { text: "Theme", className: "bg-slate-800 text-cyan-400" },
   topic: { text: "Topic", className: "bg-slate-800 text-amber-300" },
+  domain: { text: "Domain", className: "bg-teal-950 text-teal-300" },
   faculty: { text: "Faculty", className: "bg-violet-950 text-violet-300" },
   department: { text: "Department", className: "bg-emerald-950 text-emerald-300" },
 };
@@ -835,6 +952,10 @@ export default function ResearchAtlasTiles({
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const onThemeLabelClickRef = useRef<(theme: string) => void>(() => {});
   const onDomainLabelClickRef = useRef<(theme: string, domain: string) => void>(() => {});
+  /** Pick a domain from refine suggestions after a theme drill (focus + sidebar). */
+  const pickDomainSuggestRef = useRef<(domain: string) => void>(() => {});
+  /** Domain to focus once a theme drill finishes loading its layout. */
+  const pendingDomainFocusRef = useRef<string | null>(null);
   /** Raycast papers from label DOM handlers (labels sit above the canvas). */
   const pickPaperRef = useRef<(clientX: number, clientY: number) => PickedPaper | null>(() => null);
   const selectPaperRef = useRef<(paper: PickedPaper) => void>(() => {});
@@ -1160,7 +1281,7 @@ export default function ResearchAtlasTiles({
     [suggestions],
   );
 
-  const dropdownItems = (hasSearched ? refineItems : suggestItems).slice(0, 6);
+  const dropdownItems = (hasSearched ? refineItems : suggestItems).slice(0, 10);
 
   useEffect(() => { setSuggestActive(-1); }, [dropdownItems]);
 
@@ -1260,6 +1381,10 @@ export default function ResearchAtlasTiles({
       setSuggestOpen(false);
       return;
     }
+    if (item.group === "domain") {
+      pickDomainSuggestRef.current(item.label);
+      return;
+    }
     const pick = item.group === "faculty" || item.group === "department" ? item.group : null;
     if (!hasSearched) applyPrimarySearch(item.label, pick);
     else applyRefineSearch(item.label, pick);
@@ -1330,14 +1455,40 @@ export default function ResearchAtlasTiles({
           fetchKgAtlasDepartmentSearch(q).catch(() => ({ matches: [], indices: [] as number[] })),
         ]);
         if (cancelled) return;
-        for (const i of textIdx) union.add(i);
-        for (const i of fac.indices) union.add(i);
-        for (const i of dept.indices) union.add(i);
-        setPrimaryEntity(classifySearchEntity(
-          q, fac.matches ?? [], dept.matches ?? [], primaryPickRef.current,
-        ));
 
-        const indices = [...union].slice(0, OVERLAY_CAP);
+        const entity = classifySearchEntity(
+          q, fac.matches ?? [], dept.matches ?? [], primaryPickRef.current,
+        );
+        setPrimaryEntity(entity);
+
+        // Department / faculty searches must use ONLY that entity's paper index.
+        // Unioning with full-text search is why "Chemical Engineering" also showed
+        // Physics / Biochemical papers (title tokens like "chemical" / "engineering").
+        let indices: number[] = [];
+        if (entity === "department") {
+          const exactName =
+            (dept.matches ?? []).find((d) => d.department.toLowerCase() === q.toLowerCase())?.department
+            ?? (dept.matches ?? [])[0]?.department
+            ?? q;
+          const exact = await fetchKgDepartmentAtlasIndices([exactName]).catch(() => null);
+          indices = (exact?.indices?.length ? exact.indices : (dept.indices ?? [])).slice(0, OVERLAY_CAP);
+        } else if (entity === "faculty") {
+          const exactFac =
+            (fac.matches ?? []).find((f) => f.name.toLowerCase() === q.toLowerCase())
+            ?? (fac.matches ?? [])[0];
+          if (exactFac?.facultyId) {
+            const facIdx = await fetchKgFacultyAtlasIndices([exactFac.facultyId]).catch(() => null);
+            indices = (facIdx?.indices?.length ? facIdx.indices : (fac.indices ?? [])).slice(0, OVERLAY_CAP);
+          } else {
+            indices = (fac.indices ?? []).slice(0, OVERLAY_CAP);
+          }
+        } else {
+          for (const i of textIdx) union.add(i);
+          for (const i of fac.indices) union.add(i);
+          for (const i of dept.indices) union.add(i);
+          indices = [...union].slice(0, OVERLAY_CAP);
+        }
+
         const coords = await fetchAtlasPointCoords(indices);
         if (cancelled) return;
         let points = indices.map((i) => coords.get(i)).filter((p): p is AtlasPointCoord => !!p);
@@ -1348,6 +1499,7 @@ export default function ResearchAtlasTiles({
         const dictThemes = dictRef.current?.themes ?? [];
         const exactTheme = dictThemes.find((t) => t.toLowerCase() === q.toLowerCase());
         if (exactTheme) points = points.filter((p) => p.theme === exactTheme);
+
         basePointsRef.current = points;
         baseIndicesRef.current = new Set(points.map((p) => p.i));
         overlayIndicesRef.current = points.map((p) => p.i);
@@ -1412,54 +1564,104 @@ export default function ResearchAtlasTiles({
           refinePickRef.current === "department" || refinePickRef.current === "faculty"
             ? refinePickRef.current
             : null;
-        const result = await fetchKgAtlasRefine(baseQ, rq, OVERLAY_CAP, entityHint);
-        if (cancelled) return;
-
-        let points: AtlasPointCoord[] = (result.points ?? []).map((p) => ({
-          i: p.i,
-          id: p.id || "",
-          title: p.title || "",
-          theme: p.theme || "",
-          domain: p.domain || "",
-          department: p.department || "",
-          x: p.x,
-          y: p.y,
-          z: p.z,
-        }));
-
+        const baseEntityHint =
+          primaryEntity === "department" || primaryEntity === "faculty"
+            ? primaryEntity
+            : null;
+        const baseSet = baseIndicesRef.current;
         const rqLower = rq.toLowerCase();
-        const deptNames = [...new Set(
-          points.map((p) => (p.department || "").trim()).filter(Boolean),
-        )];
-        const deptForClassify = deptNames.map((department) => ({
-          department,
-          facultyCount: 0,
-          atlasCount: points.filter((p) => (p.department || "").trim() === department).length,
-        }));
-        let entity = classifySearchEntity(rq, [], deptForClassify, refinePickRef.current);
-        if (entity === "text" && deptNames.some((n) => n.toLowerCase() === rqLower)) {
-          entity = "department";
-        }
-        if (refinePickRef.current === "department") entity = "department";
-        if (refinePickRef.current === "faculty") entity = "faculty";
+        let points: AtlasPointCoord[] = [];
+        let entity: SearchEntity = "text";
+        const deptPrimary =
+          primaryEntity === "department" || primaryPickRef.current === "department";
 
-        // Belt-and-suspenders: department refine must not keep other depts' papers
-        // (text search used to match "Electrochemical" / "... Engineering").
-        if (entity === "department") {
-          points = points.filter((p) => {
-            const d = (p.department || "").trim().toLowerCase();
-            if (!d) return true;
-            return d === rqLower || d.includes(rqLower) || rqLower.includes(d);
-          });
+        // Department primary + faculty narrow: intersect faculty index with the
+        // loaded department set. Server refine still text-searches the base
+        // query unless the KG service is on atlas-refine-v3+.
+        const facProbe = await fetchKgAtlasFacultySearch(rq, 20).catch(() => ({
+          matches: [] as KgAtlasFacultyMatch[],
+          indices: [] as number[],
+        }));
+        if (cancelled) return;
+        const refineLooksFaculty =
+          entityHint === "faculty"
+          || (deptPrimary
+            && entityHint !== "department"
+            && classifySearchEntity(rq, facProbe.matches ?? [], [], refinePickRef.current) === "faculty");
+
+        if (refineLooksFaculty && baseSet.size > 0) {
+          const deptHint = deptPrimary ? baseQ : "";
+          points = await pointsIntersectingFacultyInBase(rq, baseSet, base, deptHint);
+          entity = "faculty";
+        } else {
+          const result = await fetchKgAtlasRefine(
+            baseQ,
+            rq,
+            OVERLAY_CAP,
+            entityHint,
+            baseEntityHint,
+          );
+          if (cancelled) return;
+
+          points = (result.points ?? []).map((p) => ({
+            i: p.i,
+            id: p.id || "",
+            title: p.title || "",
+            theme: p.theme || "",
+            domain: p.domain || "",
+            department: p.department || "",
+            x: p.x,
+            y: p.y,
+            z: p.z,
+          }));
+
+          const deptNames = [...new Set(
+            points.map((p) => (p.department || "").trim()).filter(Boolean),
+          )];
+          const deptForClassify = deptNames.map((department) => ({
+            department,
+            facultyCount: 0,
+            atlasCount: points.filter((p) => (p.department || "").trim() === department).length,
+          }));
+          entity = classifySearchEntity(rq, facProbe.matches ?? [], deptForClassify, refinePickRef.current);
+          if (entity === "text" && deptNames.some((n) => n.toLowerCase() === rqLower)) {
+            entity = "department";
+          }
+          if (refinePickRef.current === "department") entity = "department";
+          if (refinePickRef.current === "faculty") entity = "faculty";
+
+          if (entity === "department") {
+            points = points.filter((p) => {
+              const d = (p.department || "").trim().toLowerCase();
+              if (!d) return true;
+              return d === rqLower || d.includes(rqLower) || rqLower.includes(d);
+            });
+          }
+
+          // Stale refine API used text search for department bases — recover faculty picks.
+          if (
+            points.length === 0
+            && deptPrimary
+            && classifySearchEntity(rq, facProbe.matches ?? [], [], refinePickRef.current) === "faculty"
+          ) {
+            points = await pointsIntersectingFacultyInBase(rq, baseSet, base, baseQ);
+            entity = "faculty";
+          }
+
+          if (
+            typeof result.baseCount === "number"
+            && result.baseCount > 0
+            && !deptPrimary
+            && primaryEntity !== "faculty"
+          ) {
+            setBaseMatchCount(result.baseCount);
+          }
         }
 
         midPointsRef.current = points;
         midIndicesRef.current = new Set(points.map((p) => p.i));
         overlayIndicesRef.current = points.map((p) => p.i);
         setMatchCount(points.length);
-        if (typeof result.baseCount === "number" && result.baseCount > 0) {
-          setBaseMatchCount(result.baseCount);
-        }
 
         setRefineEntity(entity);
         setMidEpoch((n) => n + 1);
@@ -1481,7 +1683,7 @@ export default function ResearchAtlasTiles({
       }
     })();
     return () => { cancelled = true; };
-  }, [refineSearchQuery, searchQuery, baseMatchCount, rebuildOverlay, deepRefineSearchQuery]);
+  }, [refineSearchQuery, searchQuery, baseMatchCount, primaryEntity, rebuildOverlay, deepRefineSearchQuery]);
 
   // Level-3: intersect theme∩department mid-set with a professor's atlas indices.
   useEffect(() => {
@@ -1553,7 +1755,7 @@ export default function ResearchAtlasTiles({
   }, [deepRefineSearchQuery, refineSearchQuery, midEpoch, rebuildOverlay]);
 
   // Refine suggestions:
-  //  - after theme (no dept yet): departments + faculty in primary results
+  //  - after theme (no dept yet): domains + departments + faculty in primary results
   //  - after department (level 2): professors in that department (level 3)
   useEffect(() => {
     if (!suggestOpen || !hasSearched || !basePointsRef.current.length) {
@@ -1566,6 +1768,7 @@ export default function ResearchAtlasTiles({
     const baseSet = baseIndicesRef.current;
     const midSet = midIndicesRef.current;
     const scopeSet = midSet.size > 0 ? midSet : baseSet;
+    const scopePoints = midSet.size > 0 ? midPointsRef.current : base;
     const deptLevelActive = Boolean(refineSearchQuery.trim()) && refineEntity === "department";
     const primaryIsDepartment = primaryEntity === "department" && !refineSearchQuery.trim();
     const facultyLevel = deptLevelActive || primaryIsDepartment;
@@ -1575,10 +1778,15 @@ export default function ResearchAtlasTiles({
         ? searchQuery.trim()
         : "";
     const deptLower = deptName.toLowerCase();
+    const themeScoped = Boolean(drillTheme) || Boolean(
+      (dictRef.current?.themes ?? []).some(
+        (t) => t.toLowerCase() === searchQuery.trim().toLowerCase(),
+      ),
+    );
 
     const deptCounts = new Map<string, number>();
     if (!facultyLevel) {
-      for (const p of base) {
+      for (const p of scopePoints) {
         const name = (p.department || "").trim() || "Unassigned";
         if (rq && !name.toLowerCase().includes(rq)) continue;
         deptCounts.set(name, (deptCounts.get(name) ?? 0) + 1);
@@ -1593,6 +1801,30 @@ export default function ResearchAtlasTiles({
         sub: "in current results",
         count,
       }));
+
+    const domainItems: SuggestItem[] = [];
+    if (themeScoped && !facultyLevel) {
+      const domainCounts = new Map<string, number>();
+      for (const p of scopePoints) {
+        const name = (p.domain || "").trim() || "Other";
+        if (rq && !name.toLowerCase().includes(rq)) continue;
+        domainCounts.set(name, (domainCounts.get(name) ?? 0) + 1);
+      }
+      for (const [label, count] of [...domainCounts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 8)) {
+        domainItems.push({
+          group: "domain",
+          label,
+          sub: drillTheme || searchQuery.trim() || "in theme",
+          count,
+        });
+      }
+    }
+
+    const keywordItems: SuggestItem[] = (rq && themeScoped && !facultyLevel)
+      ? extractKeywordSuggestionsFromPoints(query.trim(), scopePoints, 8)
+      : [];
 
     (async () => {
       try {
@@ -1632,7 +1864,12 @@ export default function ResearchAtlasTiles({
         }
 
         if (!rq) {
-          if (!cancelled) setRefineItems(deptItems);
+          if (!cancelled) {
+            setRefineItems([
+              ...domainItems.slice(0, 6),
+              ...deptItems.slice(0, themeScoped ? 4 : 8),
+            ]);
+          }
           return;
         }
 
@@ -1642,7 +1879,7 @@ export default function ResearchAtlasTiles({
         await Promise.all((fac.matches ?? []).slice(0, 10).map(async (match) => {
           try {
             const res = await fetchKgFacultyAtlasIndices([match.facultyId]);
-            const n = (res.indices ?? []).filter((i) => baseSet.has(i)).length;
+            const n = (res.indices ?? []).filter((i) => scopeSet.has(i)).length;
             if (n > 0) {
               withCounts.push({
                 group: "faculty",
@@ -1654,18 +1891,34 @@ export default function ResearchAtlasTiles({
           } catch { /* skip */ }
         }));
         if (!cancelled) {
-          setRefineItems([
-            ...deptItems.slice(0, 6),
-            ...withCounts.sort((a, b) => b.count - a.count).slice(0, 6),
-          ]);
+          const facultySorted = withCounts.sort((a, b) => b.count - a.count).slice(0, 6);
+          setRefineItems(
+            themeScoped
+              ? [
+                  ...keywordItems.slice(0, 6),
+                  ...domainItems.slice(0, 3),
+                  ...deptItems.slice(0, 2),
+                  ...facultySorted.slice(0, 2),
+                ]
+              : [
+                  ...deptItems.slice(0, 6),
+                  ...facultySorted,
+                ],
+          );
         }
       } catch {
-        if (!cancelled) setRefineItems(deptItems);
+        if (!cancelled) {
+          setRefineItems(
+            themeScoped
+              ? [...keywordItems, ...domainItems, ...deptItems]
+              : deptItems,
+          );
+        }
       }
     })();
     return () => { cancelled = true; };
   }, [
-    suggestOpen, query, hasSearched, baseMatchCount, midEpoch,
+    suggestOpen, query, hasSearched, baseMatchCount, midEpoch, drillTheme,
     primaryEntity, searchQuery, refineSearchQuery, refineEntity, deepRefineSearchQuery,
   ]);
 
@@ -2478,6 +2731,15 @@ export default function ResearchAtlasTiles({
     setClusterLoading(false);
   }, [searchQuery]);
 
+  // Apply a domain suggestion that was picked before the drill layout was ready.
+  useEffect(() => {
+    const pending = pendingDomainFocusRef.current;
+    if (!pending || !drillTheme || !drillLayoutRef.current?.centers.length) return;
+    pendingDomainFocusRef.current = null;
+    focusDomain(pending);
+    openDomainCluster(pending);
+  }, [drillTheme, matchCount, drillDomainCounts, focusDomain, openDomainCluster]);
+
   onThemeLabelClickRef.current = (theme) => {
     if (viewOnlyRef.current) return;
     drillIntoTheme(theme);
@@ -2486,6 +2748,21 @@ export default function ResearchAtlasTiles({
   onDomainLabelClickRef.current = (theme, domain) => {
     if (viewOnlyRef.current) return;
     if (drillThemeRef.current === theme && domain) focusDomain(domain);
+  };
+
+  pickDomainSuggestRef.current = (domain) => {
+    if (viewOnlyRef.current || !domain) return;
+    setSuggestOpen(false);
+    setQuery("");
+    if (drillThemeRef.current) {
+      focusDomain(domain);
+      openDomainCluster(domain);
+      return;
+    }
+    // Theme named in search but not drilled yet — drill, then focus when layout is ready.
+    pendingDomainFocusRef.current = domain;
+    const theme = searchQuery.trim();
+    if (theme) drillIntoTheme(theme);
   };
 
   selectPaperRef.current = (paper) => {
@@ -2530,6 +2807,7 @@ export default function ResearchAtlasTiles({
     setDrillTheme(null);
     focusedDomainRef.current = null;
     setFocusedDomain(null);
+    pendingDomainFocusRef.current = null;
     drillLayoutRef.current = null;
     drillPointsRef.current = [];
     domainCountPointsRef.current = [];
@@ -2684,7 +2962,9 @@ export default function ResearchAtlasTiles({
                       : hasSearched
                         ? primaryEntity === "department"
                           ? `Narrow to a professor in “${searchQuery.trim()}”…`
-                          : `Narrow within “${searchQuery.trim()}”…`
+                          : drillTheme
+                            ? `Narrow by keyword, domain, or faculty in “${themeDisplayName(drillTheme)}”…`
+                            : `Narrow within “${searchQuery.trim()}”…`
                         : "Search faculty, department, theme, domain, topic, or paper…"
                 }
                 className="h-11 border-0 bg-transparent pl-10 pr-20 text-sm text-white shadow-none placeholder:text-slate-400 focus-visible:ring-0"
@@ -2717,7 +2997,9 @@ export default function ResearchAtlasTiles({
                       ? `Faculty in “${refineSearchQuery.trim()}”`
                       : primaryEntity === "department"
                         ? `Faculty in “${searchQuery.trim()}”`
-                        : `Departments & faculty inside “${searchQuery.trim()}”`
+                        : drillTheme
+                          ? `Keywords, domains & faculty inside “${themeDisplayName(drillTheme)}”`
+                          : `Departments & faculty inside “${searchQuery.trim()}”`
                     : query.trim()
                       ? `Keywords, papers & more for “${query.trim()}”`
                       : "Top themes, topics, faculty & departments"}
@@ -2734,8 +3016,12 @@ export default function ResearchAtlasTiles({
                             ? "No matching faculty in this department"
                             : "No faculty with papers in these results")
                           : query.trim()
-                            ? "No matching faculty or departments in these results"
-                            : "Type a faculty or department name…"}
+                            ? (drillTheme
+                              ? "No matching keywords, domains, or faculty in this theme"
+                              : "No matching faculty or departments in these results")
+                            : (drillTheme
+                              ? "Type a keyword, domain, or faculty name…"
+                              : "Type a faculty or department name…")}
                     </p>
                   ) : (
                     dropdownItems.map((item, idx) => {
@@ -2756,6 +3042,7 @@ export default function ResearchAtlasTiles({
                           </span>
                           {item.group === "keyword" && <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
                           {item.group === "paper" && <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
+                          {item.group === "domain" && <Tag className="h-3.5 w-3.5 shrink-0 text-teal-400" />}
                           {item.group === "faculty" && <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
                           {item.group === "department" && <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
                           <span className="flex-1 min-w-0">
