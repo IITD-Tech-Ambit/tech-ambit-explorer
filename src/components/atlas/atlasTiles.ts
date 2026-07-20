@@ -148,6 +148,7 @@ export interface AtlasPointCoord {
   z: number;
   id: string;
   theme: string;
+  domain: string;
   title: string;
   department: string;
 }
@@ -174,6 +175,7 @@ export async function fetchAtlasPointCoords(
               z: p.z,
               id: p.id ?? "",
               theme: p.theme ?? "",
+              domain: p.domain ?? "",
               title: p.title ?? "",
               department: p.department ?? "",
             });

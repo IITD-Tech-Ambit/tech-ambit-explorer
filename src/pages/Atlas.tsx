@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Navigation from "@/components/Navigation";
 import ResearchAtlas, { type AtlasMode } from "@/components/atlas/ResearchAtlas";
 import ResearchAtlasTiles from "@/components/atlas/ResearchAtlasTiles";
@@ -10,10 +10,34 @@ const USE_TILES = import.meta.env.VITE_ATLAS_TILES !== "false";
 
 const Atlas = () => {
   const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
-  const isViewMode = !USE_TILES && atlasMode === "view";
+  const isViewMode = atlasMode === "view";
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const handleModeChange = useCallback((next: AtlasMode) => {
+    setAtlasMode(next);
+    const root = rootRef.current;
+    if (!root) return;
+
+    // Must run in the same user-gesture turn as the View/Explore click.
+    if (next === "view" && !document.fullscreenElement) {
+      void root.requestFullscreen().catch(() => {});
+    } else if (next === "interactive" && document.fullscreenElement === root) {
+      void document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setAtlasMode("interactive");
+      }
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
 
   return (
-    <div className="h-screen relative overflow-hidden bg-black">
+    <div ref={rootRef} className="h-screen relative overflow-hidden bg-black">
       <div
         className={cn(
           "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out",
@@ -33,9 +57,9 @@ const Atlas = () => {
         )}
       >
         {USE_TILES ? (
-          <ResearchAtlasTiles />
+          <ResearchAtlasTiles mode={atlasMode} onModeChange={handleModeChange} />
         ) : (
-          <ResearchAtlas onModeChange={setAtlasMode} />
+          <ResearchAtlas mode={atlasMode} onModeChange={handleModeChange} />
         )}
       </main>
     </div>

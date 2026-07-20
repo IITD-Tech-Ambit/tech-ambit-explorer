@@ -25,8 +25,8 @@ const TaxonomySelectionBar = ({ chips, paperCount, facultyCount, isCountLoading,
     if (chips.length === 0) return null;
 
     return (
-        <div className="sticky top-16 z-30 -mx-4 px-4 py-3 bg-background/85 backdrop-blur border-b border-border/60 animate-fade-in">
-            <div className="container mx-auto flex flex-wrap items-center gap-2">
+        <div className="sticky top-16 z-30 py-3 bg-background/85 backdrop-blur border-b border-border/60 animate-fade-in">
+            <div className="container mx-auto px-4 flex flex-wrap items-center gap-2">
                 {chips.map((chip) => (
                     <Badge
                         key={chip.key}

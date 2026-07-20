@@ -136,7 +136,7 @@ export async function fetchKgAtlasSuggestFallback(q: string, limit = 8): Promise
     paperCount: d.atlasCount ?? 0,
   }));
 
-  return { query, themes, topics, faculty, departments };
+  return { query, themes, topics, faculty, departments, papers: [], keywords: [] };
 }
 
 export async function fetchKgAtlasSuggestSafe(q: string, limit = 8): Promise<import("./types").KgAtlasSuggestResult> {
@@ -174,6 +174,7 @@ export interface KgAtlasRefinePoint {
   id: string;
   title: string;
   theme: string;
+  domain: string;
   department: string;
   x: number;
   y: number;
@@ -190,12 +191,18 @@ export interface KgAtlasRefineResult {
 }
 
 /** Server-side nested search: refine `q` within papers matching `baseQ`. */
-export const fetchKgAtlasRefine = (baseQ: string, q: string, limit = 8000) => {
+export const fetchKgAtlasRefine = (
+  baseQ: string,
+  q: string,
+  limit = 8000,
+  entity?: "department" | "faculty" | null,
+) => {
   const params = new URLSearchParams({
     baseQ: baseQ.trim(),
     limit: String(limit),
   });
   if (q.trim()) params.set("q", q.trim());
+  if (entity) params.set("entity", entity);
   return kgFetch<KgAtlasRefineResult>(`/atlas/refine?${params}`);
 };
 

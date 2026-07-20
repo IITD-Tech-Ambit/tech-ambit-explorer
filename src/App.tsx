@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Lightbulb } from "lucide-react";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
@@ -23,6 +23,12 @@ import ChatbotWidget from "./components/chat/ChatbotWidget";
 import { ThemeProvider } from "./components/theme-provider";
 import { AuthProvider } from "./contexts/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
+
+/** Preserve query string when moving legacy /explore/browse → /research-areas. */
+function RedirectExploreBrowse() {
+  const { search } = useLocation();
+  return <Navigate to={`/research-areas${search}`} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,7 +61,8 @@ const App = () => {
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/explore/ip" element={<ExploreIP />} />
-            <Route path="/explore/browse" element={<TaxonomyBrowse />} />
+            <Route path="/explore/browse" element={<RedirectExploreBrowse />} />
+            <Route path="/research-areas" element={<TaxonomyBrowse />} />
             <Route path="/directory" element={<Directory />} />
             <Route path="/atlas" element={<Atlas />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />

@@ -67,3 +67,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # ==================== PACKAGE MANAGER ====================
 # Bun lockfile (use package-lock.json as canonical)
 bun.lockb
+
+# local env backups
+.env-backup*/
+.env-backup*
