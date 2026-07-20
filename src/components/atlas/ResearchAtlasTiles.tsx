@@ -154,9 +154,11 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
     (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
   );
   const n = domains.length;
-  const ringR = n <= 1 ? 0 : n <= 4 ? 1.0 : n <= 8 ? 1.35 : 1.65;
+  // Compact ring so the full domain overview fits under the search header
+  // without requiring an extreme camera distance.
+  const ringR = n <= 1 ? 0 : n <= 4 ? 0.72 : n <= 8 ? 0.95 : 1.15;
   // Keep labels clear of the blob so their DOM hit-box does not cover papers.
-  const labelGap = 0.55;
+  const labelGap = 0.38;
 
   const posById = new Map<number, [number, number, number]>();
   const hueById = new Map<number, number>();
@@ -170,7 +172,7 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
     const cy = n <= 1 ? 0 : uy * ringR;
     const cz = 0;
     const hue = (k * 47) % 360;
-    const blobR = Math.min(0.24, 0.05 + Math.sqrt(pts.length) * 0.006);
+    const blobR = Math.min(0.18, 0.04 + Math.sqrt(pts.length) * 0.0045);
 
     for (const p of pts) {
       const [jx, jy, jz] = drillJitter(p.i + 1, blobR);
@@ -190,6 +192,14 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
   });
 
   return { posById, hueById, centers };
+}
+
+/** Default camera distance for the domain-ring overview (keeps labels clear of the header / Clear all). */
+function drillOverviewCameraZ(domainCount: number): number {
+  if (domainCount <= 1) return 3.6;
+  if (domainCount <= 4) return 4.2;
+  if (domainCount <= 8) return 5.0;
+  return 5.6;
 }
 
 function classifySearchEntity(
@@ -765,6 +775,12 @@ export default function ResearchAtlasTiles({
   /** Result after level-2 refine (e.g. theme ∩ department) — faculty deep-refine filters within this. */
   const midPointsRef = useRef<AtlasPointCoord[]>([]);
   const midIndicesRef = useRef<Set<number>>(new Set());
+  /**
+   * Point set currently driving domain counts / left sidebar (respects refine).
+   * Kept separate from drillPointsRef (full theme) so the right sidebar total
+   * matches the left when a department/faculty narrowing is active.
+   */
+  const domainCountPointsRef = useRef<AtlasPointCoord[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -863,6 +879,19 @@ export default function ResearchAtlasTiles({
     if (!e || !tree) return;
     e.tileManager.update(allNodeKeys(tree));
   }, []);
+
+  /** Pull the camera back so the domain ring + labels clear the search header. */
+  const frameDrillOverview = useCallback(() => {
+    const e = engineRef.current;
+    if (!e) return;
+    const n = drillLayoutRef.current?.centers.length ?? 0;
+    // Bias the look-target slightly down so the ring sits under the header chips.
+    e.controls.target.set(0, -0.2, 0);
+    e.camera.position.set(0, -0.2, drillOverviewCameraZ(n));
+    e.controls.update();
+    e.dirty = true;
+    streamNow();
+  }, [streamNow]);
 
   const syncThemeLabelPresentation = useCallback((filterActive: boolean, clickable: boolean) => {
     const e = engineRef.current;
@@ -1041,6 +1070,7 @@ export default function ResearchAtlasTiles({
     // Refresh each domain's paper count from the current point set so labels
     // reflect a narrowing/refine (positions stay stable via the drill layout).
     // Use `points` (pre-focus) so a focused view still shows real per-domain totals.
+    domainCountPointsRef.current = points;
     if (layout) {
       const domCounts = new Map<string, number>();
       for (const p of points) {
@@ -1342,12 +1372,15 @@ export default function ResearchAtlasTiles({
           setFocusedDomain(null);
         }
         rebuildOverlay(points);
+        if (drillThemeRef.current && drillLayoutRef.current) {
+          frameDrillOverview();
+        }
       } finally {
         if (!cancelled) setSearchLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [searchQuery, loading, rebuildOverlay, atlasReady]);
+  }, [searchQuery, loading, rebuildOverlay, atlasReady, frameDrillOverview]);
 
   // Nested refine — authoritative server intersection within the primary query.
   useEffect(() => {
@@ -1687,7 +1720,7 @@ export default function ResearchAtlasTiles({
     controls.rotateSpeed = 0.45;
     controls.zoomSpeed = 0.8;
     controls.minDistance = 0.2;
-    controls.maxDistance = 6;
+    controls.maxDistance = 12;
 
     const baseMaterial = new THREE.ShaderMaterial({
       uniforms: { uSize: { value: 0.022 }, uDim: { value: 1.0 } },
@@ -2269,6 +2302,10 @@ export default function ResearchAtlasTiles({
   const resetView = () => {
     const e = engineRef.current;
     if (!e) return;
+    if (drillThemeRef.current && drillLayoutRef.current && !focusedDomainRef.current) {
+      frameDrillOverview();
+      return;
+    }
     e.camera.position.set(0, 0, 2.4);
     e.controls.target.set(0, 0, 0);
     e.controls.update();
@@ -2348,6 +2385,23 @@ export default function ResearchAtlasTiles({
     syncDrillLabels();
   }, [matchCount, focusedDomain, syncDrillLabels]);
 
+  // Keep an open domain sidebar in sync when the narrowing set changes
+  // (e.g. Chemical Engineering refine applied while the panel is open).
+  useEffect(() => {
+    if (!clusterDomain) return;
+    const pts = domainCountPointsRef.current;
+    if (!pts.length) return;
+    setClusterBreakdown(buildDomainBreakdownFromPoints(clusterDomain, searchQuery.trim(), pts));
+  }, [clusterDomain, matchCount, drillDomainCounts, searchQuery]);
+
+  // Re-frame whenever the drilled domain ring is showing (not when a single
+  // domain is zoomed in). Guarantees zoom-out even if HMR skipped the search path.
+  useEffect(() => {
+    if (!drillTheme || focusedDomain) return;
+    if (!drillLayoutRef.current?.centers.length) return;
+    frameDrillOverview();
+  }, [drillTheme, focusedDomain, matchCount, drillDomainCounts, frameDrillOverview]);
+
   // Clicking a theme label drills into it: filter to the theme and reveal its
   // domain sub-clusters. Clicking a domain narrows within the drilled theme.
   const drillIntoTheme = useCallback((theme: string) => {
@@ -2398,23 +2452,29 @@ export default function ResearchAtlasTiles({
       const blobR = Math.min(0.3, 0.08 + Math.sqrt(c.count) * 0.006);
       e.controls.target.set(c.cx, c.cy, c.cz);
       e.camera.position.set(c.cx, c.cy, c.cz + Math.max(0.55, blobR * 4));
+      e.controls.update();
+      e.dirty = true;
+      streamNow();
     } else {
-      // Expanded back to the whole theme — frame the full ring.
-      e.controls.target.set(0, 0, 0);
-      e.camera.position.set(0, 0, 2.4);
+      // Expanded back to the whole theme — frame the full ring (zoomed out).
+      frameDrillOverview();
     }
-    e.controls.update();
-    e.dirty = true;
-    streamNow();
-  }, [rebuildOverlay, syncDrillLabels, streamNow, refineSearchQuery, deepRefineSearchQuery]);
+  }, [rebuildOverlay, syncDrillLabels, streamNow, frameDrillOverview, refineSearchQuery, deepRefineSearchQuery]);
 
   // Open the right sidebar with a domain's departments + papers — WITHOUT
   // isolating/zooming the domain on the canvas (that's what focusDomain does).
+  // Use domainCountPointsRef (current narrowed set) so the header total matches
+  // the left sidebar — not drillPointsRef (full theme before refine).
   const openDomainCluster = useCallback((domain: string) => {
     setSelected(null);
     setClusterDomain(domain);
     setClusterTheme(drillThemeRef.current);
-    setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), drillPointsRef.current));
+    const pts = domainCountPointsRef.current.length
+      ? domainCountPointsRef.current
+      : midPointsRef.current.length
+        ? midPointsRef.current
+        : drillPointsRef.current;
+    setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), pts));
     setClusterLoading(false);
   }, [searchQuery]);
 
@@ -2472,6 +2532,7 @@ export default function ResearchAtlasTiles({
     setFocusedDomain(null);
     drillLayoutRef.current = null;
     drillPointsRef.current = [];
+    domainCountPointsRef.current = [];
     closeThemeCluster();
   };
 
