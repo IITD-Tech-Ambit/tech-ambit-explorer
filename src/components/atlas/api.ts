@@ -196,6 +196,7 @@ export const fetchKgAtlasRefine = (
   q: string,
   limit = 8000,
   entity?: "department" | "faculty" | null,
+  baseEntity?: "department" | "faculty" | null,
 ) => {
   const params = new URLSearchParams({
     baseQ: baseQ.trim(),
@@ -203,6 +204,7 @@ export const fetchKgAtlasRefine = (
   });
   if (q.trim()) params.set("q", q.trim());
   if (entity) params.set("entity", entity);
+  if (baseEntity) params.set("baseEntity", baseEntity);
   return kgFetch<KgAtlasRefineResult>(`/atlas/refine?${params}`);
 };
 

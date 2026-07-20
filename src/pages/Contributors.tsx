@@ -20,7 +20,7 @@ interface TeamMember {
 }
 
 const dean: TeamMember = {
-  name: "Prof. Aswhwini K Aggarwal",
+  name: "Prof. Ashwini K Agrawal",
   role: "Dean in Charge",
   avatar: deanAvatar,
   linkedin: "https://textile.iitd.ac.in/faculty-profile/7",
@@ -392,7 +392,7 @@ const Contributors = () => {
           <SectionHeading subtitle="Guiding the next generation of researchers">
             Mentors in Charge
           </SectionHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-3xl mx-auto animate-slide-up">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto animate-slide-up">
             {mentors.map((m) => (
               <MemberCard key={m.name} member={m} />
             ))}

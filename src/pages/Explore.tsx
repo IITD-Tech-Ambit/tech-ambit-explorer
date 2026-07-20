@@ -75,9 +75,9 @@ const Explore = () => {
       <Navigation />
 
       
-      <section className="gradient-subtle pt-16 sm:pt-20 pb-6 sm:pb-10 section-bg">
+      <section className="gradient-subtle pt-[4.75rem] sm:pt-20 pb-6 sm:pb-10 section-bg">
         <div className="container mx-auto px-4">
-          <div className="mb-1.5 sm:mb-2">
+          <div className="-mt-1 sm:-mt-2 mb-1.5 sm:mb-2">
             <ExploreModeSwitch active="papers" />
           </div>
 
