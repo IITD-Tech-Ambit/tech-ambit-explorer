@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, isValidElement, type ReactNode } from "react";
+import { useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useElementWidth } from "@/hooks/use-element-width";
@@ -435,51 +435,12 @@ const SourcesBlock = ({
   );
 };
 
-// Faculty links (/faculty/kerberos) → pill chip; IP/patent citations → open the
-// shared detail modal instead of navigating; everything else → styled external link
-
-function extractText(node: ReactNode): string {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join("");
-  if (isValidElement(node)) return extractText((node.props as { children?: ReactNode }).children);
-  return "";
-}
-
-function normalizeTitle(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[…]|\.{2,}$/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-// The LLM cites IP filings by title in prose (patents/IP results carry no `url`
-// field, unlike papers), so inline links can only be resolved back to a source
-// by matching their visible text against `message.sources` — not by href.
-function findIPSourceMatch(sources: ChatSource[] | undefined, linkText: string): ChatSource | undefined {
-  const norm = normalizeTitle(linkText);
-  if (!sources?.length || norm.length < 8) return undefined;
-
-  const ipSources = sources.filter(isIPSource);
-  const exact = ipSources.find((s) => normalizeTitle(s.title) === norm);
-  if (exact) return exact;
-
-  return ipSources.find((s) => {
-    const st = normalizeTitle(s.title);
-    return st.length >= 8 && (st.startsWith(norm) || norm.startsWith(st));
-  });
-}
+// Faculty links (/faculty/kerberos) → pill chip; everything else → styled external link
 
 const MarkdownLink = ({
   href,
   children,
-  sources,
-  onOpenIPSource,
-}: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
-  sources?: ChatSource[];
-  onOpenIPSource?: (source: ChatSource) => void;
-}) => {
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
   const isFaculty = href?.startsWith("/faculty/");
 
   if (isFaculty) {
@@ -500,32 +461,6 @@ const MarkdownLink = ({
         <UserRound className="w-3 h-3 flex-shrink-0 opacity-80" />
         <span>{children}</span>
         <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-50" />
-      </a>
-    );
-  }
-
-  const ipMatch = findIPSourceMatch(sources, extractText(children));
-
-  if (ipMatch) {
-    const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-      e.preventDefault();
-      onOpenIPSource?.(ipMatch);
-    };
-
-    return (
-      <a
-        href={href}
-        onClick={handleClick}
-        className="
-          inline-flex items-baseline gap-0.5 cursor-pointer
-          text-primary underline decoration-primary/30 underline-offset-2
-          hover:decoration-primary/70 hover:text-primary/90
-          transition-colors duration-150
-        "
-      >
-        <span>{children}</span>
-        <Lightbulb className="w-3 h-3 flex-shrink-0 self-center opacity-50 ml-0.5" />
       </a>
     );
   }
@@ -710,14 +645,6 @@ const AssistantActions = ({
 const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatMessageProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const LinkRenderer = useMemo(
-    () =>
-      (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-        <MarkdownLink {...props} sources={message.sources} onOpenIPSource={onOpenIPSource} />
-      ),
-    [message.sources, onOpenIPSource]
-  );
-
   if (message.role === "user") {
     return (
       <div className="group/msg flex flex-col items-end gap-0.5">
@@ -792,7 +719,7 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatM
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              components={{ a: LinkRenderer }}
+              components={{ a: MarkdownLink }}
             >
               {message.content}
             </ReactMarkdown>
