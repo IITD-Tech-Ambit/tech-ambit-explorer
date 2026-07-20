@@ -80,7 +80,9 @@ const PublicationTimeline = ({ timeline: initialTimeline, kerberos, totalYears, 
                     </span>
                 )}
             </div>
-            <div className="p-5">
+            {/* Capped + internally scrollable so this card lines up with the Patent Timeline card next to it
+                instead of growing arbitrarily tall (or short) based on how many years of history there are. */}
+            <div className="p-5 max-h-[640px] overflow-y-auto scrollbar-thin">
                 <div className="relative">
                     <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-primary/60 via-primary/30 to-transparent rounded-full" />
 
@@ -121,9 +123,11 @@ const PublicationTimeline = ({ timeline: initialTimeline, kerberos, totalYears, 
                                                                 href={paperUrl}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="text-sm font-medium text-primary hover:underline underline-offset-2 line-clamp-2 leading-snug flex items-start gap-1 group"
+                                                                className="flex items-start gap-1 group"
                                                             >
-                                                                {paper.title}
+                                                                <span className="text-sm font-medium text-primary group-hover:underline underline-offset-2 line-clamp-2 leading-snug min-w-0">
+                                                                    {paper.title}
+                                                                </span>
                                                                 <ExternalLink className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity" />
                                                             </a>
                                                         ) : (

@@ -52,6 +52,9 @@ export interface TaxonomyPagination {
 export interface TaxonomyFacultyResponse {
   kerberos_list: string[];
   faculty_total: number;
+  /** How many of kerberos_list to show by default — a per-area statistical
+   * cutoff, not a fixed page size. See TaxonomyFacultySection's "Show all". */
+  recommended_count: number;
   pagination: TaxonomyPagination;
   meta: TaxonomyMeta;
 }
@@ -83,15 +86,6 @@ export const getTaxonomyThemes = (filters: Pick<TaxonomyBrowseFilters, 'departme
 
 export const getTaxonomyDomains = (filters: Pick<TaxonomyBrowseFilters, 'theme' | 'department'>) =>
   getJson<{ domains: TaxonomyNode[]; meta: TaxonomyMeta }>('/taxonomy/domains', buildParams(filters));
-
-export const getTaxonomySubdomains = (
-  domainSlug: string,
-  filters: Pick<TaxonomyBrowseFilters, 'theme' | 'department'>
-) =>
-  getJson<{ domain: { id: string; name: string; slug: string }; subdomains: TaxonomyNode[]; meta: TaxonomyMeta }>(
-    `/taxonomy/domains/${encodeURIComponent(domainSlug)}/subdomains`,
-    buildParams(filters)
-  );
 
 export const getTaxonomyCounts = (filters: TaxonomyBrowseFilters) =>
   getJson<TaxonomyCountsResponse>('/taxonomy/counts', buildParams(filters));
