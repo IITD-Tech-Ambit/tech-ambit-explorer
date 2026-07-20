@@ -22,12 +22,6 @@ export interface KgAtlasPaper {
   z: number;
 }
 
-export interface KgAtlasDepartmentBreakdown {
-  department: string;
-  paperCount: number;
-  papers: KgAtlasClusterPaper[];
-}
-
 export interface KgAtlasClusterPaper {
   id: string;
   i: number;
@@ -35,6 +29,21 @@ export interface KgAtlasClusterPaper {
   domain: string;
   topic: string;
   citations: number;
+}
+
+export interface KgAtlasFacultyBreakdown {
+  facultyId: string;
+  name: string;
+  paperCount: number;
+  papers: KgAtlasClusterPaper[];
+}
+
+export interface KgAtlasDepartmentBreakdown {
+  department: string;
+  paperCount: number;
+  papers: KgAtlasClusterPaper[];
+  /** Professors in this department with papers in the current theme/query set. */
+  faculty?: KgAtlasFacultyBreakdown[];
 }
 
 export interface KgAtlasClusterBreakdown {
@@ -108,10 +117,25 @@ export interface KgAtlasSuggestDepartment {
   paperCount: number;
 }
 
+export interface KgAtlasSuggestPaper {
+  id: string;
+  i: number;
+  title: string;
+  theme: string;
+  department: string;
+}
+
+export interface KgAtlasSuggestKeyword {
+  term: string;
+  paperCount: number;
+}
+
 export interface KgAtlasSuggestResult {
   query: string;
   themes: KgAtlasSuggestTerm[];
   topics: KgAtlasSuggestTerm[];
   faculty: KgAtlasSuggestFaculty[];
   departments: KgAtlasSuggestDepartment[];
+  papers?: KgAtlasSuggestPaper[];
+  keywords?: KgAtlasSuggestKeyword[];
 }

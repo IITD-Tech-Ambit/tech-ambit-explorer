@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
+  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, FileText, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { allNodeKeys, themeColorHex, TileManager } from "./atlasOctree";
 import { themeDisplayName } from "./atlasClusters";
 import {
   fetchKgAtlasDepartmentSearch, fetchKgAtlasFacultySearch, fetchKgAtlasSuggestSafe,
-  fetchKgAtlasClusterBreakdown, fetchKgAtlasRefine, fetchKgFacultyAtlasIndices, fetchKgPaperMeta, type KgPaperMeta,
+  fetchKgAtlasClusterBreakdown, fetchKgAtlasRefine, fetchKgFacultyAtlasIndices, fetchKgFacultyIndex, fetchKgPaperMeta, type KgPaperMeta,
 } from "./api";
 import { getPaperExternalUrl } from "./paperLink";
 import type {
@@ -27,7 +28,13 @@ import type {
 const BG = "#000000";
 const POINT_BUDGET = 250_000;
 const MAX_IN_FLIGHT = 8;
-const OVERLAY_CAP = 8000;
+// Max matched points held in the highlight overlay. Per-theme counts on the
+// cluster labels are derived from this overlay, so it must be able to hold the
+// entire atlas — otherwise a filter that matches more points than the cap
+// reports truncated theme counts (e.g. a 9,453-paper theme showing as "8,000").
+// Set to the backend's own ceiling (getAtlasPoints caps at 70k; the whole cloud
+// is ~67.8k) so every theme always shows its true count under any filter.
+const OVERLAY_CAP = 70000;
 
 /** A point picked from a tile — carries what the detail panel + overlay need. */
 export interface PickedPaper {
@@ -85,11 +92,105 @@ type ThemeLabelEntry = {
   root: HTMLElement;
   titleEl: HTMLElement;
   countEl: HTMLElement;
+  obj: CSS2DObject;
   line: THREE.Line;
   tip: THREE.Mesh;
   fullCount: number;
   themeName: string;
 };
+
+type DomainLabelEntry = {
+  root: HTMLElement;
+  titleEl: HTMLElement;
+  countEl: HTMLElement;
+  obj: CSS2DObject;
+  line: THREE.Line;
+  tip: THREE.Mesh;
+  theme: string;
+  domain: string;
+};
+
+type DomainCluster = {
+  domain: string;
+  count: number;
+  cx: number; cy: number; cz: number;
+  lx: number; ly: number; lz: number;
+  hue: number;
+};
+
+type DrillLayout = {
+  posById: Map<number, [number, number, number]>;
+  hueById: Map<number, number>;
+  centers: DomainCluster[];
+};
+
+/** Deterministic per-point jitter (round disc) so re-renders keep points put. */
+function drillJitter(seed: number, radius: number): [number, number, number] {
+  const a = Math.sin(seed * 127.1) * 43758.5453;
+  const b = Math.sin(seed * 269.5) * 43758.5453;
+  const c = Math.sin(seed * 419.2) * 43758.5453;
+  const r1 = a - Math.floor(a);
+  const r2 = b - Math.floor(b);
+  const r3 = c - Math.floor(c);
+  const rr = Math.sqrt(r1) * radius; // sqrt → uniform fill of the disc
+  const ang = r2 * Math.PI * 2;
+  return [Math.cos(ang) * rr, Math.sin(ang) * rr, (r3 - 0.5) * radius * 0.4];
+}
+
+/**
+ * Spread a theme's points into separate per-domain clusters arranged in a ring
+ * on the view plane — the drilled equivalent of the nine theme blobs. Positions
+ * are keyed by atlas index so a later refine keeps points in their cluster.
+ */
+function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
+  const byDomain = new Map<string, AtlasPointCoord[]>();
+  for (const p of points) {
+    const d = p.domain || "Other";
+    const list = byDomain.get(d);
+    if (list) list.push(p);
+    else byDomain.set(d, [p]);
+  }
+  const domains = [...byDomain.entries()].sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+  const n = domains.length;
+  const ringR = n <= 1 ? 0 : n <= 4 ? 1.0 : n <= 8 ? 1.35 : 1.65;
+  // Keep labels clear of the blob so their DOM hit-box does not cover papers.
+  const labelGap = 0.55;
+
+  const posById = new Map<number, [number, number, number]>();
+  const hueById = new Map<number, number>();
+  const centers: DomainCluster[] = [];
+
+  domains.forEach(([domain, pts], k) => {
+    const angle = n <= 1 ? -Math.PI / 2 : (2 * Math.PI * k) / n - Math.PI / 2;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const cx = n <= 1 ? 0 : ux * ringR;
+    const cy = n <= 1 ? 0 : uy * ringR;
+    const cz = 0;
+    const hue = (k * 47) % 360;
+    const blobR = Math.min(0.24, 0.05 + Math.sqrt(pts.length) * 0.006);
+
+    for (const p of pts) {
+      const [jx, jy, jz] = drillJitter(p.i + 1, blobR);
+      posById.set(p.i, [cx + jx, cy + jy, cz + jz]);
+      hueById.set(p.i, hue);
+    }
+
+    centers.push({
+      domain,
+      count: pts.length,
+      cx, cy, cz,
+      lx: n <= 1 ? 0 : ux * (ringR + labelGap),
+      ly: n <= 1 ? blobR + labelGap : uy * (ringR + labelGap),
+      lz: 0,
+      hue,
+    });
+  });
+
+  return { posById, hueById, centers };
+}
 
 function classifySearchEntity(
   q: string,
@@ -114,13 +215,18 @@ function classifySearchEntity(
 
 /** One row in the search suggestion dropdown (flattened for keyboard nav). */
 interface SuggestItem {
-  group: "theme" | "topic" | "faculty" | "department";
+  group: "keyword" | "paper" | "theme" | "topic" | "faculty" | "department";
   label: string;
   sub: string;
   count: number;
+  /** Set for paper suggestions so a click can open that exact dot. */
+  paperId?: string;
+  paperIndex?: number;
 }
 
 const SUGGEST_BADGE: Record<SuggestItem["group"], { text: string; className: string }> = {
+  keyword: { text: "Keyword", className: "bg-slate-800 text-slate-200" },
+  paper: { text: "Paper", className: "bg-sky-950 text-sky-300" },
   theme: { text: "Theme", className: "bg-slate-800 text-cyan-400" },
   topic: { text: "Topic", className: "bg-slate-800 text-amber-300" },
   faculty: { text: "Faculty", className: "bg-violet-950 text-violet-300" },
@@ -129,12 +235,8 @@ const SUGGEST_BADGE: Record<SuggestItem["group"], { text: string; className: str
 
 function flattenSuggestions(result: KgAtlasSuggestResult): SuggestItem[] {
   const items: SuggestItem[] = [];
-  for (const t of result.themes) {
-    items.push({ group: "theme", label: t.label, sub: "", count: t.paperCount });
-  }
-  for (const t of result.topics) {
-    items.push({ group: "topic", label: t.label, sub: "", count: t.paperCount });
-  }
+  // Faculty and departments always come first so they're never buried by the
+  // keyword/paper matches, even with the dropdown's small item cap.
   for (const f of result.faculty) {
     items.push({ group: "faculty", label: f.name, sub: f.department, count: f.paperCount });
   }
@@ -143,6 +245,25 @@ function flattenSuggestions(result: KgAtlasSuggestResult): SuggestItem[] {
       group: "department", label: d.department,
       sub: `${formatCount(d.facultyCount)} faculty`, count: d.paperCount,
     });
+  }
+  for (const k of result.keywords ?? []) {
+    items.push({ group: "keyword", label: k.term, sub: "", count: k.paperCount });
+  }
+  for (const p of result.papers ?? []) {
+    items.push({
+      group: "paper",
+      label: p.title || "Untitled",
+      sub: [p.theme, p.department].filter(Boolean).join(" · "),
+      count: 0,
+      paperId: p.id,
+      paperIndex: p.i,
+    });
+  }
+  for (const t of result.themes) {
+    items.push({ group: "theme", label: t.label, sub: "", count: t.paperCount });
+  }
+  for (const t of result.topics) {
+    items.push({ group: "topic", label: t.label, sub: "", count: t.paperCount });
   }
   return items;
 }
@@ -155,9 +276,64 @@ function buildThemeBreakdownFromOverlay(
   paperLimit = 200,
 ): KgAtlasClusterBreakdown {
   const inTheme = points.filter((p) => p.theme === theme);
-  const byDept = new Map<string, { paperCount: number; papers: KgAtlasClusterBreakdown["departments"][0]["papers"] }>();
+  const byDept = new Map<string, {
+    paperCount: number;
+    papers: KgAtlasClusterBreakdown["departments"][0]["papers"];
+    indices: Set<number>;
+  }>();
 
   for (const p of inTheme) {
+    const dept = (p.department || "").trim() || "Unassigned";
+    let entry = byDept.get(dept);
+    if (!entry) {
+      entry = { paperCount: 0, papers: [], indices: new Set() };
+      byDept.set(dept, entry);
+    }
+    entry.paperCount += 1;
+    entry.indices.add(p.i);
+    if (entry.papers.length < paperLimit) {
+      entry.papers.push({
+        id: p.id,
+        i: p.i,
+        title: p.title || "Untitled",
+        domain: p.domain || "",
+        topic: "",
+        citations: 0,
+      });
+    }
+  }
+
+  const departments = [...byDept.entries()]
+    .map(([department, entry]) => ({
+      department,
+      paperCount: entry.paperCount,
+      papers: entry.papers,
+      faculty: [] as NonNullable<KgAtlasClusterBreakdown["departments"][0]["faculty"]>,
+      // Internal: full index set for faculty intersection (stripped before render if needed)
+      _indices: entry.indices,
+    }))
+    .sort((a, b) => b.paperCount - a.paperCount || a.department.localeCompare(b.department));
+
+  return { theme, query, totalPapers: inTheme.length, departments };
+}
+
+/**
+ * Build a department → papers breakdown for a single domain from the drilled
+ * theme's points. Powers the right sidebar when a domain is focused.
+ */
+function buildDomainBreakdownFromPoints(
+  domain: string,
+  query: string,
+  points: AtlasPointCoord[],
+  paperLimit = 200,
+): KgAtlasClusterBreakdown {
+  const inDomain = points.filter((p) => (p.domain || "Other") === domain);
+  const byDept = new Map<string, {
+    paperCount: number;
+    papers: KgAtlasClusterBreakdown["departments"][0]["papers"];
+  }>();
+
+  for (const p of inDomain) {
     const dept = (p.department || "").trim() || "Unassigned";
     let entry = byDept.get(dept);
     if (!entry) {
@@ -170,7 +346,7 @@ function buildThemeBreakdownFromOverlay(
         id: p.id,
         i: p.i,
         title: p.title || "Untitled",
-        domain: "",
+        domain: p.domain || "",
         topic: "",
         citations: 0,
       });
@@ -182,14 +358,52 @@ function buildThemeBreakdownFromOverlay(
       department,
       paperCount: entry.paperCount,
       papers: entry.papers,
+      faculty: [] as NonNullable<KgAtlasClusterBreakdown["departments"][0]["faculty"]>,
     }))
     .sort((a, b) => b.paperCount - a.paperCount || a.department.localeCompare(b.department));
 
-  return { theme, query, totalPapers: inTheme.length, departments };
+  return { theme: domain, query, totalPapers: inDomain.length, departments };
+}
+
+/** Attach professors under each department from a server breakdown, scoped to local papers. */
+function mergeFacultyIntoBreakdown(
+  local: KgAtlasClusterBreakdown,
+  api: KgAtlasClusterBreakdown,
+): KgAtlasClusterBreakdown {
+  const apiByDept = new Map(
+    api.departments.map((d) => [d.department.trim().toLowerCase(), d]),
+  );
+  return {
+    ...local,
+    departments: local.departments.map((dept) => {
+      const apiDept = apiByDept.get(dept.department.trim().toLowerCase());
+      const localSet: Set<number> =
+        (dept as { _indices?: Set<number> })._indices
+        ?? new Set(dept.papers.map((p) => p.i));
+
+      const faculty = (apiDept?.faculty ?? [])
+        .map((f) => {
+          const papers = f.papers.filter((p) => localSet.has(p.i));
+          if (!papers.length) return null;
+          return {
+            facultyId: f.facultyId,
+            name: f.name,
+            paperCount: papers.length,
+            papers,
+          };
+        })
+        .filter((f): f is NonNullable<typeof f> => !!f)
+        .sort((a, b) => b.paperCount - a.paperCount || a.name.localeCompare(b.name));
+
+      const { _indices: _drop, ...rest } = dept as typeof dept & { _indices?: Set<number> };
+      void _drop;
+      return { ...rest, faculty };
+    }),
+  };
 }
 
 function ThemeClusterPanel({
-  theme, query, breakdown, loading, themeColor, onClose, onPaperClick,
+  theme, query, breakdown, loading, themeColor, onClose, onPaperClick, domain,
 }: {
   theme: string;
   query: string;
@@ -198,18 +412,35 @@ function ThemeClusterPanel({
   themeColor: string;
   onClose: () => void;
   onPaperClick: (paper: PickedPaper) => void;
+  /** When set, the panel is scoped to a single domain within `theme`. */
+  domain?: string | null;
 }) {
   const [openDept, setOpenDept] = useState<string | null>(null);
+  const [openFaculty, setOpenFaculty] = useState<string | null>(null);
   const [deptFilter, setDeptFilter] = useState("");
   const q = deptFilter.trim().toLowerCase();
   const depts = (breakdown?.departments ?? []).filter((d) =>
     !q || d.department.toLowerCase().includes(q),
   );
 
+  const pickPaper = (p: { id: string; i: number; title: string; domain: string; topic?: string; citations: number }) => {
+    onPaperClick({
+      i: p.i,
+      id: p.id,
+      title: p.title,
+      theme,
+      domain: p.domain,
+      citations: p.citations,
+      x: 0, y: 0, z: 0,
+    });
+  };
+
   return (
     <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[420px] border-l border-slate-700/60 bg-slate-950/95 backdrop-blur-md overflow-y-auto shadow-2xl">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-700/60 bg-slate-950/95">
-        <span className="text-xs font-semibold uppercase tracking-wide text-cyan-400/90">Theme cluster</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-cyan-400/90">
+          {domain ? "Domain cluster" : "Theme cluster"}
+        </span>
         <Button type="button" size="icon" variant="ghost" onClick={onClose}
           className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800" aria-label="Close">
           <X className="h-4 w-4" />
@@ -223,11 +454,15 @@ function ThemeClusterPanel({
             <span className="mt-1 h-3 w-3 shrink-0 rounded-full"
               style={{ backgroundColor: themeColor, boxShadow: `0 0 8px ${themeColor}` }} />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white leading-snug">{theme}</p>
+              <p className="text-sm font-semibold text-white leading-snug">{domain || theme}</p>
               <p className="mt-1 text-xs text-slate-400">
-                Papers matching “{query}” in this theme
-                {breakdown ? ` · ${formatCount(breakdown.totalPapers)} total` : ""}
+                {domain
+                  ? <>Papers in this domain{breakdown ? ` · ${formatCount(breakdown.totalPapers)} total` : ""}</>
+                  : <>Papers matching “{query}” in this theme{breakdown ? ` · ${formatCount(breakdown.totalPapers)} total` : ""}</>}
               </p>
+              {domain && (
+                <p className="mt-0.5 text-[11px] text-slate-500 truncate">in {theme}</p>
+              )}
             </div>
           </div>
         </div>
@@ -254,11 +489,16 @@ function ThemeClusterPanel({
             </p>
             {depts.map((dept) => {
               const isOpen = openDept === dept.department;
+              const faculty = dept.faculty ?? [];
+              const hasFaculty = faculty.length > 0;
               return (
                 <div key={dept.department}
                   className="rounded-xl border border-slate-700/50 bg-slate-900/40 overflow-hidden">
                   <button type="button"
-                    onClick={() => setOpenDept(isOpen ? null : dept.department)}
+                    onClick={() => {
+                      setOpenDept(isOpen ? null : dept.department);
+                      setOpenFaculty(null);
+                    }}
                     className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-800/50 transition-colors">
                     <ChevronDown className={cn(
                       "h-4 w-4 shrink-0 text-slate-500 transition-transform",
@@ -268,37 +508,90 @@ function ThemeClusterPanel({
                       {dept.department}
                     </span>
                     <span className="shrink-0 text-xs text-slate-500">
-                      {formatCount(dept.paperCount)} papers
+                      {hasFaculty
+                        ? `${formatCount(faculty.length)} faculty · ${formatCount(dept.paperCount)} papers`
+                        : `${formatCount(dept.paperCount)} papers`}
                     </span>
                   </button>
                   {isOpen && (
-                    <ul className="border-t border-slate-800/80 px-2 py-2 space-y-1 max-h-64 overflow-y-auto">
-                      {dept.papers.map((p) => (
-                        <li key={p.id || String(p.i)}>
-                          <button type="button"
-                            onClick={() => onPaperClick({
-                              i: p.i,
-                              id: p.id,
-                              title: p.title,
-                              theme,
-                              domain: p.domain,
-                              citations: p.citations,
-                              x: 0, y: 0, z: 0,
-                            })}
-                            className="w-full rounded-lg px-2 py-2 text-left hover:bg-slate-800/70 transition-colors">
-                            <span className="block text-xs text-white leading-snug line-clamp-2">{p.title}</span>
-                            {p.topic && (
-                              <span className="block mt-0.5 text-[10px] text-slate-500 truncate">{p.topic}</span>
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                      {dept.paperCount > dept.papers.length && (
-                        <li className="px-2 py-1 text-[10px] text-slate-500">
-                          Showing {formatCount(dept.papers.length)} of {formatCount(dept.paperCount)} papers
-                        </li>
+                    <div className="border-t border-slate-800/80 px-2 py-2 space-y-1 max-h-80 overflow-y-auto">
+                      {hasFaculty ? (
+                        <>
+                          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            Faculty in this department
+                          </p>
+                          {faculty.map((fac) => {
+                            const facKey = `${dept.department}::${fac.facultyId || fac.name}`;
+                            const facOpen = openFaculty === facKey;
+                            return (
+                              <div key={facKey} className="rounded-lg border border-slate-800/80 bg-slate-950/40 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenFaculty(facOpen ? null : facKey)}
+                                  className="flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-slate-800/50 transition-colors"
+                                >
+                                  <ChevronRight className={cn(
+                                    "h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform",
+                                    facOpen && "rotate-90",
+                                  )} />
+                                  <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />
+                                  <span className="flex-1 min-w-0 text-xs font-medium text-slate-200 truncate">
+                                    {fac.name}
+                                  </span>
+                                  <span className="shrink-0 text-[10px] text-slate-500">
+                                    {formatCount(fac.paperCount)}
+                                  </span>
+                                </button>
+                                {facOpen && (
+                                  <ul className="border-t border-slate-800/80 px-1.5 py-1.5 space-y-0.5">
+                                    {fac.papers.map((p) => (
+                                      <li key={p.id || String(p.i)}>
+                                        <button
+                                          type="button"
+                                          onClick={() => pickPaper(p)}
+                                          className="w-full rounded-md px-2 py-1.5 text-left hover:bg-slate-800/70 transition-colors"
+                                        >
+                                          <span className="block text-xs text-white leading-snug line-clamp-2">{p.title}</span>
+                                          {p.topic && (
+                                            <span className="block mt-0.5 text-[10px] text-slate-500 truncate">{p.topic}</span>
+                                          )}
+                                        </button>
+                                      </li>
+                                    ))}
+                                    {fac.paperCount > fac.papers.length && (
+                                      <li className="px-2 py-1 text-[10px] text-slate-500">
+                                        Showing {formatCount(fac.papers.length)} of {formatCount(fac.paperCount)} papers
+                                      </li>
+                                    )}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <ul className="space-y-1">
+                          {dept.papers.map((p) => (
+                            <li key={p.id || String(p.i)}>
+                              <button type="button"
+                                onClick={() => pickPaper(p)}
+                                className="w-full rounded-lg px-2 py-2 text-left hover:bg-slate-800/70 transition-colors">
+                                <span className="block text-xs text-white leading-snug line-clamp-2">{p.title}</span>
+                                {p.topic && (
+                                  <span className="block mt-0.5 text-[10px] text-slate-500 truncate">{p.topic}</span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                          {dept.paperCount > dept.papers.length && (
+                            <li className="px-2 py-1 text-[10px] text-slate-500">
+                              Showing {formatCount(dept.papers.length)} of {formatCount(dept.paperCount)} papers
+                            </li>
+                          )}
+                        </ul>
                       )}
-                    </ul>
+                    </div>
                   )}
                 </div>
               );
@@ -428,7 +721,13 @@ function PaperPanel({
   );
 }
 
-export default function ResearchAtlasTiles() {
+export default function ResearchAtlasTiles({
+  mode,
+  onModeChange,
+}: {
+  mode?: AtlasMode;
+  onModeChange?: (mode: AtlasMode) => void;
+} = {}) {
   const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -447,6 +746,7 @@ export default function ResearchAtlasTiles() {
     baseMaterial: THREE.ShaderMaterial;
     marker: THREE.Mesh;
     labelByTheme: Map<string, ThemeLabelEntry>;
+    labelByDomain: Map<string, DomainLabelEntry[]>;
     frameId: number;
     dirty: boolean;
     lastStream: number;
@@ -457,9 +757,14 @@ export default function ResearchAtlasTiles() {
   const overlayIndicesRef = useRef<number[]>([]);
   const overlayPointsRef = useRef<AtlasPointCoord[]>([]);
   const filterActiveRef = useRef(false);
+  /** Per-theme filtered counts (null = not filtering) — drives theme label visibility. */
+  const filterCountsRef = useRef<Record<string, number> | null>(null);
   /** Full result of the primary search — refine filters within this set. */
   const basePointsRef = useRef<AtlasPointCoord[]>([]);
   const baseIndicesRef = useRef<Set<number>>(new Set());
+  /** Result after level-2 refine (e.g. theme ∩ department) — faculty deep-refine filters within this. */
+  const midPointsRef = useRef<AtlasPointCoord[]>([]);
+  const midIndicesRef = useRef<Set<number>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -467,9 +772,14 @@ export default function ResearchAtlasTiles() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refineQuery, setRefineQuery] = useState("");
   const [refineSearchQuery, setRefineSearchQuery] = useState("");
+  /** Level-3 narrow: typically a professor within the level-2 department. */
+  const [deepRefineQuery, setDeepRefineQuery] = useState("");
+  const [deepRefineSearchQuery, setDeepRefineSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [baseMatchCount, setBaseMatchCount] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
+  /** Bumped whenever theme∩department mid-set is rebuilt so faculty refine can re-intersect. */
+  const [midEpoch, setMidEpoch] = useState(0);
   const [hovered, setHovered] = useState<PickedPaper | null>(null);
   const [selected, setSelected] = useState<PickedPaper | null>(null);
   const [detail, setDetail] = useState<KgPaperMeta | null>(null);
@@ -480,21 +790,52 @@ export default function ResearchAtlasTiles() {
   const [contextLost, setContextLost] = useState(false);
   const [rendererEpoch, setRendererEpoch] = useState(0);
   const [atlasReady, setAtlasReady] = useState(false);
-  const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
+  const [internalMode, setInternalMode] = useState<AtlasMode>("interactive");
+  const atlasMode = mode ?? internalMode;
+  const setAtlasMode = useCallback(
+    (next: AtlasMode | ((prev: AtlasMode) => AtlasMode)) => {
+      const resolved = typeof next === "function" ? next(atlasMode) : next;
+      if (mode === undefined) setInternalMode(resolved);
+      onModeChange?.(resolved);
+    },
+    [atlasMode, mode, onModeChange],
+  );
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<KgAtlasSuggestResult | null>(null);
   const [suggestActive, setSuggestActive] = useState(-1);
   const [refineItems, setRefineItems] = useState<SuggestItem[]>([]);
   const [clusterTheme, setClusterTheme] = useState<string | null>(null);
   const [clusterBreakdown, setClusterBreakdown] = useState<KgAtlasClusterBreakdown | null>(null);
+  /** When the cluster sidebar is scoped to a focused domain (vs a whole theme). */
+  const [clusterDomain, setClusterDomain] = useState<string | null>(null);
   const [clusterLoading, setClusterLoading] = useState(false);
+  const [drillTheme, setDrillTheme] = useState<string | null>(null);
+  const [focusedDomain, setFocusedDomain] = useState<string | null>(null);
   const [filterThemeCounts, setFilterThemeCounts] = useState<{ theme: string; count: number; color: string }[]>([]);
+  const [drillDomainCounts, setDrillDomainCounts] = useState<{ domain: string; count: number; hue: number }[]>([]);
   const [primaryEntity, setPrimaryEntity] = useState<SearchEntity>("text");
   const [refineEntity, setRefineEntity] = useState<SearchEntity | null>(null);
+  const [deepRefineEntity, setDeepRefineEntity] = useState<SearchEntity | null>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const onThemeLabelClickRef = useRef<(theme: string) => void>(() => {});
+  const onDomainLabelClickRef = useRef<(theme: string, domain: string) => void>(() => {});
+  /** Raycast papers from label DOM handlers (labels sit above the canvas). */
+  const pickPaperRef = useRef<(clientX: number, clientY: number) => PickedPaper | null>(() => null);
+  const selectPaperRef = useRef<(paper: PickedPaper) => void>(() => {});
+  const hoverPaperRef = useRef<(
+    paper: PickedPaper | null,
+    clientX: number,
+    clientY: number,
+  ) => void>(() => {});
+  const drillThemeRef = useRef<string | null>(null);
+  const drillLayoutRef = useRef<DrillLayout | null>(null);
+  /** Full point set of the drilled theme (all domains) — lets focus re-filter. */
+  const drillPointsRef = useRef<AtlasPointCoord[]>([]);
+  /** Domain currently isolated/zoomed within the drilled theme, or null. */
+  const focusedDomainRef = useRef<string | null>(null);
   const primaryPickRef = useRef<"faculty" | "department" | null>(null);
   const refinePickRef = useRef<"faculty" | "department" | null>(null);
+  const deepRefinePickRef = useRef<"faculty" | "department" | null>(null);
   const themesClickableRef = useRef(true);
   const viewOnlyRef = useRef(false);
 
@@ -502,6 +843,12 @@ export default function ResearchAtlasTiles() {
 
   useEffect(() => {
     viewOnlyRef.current = isViewMode;
+  }, [isViewMode]);
+
+  // Re-fit the WebGL canvas after nav chrome / fullscreen layout changes.
+  useEffect(() => {
+    const t = window.setTimeout(() => window.dispatchEvent(new Event("resize")), 520);
+    return () => window.clearTimeout(t);
   }, [isViewMode]);
 
   const markDirty = useCallback(() => {
@@ -517,13 +864,16 @@ export default function ResearchAtlasTiles() {
     e.tileManager.update(allNodeKeys(tree));
   }, []);
 
-  const syncThemeLabelPresentation = useCallback((filterActive: boolean, _clickable: boolean) => {
+  const syncThemeLabelPresentation = useCallback((filterActive: boolean, clickable: boolean) => {
     const e = engineRef.current;
     if (!e) return;
     for (const [, entry] of e.labelByTheme) {
       const { root, titleEl, countEl, themeName } = entry;
-      // Labels must never capture clicks — papers stay clickable under/near them.
-      root.style.pointerEvents = "none";
+      // The label block is clickable (drills into the theme); the inner spans
+      // stay pass-through so the hit falls to the root's click handler.
+      // In view mode labels stay visible but are not interactive.
+      root.style.pointerEvents = clickable ? "auto" : "none";
+      root.style.cursor = clickable ? "pointer" : "default";
       titleEl.style.pointerEvents = "none";
       countEl.style.pointerEvents = "none";
       root.style.transform = "translate(-6px,-50%)";
@@ -537,7 +887,7 @@ export default function ResearchAtlasTiles() {
       titleEl.textContent = themeDisplayName(themeName);
       titleEl.style.fontSize = filterActive ? "11px" : "12px";
       titleEl.style.textDecoration = "none";
-      titleEl.style.cursor = "default";
+      titleEl.style.cursor = clickable ? "pointer" : "default";
 
       countEl.style.display = "block";
       countEl.style.fontSize = filterActive ? "9px" : "10px";
@@ -545,42 +895,135 @@ export default function ResearchAtlasTiles() {
     }
   }, []);
 
+  // Single source of truth for cluster-label VISIBILITY. Because CSS2DRenderer
+  // rewrites element.style.display every frame from the CSS2DObject's .visible
+  // flag, visibility MUST be driven via obj.visible (not root.style.display).
+  //
+  // Rules:
+  //  - Drilled  → all theme labels hidden; the drilled theme's domain labels are
+  //    positioned at their spread centers and shown (only the focused one when a
+  //    domain is focused). All other domain labels hidden.
+  //  - Not drilled → theme labels shown (except zero-count themes while
+  //    filtering); all domain labels hidden.
+  // Idempotent, so it can be re-run after any state change.
+  const syncDrillLabels = useCallback(() => {
+    const e = engineRef.current;
+    if (!e) return;
+    const norm = (s: string) => (s || "").trim().toLowerCase();
+    const drill = drillThemeRef.current;
+    const drillN = norm(drill ?? "");
+    const layout = drillLayoutRef.current;
+    const counts = filterCountsRef.current;
+    const focus = drill ? focusedDomainRef.current : null;
+    const focusN = norm(focus ?? "");
+
+    for (const [theme, entry] of e.labelByTheme) {
+      let show = !drill;
+      if (show && counts) show = (counts[theme] ?? 0) > 0;
+      entry.obj.visible = show;
+      entry.line.visible = show;
+      entry.tip.visible = show;
+    }
+
+    // Match domains by normalized name so subtle whitespace/case differences
+    // between the point stream and the dict anchors never drop a label.
+    const centerByDomain = new Map<string, DomainCluster>();
+    if (drill && layout) for (const c of layout.centers) centerByDomain.set(norm(c.domain), c);
+
+    for (const [theme, list] of e.labelByDomain) {
+      const themeMatch = !!drill && norm(theme) === drillN;
+      for (const d of list) {
+        const c = themeMatch ? centerByDomain.get(norm(d.domain)) : undefined;
+        // While a domain is focused, only that domain's label stays visible.
+        // Also drop domains with no papers in the current (refined) set.
+        const show = !!c && c.count > 0 && (!focus || focusN === norm(d.domain));
+        if (!show || !c) {
+          d.obj.visible = false;
+          d.line.visible = false;
+          d.tip.visible = false;
+          continue;
+        }
+        const col = `hsl(${c.hue}, 72%, 66%)`;
+        d.titleEl.style.color = col;
+        d.countEl.textContent = formatThemeCountLabel(c.count);
+        (d.tip.material as THREE.MeshBasicMaterial).color.set(col);
+        (d.line.material as THREE.LineBasicMaterial).color.set(col);
+        d.tip.position.set(c.cx, c.cy, c.cz);
+        d.obj.position.set(c.lx, c.ly, c.lz);
+        d.line.geometry.setFromPoints([
+          new THREE.Vector3(c.cx, c.cy, c.cz),
+          new THREE.Vector3(c.lx, c.ly, c.lz),
+        ]);
+        // The DOM element starts at opacity:0 (see creation); make it visible.
+        // Visibility itself is driven by obj.visible (CSS2DRenderer owns display).
+        d.root.style.opacity = "1";
+        // Labels stay interactive for domain focus, but paper hits are preferred
+        // in the click/move handlers so the DOM box never traps paper selection.
+        d.root.style.pointerEvents = viewOnlyRef.current ? "none" : "auto";
+        d.root.style.cursor = viewOnlyRef.current ? "default" : "pointer";
+        d.titleEl.style.pointerEvents = "none";
+        d.countEl.style.pointerEvents = "none";
+        d.obj.visible = true;
+        d.line.visible = true;
+        d.tip.visible = true;
+      }
+    }
+    markDirty();
+  }, [markDirty]);
+
   const applyThemeLabelCounts = useCallback((counts: Record<string, number> | null) => {
     const e = engineRef.current;
     if (!e) return;
     const filterActive = counts != null;
     filterActiveRef.current = filterActive;
-    for (const [theme, entry] of e.labelByTheme) {
-      const n = counts ? (counts[theme] ?? 0) : entry.fullCount;
+    filterCountsRef.current = counts;
+    for (const [, entry] of e.labelByTheme) {
+      const n = counts ? (counts[entry.themeName] ?? 0) : entry.fullCount;
       entry.countEl.textContent = formatThemeCountLabel(n);
-      // Hide only themes with zero matches while filtering.
-      const hide = Boolean(counts && n === 0);
-      entry.root.style.display = hide ? "none" : "flex";
-      entry.root.style.opacity = hide ? "0" : "1";
-      entry.line.visible = !hide;
-      entry.tip.visible = !hide;
     }
-    syncThemeLabelPresentation(filterActive, themesClickableRef.current);
-  }, [syncThemeLabelPresentation]);
+    // Styling only — actual visibility is applied by syncDrillLabels (obj.visible).
+    syncThemeLabelPresentation(filterActive, !viewOnlyRef.current);
+    syncDrillLabels();
+  }, [syncThemeLabelPresentation, syncDrillLabels]);
 
   const rebuildOverlay = useCallback((points: AtlasPointCoord[]) => {
     const e = engineRef.current;
     const dict = dictRef.current;
     if (!e) return;
 
-    const n = points.length;
+    // While drilled, re-lay-out points into separate per-domain clusters and
+    // color them by domain (see buildDomainSpreadLayout); otherwise keep the
+    // original positions colored by theme.
+    const layout = drillThemeRef.current ? drillLayoutRef.current : null;
+    // When a domain is focused, isolate its points (hide the other domains).
+    const focus = drillThemeRef.current ? focusedDomainRef.current : null;
+    const src = focus ? points.filter((p) => (p.domain || "Other") === focus) : points;
+
+    const n = src.length;
     const positions = new Float32Array(n * 3);
     const colors = new Float32Array(n * 3);
     const tmp = new THREE.Color();
     const counts: Record<string, number> = {};
 
     for (let k = 0; k < n; k++) {
-      const p = points[k];
-      positions[k * 3] = p.x;
-      positions[k * 3 + 1] = p.y;
-      positions[k * 3 + 2] = p.z;
-      const themeId = dict ? dict.themes.indexOf(p.theme) : -1;
-      tmp.set(themeColorHex(themeId >= 0 ? themeId : 0));
+      const p = src[k];
+      const pos = layout?.posById.get(p.i);
+      if (pos) {
+        positions[k * 3] = pos[0];
+        positions[k * 3 + 1] = pos[1];
+        positions[k * 3 + 2] = pos[2];
+      } else {
+        positions[k * 3] = p.x;
+        positions[k * 3 + 1] = p.y;
+        positions[k * 3 + 2] = p.z;
+      }
+      const hue = layout?.hueById.get(p.i);
+      if (hue != null) {
+        tmp.setHSL(hue / 360, 0.72, 0.6);
+      } else {
+        const themeId = dict ? dict.themes.indexOf(p.theme) : -1;
+        tmp.set(themeColorHex(themeId >= 0 ? themeId : 0));
+      }
       colors[k * 3] = tmp.r;
       colors[k * 3 + 1] = tmp.g;
       colors[k * 3 + 2] = tmp.b;
@@ -595,7 +1038,26 @@ export default function ResearchAtlasTiles() {
     e.tileGroup.visible = n === 0;
     e.baseMaterial.uniforms.uDim.value = 1.0;
 
-    overlayPointsRef.current = points;
+    // Refresh each domain's paper count from the current point set so labels
+    // reflect a narrowing/refine (positions stay stable via the drill layout).
+    // Use `points` (pre-focus) so a focused view still shows real per-domain totals.
+    if (layout) {
+      const domCounts = new Map<string, number>();
+      for (const p of points) {
+        const d = p.domain || "Other";
+        domCounts.set(d, (domCounts.get(d) ?? 0) + 1);
+      }
+      for (const c of layout.centers) c.count = domCounts.get(c.domain) ?? 0;
+      // Keep the bottom-left domains panel in sync with the current (narrowed) set.
+      setDrillDomainCounts(
+        layout.centers
+          .filter((c) => c.count > 0)
+          .map((c) => ({ domain: c.domain, count: c.count, hue: c.hue }))
+          .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain)),
+      );
+    }
+
+    overlayPointsRef.current = src;
     if (n > 0) {
       applyThemeLabelCounts(counts);
       const dictThemes = dict?.themes ?? [];
@@ -633,6 +1095,7 @@ export default function ResearchAtlasTiles() {
     const theme = searchParams.get("theme")?.trim();
     if (theme) {
       setQuery("");
+      setDrillTheme(theme);
       setSearchQuery(theme);
     }
   }, [searchParams]);
@@ -667,7 +1130,7 @@ export default function ResearchAtlasTiles() {
     [suggestions],
   );
 
-  const dropdownItems = hasSearched ? refineItems : suggestItems;
+  const dropdownItems = (hasSearched ? refineItems : suggestItems).slice(0, 6);
 
   useEffect(() => { setSuggestActive(-1); }, [dropdownItems]);
 
@@ -676,21 +1139,63 @@ export default function ResearchAtlasTiles() {
     if (!t) return;
     primaryPickRef.current = pick;
     refinePickRef.current = null;
+    deepRefinePickRef.current = null;
     setSearchQuery(t);
     setQuery("");
     setRefineQuery("");
     setRefineSearchQuery("");
+    setDeepRefineQuery("");
+    setDeepRefineSearchQuery("");
+    setDeepRefineEntity(null);
     setSuggestOpen(false);
     setActiveLevel(null);
     setSelected(null);
     setClusterTheme(null);
     setClusterBreakdown(null);
+    setDrillTheme(null);
+    drillLayoutRef.current = null;
+    setDrillDomainCounts([]);
   }, []);
+
+  const applyDeepRefineSearch = useCallback((term: string, pick: "faculty" | "department" | null = null) => {
+    const t = term.trim();
+    if (!t || !searchQuery.trim() || !refineSearchQuery.trim()) return;
+    deepRefinePickRef.current = pick ?? "faculty";
+    setDeepRefineQuery(t);
+    setDeepRefineSearchQuery(t);
+    setDeepRefineEntity(pick ?? "faculty");
+    setQuery("");
+    setSuggestOpen(false);
+    setSelected(null);
+    setClusterTheme(null);
+    setClusterBreakdown(null);
+  }, [searchQuery, refineSearchQuery]);
 
   const applyRefineSearch = useCallback((term: string, pick: "faculty" | "department" | null = null) => {
     const t = term.trim();
     if (!t || !searchQuery.trim()) return;
+    if (focusedDomainRef.current) {
+      toast.info("Exit the focused domain before narrowing further.");
+      return;
+    }
+    // Level 3: theme → department → professor
+    if (refineSearchQuery.trim()) {
+      if (deepRefineSearchQuery.trim()) {
+        toast.info("You can apply up to 3 filters (theme → department → faculty). Clear one to change.");
+        return;
+      }
+      if (refineEntity !== "department" && pick !== "faculty") {
+        toast.info("Third-level narrowing is for faculty within the selected department.");
+        return;
+      }
+      applyDeepRefineSearch(t, pick ?? "faculty");
+      return;
+    }
     refinePickRef.current = pick;
+    deepRefinePickRef.current = null;
+    setDeepRefineQuery("");
+    setDeepRefineSearchQuery("");
+    setDeepRefineEntity(null);
     setRefineQuery(t);
     setRefineSearchQuery(t);
     setQuery("");
@@ -698,7 +1203,7 @@ export default function ResearchAtlasTiles() {
     setSelected(null);
     setClusterTheme(null);
     setClusterBreakdown(null);
-  }, [searchQuery]);
+  }, [searchQuery, refineSearchQuery, deepRefineSearchQuery, refineEntity, applyDeepRefineSearch]);
 
   const submitSearch = useCallback(() => {
     const term = query.trim();
@@ -708,6 +1213,23 @@ export default function ResearchAtlasTiles() {
   }, [query, hasSearched, applyPrimarySearch, applyRefineSearch]);
 
   const pickSuggestion = useCallback((item: SuggestItem) => {
+    if (item.group === "paper" && item.paperId) {
+      // Open the exact paper's detail panel; carry coords if the dot is loaded.
+      const fromOverlay = overlayPointsRef.current.find((p) => p.i === item.paperIndex);
+      selectPaperRef.current({
+        i: item.paperIndex ?? fromOverlay?.i ?? 0,
+        id: item.paperId,
+        title: item.label,
+        theme: fromOverlay?.theme || "",
+        domain: fromOverlay?.domain || "",
+        citations: 0,
+        x: fromOverlay?.x ?? 0,
+        y: fromOverlay?.y ?? 0,
+        z: fromOverlay?.z ?? 0,
+      });
+      setSuggestOpen(false);
+      return;
+    }
     const pick = item.group === "faculty" || item.group === "department" ? item.group : null;
     if (!hasSearched) applyPrimarySearch(item.label, pick);
     else applyRefineSearch(item.label, pick);
@@ -741,10 +1263,17 @@ export default function ResearchAtlasTiles() {
         setMatchCount(0);
         setRefineQuery("");
         setRefineSearchQuery("");
+        setDeepRefineQuery("");
+        setDeepRefineSearchQuery("");
         setPrimaryEntity("text");
         setRefineEntity(null);
+        setDeepRefineEntity(null);
         primaryPickRef.current = null;
         refinePickRef.current = null;
+        deepRefinePickRef.current = null;
+        drillLayoutRef.current = null;
+        midPointsRef.current = [];
+        midIndicesRef.current = new Set();
         rebuildOverlay([]);
         setClusterTheme(null);
         setClusterBreakdown(null);
@@ -754,8 +1283,14 @@ export default function ResearchAtlasTiles() {
     setSearchLoading(true);
     setRefineQuery("");
     setRefineSearchQuery("");
+    setDeepRefineQuery("");
+    setDeepRefineSearchQuery("");
     setRefineEntity(null);
+    setDeepRefineEntity(null);
     refinePickRef.current = null;
+    deepRefinePickRef.current = null;
+    midPointsRef.current = [];
+    midIndicesRef.current = new Set();
     (async () => {
       const union = new Set<number>();
       try {
@@ -775,12 +1310,37 @@ export default function ResearchAtlasTiles() {
         const indices = [...union].slice(0, OVERLAY_CAP);
         const coords = await fetchAtlasPointCoords(indices);
         if (cancelled) return;
-        const points = indices.map((i) => coords.get(i)).filter((p): p is AtlasPointCoord => !!p);
+        let points = indices.map((i) => coords.get(i)).filter((p): p is AtlasPointCoord => !!p);
+        // When the query exactly names a theme, show only that theme's papers.
+        // The text index also matches the theme's words (e.g. "materials",
+        // "devices") inside other themes' titles/domains, which otherwise leaks
+        // a few stray cross-theme dots into a theme search.
+        const dictThemes = dictRef.current?.themes ?? [];
+        const exactTheme = dictThemes.find((t) => t.toLowerCase() === q.toLowerCase());
+        if (exactTheme) points = points.filter((p) => p.theme === exactTheme);
         basePointsRef.current = points;
         baseIndicesRef.current = new Set(points.map((p) => p.i));
         overlayIndicesRef.current = points.map((p) => p.i);
         setBaseMatchCount(points.length);
         setMatchCount(points.length);
+        // Drilled into a theme → spread its points into separate domain clusters.
+        // Fresh drill resets any per-domain focus and stores the full set so a
+        // later domain click can isolate/expand without a re-fetch.
+        drillLayoutRef.current = drillThemeRef.current
+          ? buildDomainSpreadLayout(points)
+          : null;
+        setDrillDomainCounts(
+          drillLayoutRef.current
+            ? drillLayoutRef.current.centers
+                .map((c) => ({ domain: c.domain, count: c.count, hue: c.hue }))
+                .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain))
+            : [],
+        );
+        drillPointsRef.current = drillThemeRef.current ? points : [];
+        if (focusedDomainRef.current) {
+          focusedDomainRef.current = null;
+          setFocusedDomain(null);
+        }
         rebuildOverlay(points);
       } finally {
         if (!cancelled) setSearchLoading(false);
@@ -799,9 +1359,15 @@ export default function ResearchAtlasTiles() {
     if (!baseQ || !base.length) return;
 
     if (!rq) {
+      midPointsRef.current = [];
+      midIndicesRef.current = new Set();
       overlayIndicesRef.current = base.map((p) => p.i);
       setMatchCount(base.length);
       setRefineEntity(null);
+      setDeepRefineQuery("");
+      setDeepRefineSearchQuery("");
+      setDeepRefineEntity(null);
+      deepRefinePickRef.current = null;
       rebuildOverlay(base);
       return;
     }
@@ -809,25 +1375,24 @@ export default function ResearchAtlasTiles() {
     setSearchLoading(true);
     (async () => {
       try {
-        const result = await fetchKgAtlasRefine(baseQ, rq, OVERLAY_CAP);
+        const entityHint =
+          refinePickRef.current === "department" || refinePickRef.current === "faculty"
+            ? refinePickRef.current
+            : null;
+        const result = await fetchKgAtlasRefine(baseQ, rq, OVERLAY_CAP, entityHint);
         if (cancelled) return;
 
-        const points: AtlasPointCoord[] = (result.points ?? []).map((p) => ({
+        let points: AtlasPointCoord[] = (result.points ?? []).map((p) => ({
           i: p.i,
           id: p.id || "",
           title: p.title || "",
           theme: p.theme || "",
+          domain: p.domain || "",
           department: p.department || "",
           x: p.x,
           y: p.y,
           z: p.z,
         }));
-
-        overlayIndicesRef.current = points.map((p) => p.i);
-        setMatchCount(result.matchCount ?? points.length);
-        if (typeof result.baseCount === "number" && result.baseCount > 0) {
-          setBaseMatchCount(result.baseCount);
-        }
 
         const rqLower = rq.toLowerCase();
         const deptNames = [...new Set(
@@ -842,12 +1407,38 @@ export default function ResearchAtlasTiles() {
         if (entity === "text" && deptNames.some((n) => n.toLowerCase() === rqLower)) {
           entity = "department";
         }
-        setRefineEntity(entity);
+        if (refinePickRef.current === "department") entity = "department";
+        if (refinePickRef.current === "faculty") entity = "faculty";
 
-        rebuildOverlay(points);
+        // Belt-and-suspenders: department refine must not keep other depts' papers
+        // (text search used to match "Electrochemical" / "... Engineering").
+        if (entity === "department") {
+          points = points.filter((p) => {
+            const d = (p.department || "").trim().toLowerCase();
+            if (!d) return true;
+            return d === rqLower || d.includes(rqLower) || rqLower.includes(d);
+          });
+        }
+
+        midPointsRef.current = points;
+        midIndicesRef.current = new Set(points.map((p) => p.i));
+        overlayIndicesRef.current = points.map((p) => p.i);
+        setMatchCount(points.length);
+        if (typeof result.baseCount === "number" && result.baseCount > 0) {
+          setBaseMatchCount(result.baseCount);
+        }
+
+        setRefineEntity(entity);
+        setMidEpoch((n) => n + 1);
+
+        // Level-3 faculty refine is applied by a separate effect when deepRefine is set.
+        if (!deepRefineSearchQuery.trim()) {
+          rebuildOverlay(points);
+        }
       } catch {
         if (cancelled) return;
-        // Fallback: keep showing the primary base set if refine API fails.
+        midPointsRef.current = [];
+        midIndicesRef.current = new Set();
         overlayIndicesRef.current = base.map((p) => p.i);
         setMatchCount(base.length);
         setRefineEntity(null);
@@ -857,9 +1448,80 @@ export default function ResearchAtlasTiles() {
       }
     })();
     return () => { cancelled = true; };
-  }, [refineSearchQuery, searchQuery, baseMatchCount, rebuildOverlay]);
+  }, [refineSearchQuery, searchQuery, baseMatchCount, rebuildOverlay, deepRefineSearchQuery]);
 
-  // Refine suggestions scoped to departments / faculty inside the primary result set.
+  // Level-3: intersect theme∩department mid-set with a professor's atlas indices.
+  useEffect(() => {
+    let cancelled = false;
+    const dq = deepRefineSearchQuery.trim();
+    const mid = midPointsRef.current;
+    const midSet = midIndicesRef.current;
+
+    if (!refineSearchQuery.trim()) return;
+
+    if (!dq) {
+      if (mid.length) {
+        overlayIndicesRef.current = mid.map((p) => p.i);
+        setMatchCount(mid.length);
+        setDeepRefineEntity(null);
+        rebuildOverlay(mid);
+      }
+      return;
+    }
+
+    if (!mid.length) return;
+
+    setSearchLoading(true);
+    (async () => {
+      try {
+        const fac = await fetchKgAtlasFacultySearch(dq, 20).catch(() => ({
+          matches: [] as { facultyId: string; name: string; department: string }[],
+          indices: [] as number[],
+        }));
+        if (cancelled) return;
+
+        let facultyId = "";
+        const exact = (fac.matches ?? []).find((f) => f.name.toLowerCase() === dq.toLowerCase());
+        if (exact) facultyId = exact.facultyId;
+        else if ((fac.matches ?? []).length === 1) facultyId = fac.matches![0].facultyId;
+        else {
+          const deptLower = refineSearchQuery.trim().toLowerCase();
+          const inDept = (fac.matches ?? []).find((f) =>
+            (f.department || "").toLowerCase().includes(deptLower)
+            || deptLower.includes((f.department || "").toLowerCase()),
+          );
+          if (inDept) facultyId = inDept.facultyId;
+          else if ((fac.matches ?? [])[0]) facultyId = fac.matches![0].facultyId;
+        }
+
+        let facIndices: number[] = fac.indices ?? [];
+        if (facultyId) {
+          const res = await fetchKgFacultyAtlasIndices([facultyId]).catch(() => null);
+          if (res?.indices?.length) facIndices = res.indices;
+        }
+
+        const keep = new Set(facIndices.filter((i) => midSet.has(i)));
+        const points = mid.filter((p) => keep.has(p.i));
+        overlayIndicesRef.current = points.map((p) => p.i);
+        setMatchCount(points.length);
+        setDeepRefineEntity("faculty");
+        rebuildOverlay(points);
+      } catch {
+        if (cancelled) return;
+        overlayIndicesRef.current = mid.map((p) => p.i);
+        setMatchCount(mid.length);
+        setDeepRefineEntity(null);
+        rebuildOverlay(mid);
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [deepRefineSearchQuery, refineSearchQuery, midEpoch, rebuildOverlay]);
+
+  // Refine suggestions:
+  //  - after theme (no dept yet): departments + faculty in primary results
+  //  - after department (level 2): professors in that department (level 3)
   useEffect(() => {
     if (!suggestOpen || !hasSearched || !basePointsRef.current.length) {
       setRefineItems([]);
@@ -869,12 +1531,25 @@ export default function ResearchAtlasTiles() {
     const rq = query.trim().toLowerCase();
     const base = basePointsRef.current;
     const baseSet = baseIndicesRef.current;
+    const midSet = midIndicesRef.current;
+    const scopeSet = midSet.size > 0 ? midSet : baseSet;
+    const deptLevelActive = Boolean(refineSearchQuery.trim()) && refineEntity === "department";
+    const primaryIsDepartment = primaryEntity === "department" && !refineSearchQuery.trim();
+    const facultyLevel = deptLevelActive || primaryIsDepartment;
+    const deptName = deptLevelActive
+      ? refineSearchQuery.trim()
+      : primaryIsDepartment
+        ? searchQuery.trim()
+        : "";
+    const deptLower = deptName.toLowerCase();
 
     const deptCounts = new Map<string, number>();
-    for (const p of base) {
-      const name = (p.department || "").trim() || "Unassigned";
-      if (rq && !name.toLowerCase().includes(rq)) continue;
-      deptCounts.set(name, (deptCounts.get(name) ?? 0) + 1);
+    if (!facultyLevel) {
+      for (const p of base) {
+        const name = (p.department || "").trim() || "Unassigned";
+        if (rq && !name.toLowerCase().includes(rq)) continue;
+        deptCounts.set(name, (deptCounts.get(name) ?? 0) + 1);
+      }
     }
     const deptItems: SuggestItem[] = [...deptCounts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -887,30 +1562,62 @@ export default function ResearchAtlasTiles() {
       }));
 
     (async () => {
-      if (!rq) {
-        if (!cancelled) setRefineItems(deptItems);
-        return;
-      }
       try {
+        if (facultyLevel) {
+          if (deepRefineSearchQuery.trim()) {
+            if (!cancelled) setRefineItems([]);
+            return;
+          }
+          const allFac = await fetchKgFacultyIndex().catch(() => []);
+          if (cancelled) return;
+          const inDept = allFac.filter((f) => {
+            const fd = (f.department || "").trim().toLowerCase();
+            if (!fd || !deptLower) return false;
+            if (fd !== deptLower && !fd.includes(deptLower) && !deptLower.includes(fd)) return false;
+            if (rq && !f.name.toLowerCase().includes(rq)) return false;
+            return true;
+          });
+          const withCounts: SuggestItem[] = [];
+          await Promise.all(inDept.slice(0, 30).map(async (match) => {
+            try {
+              const res = await fetchKgFacultyAtlasIndices([match.facultyId]);
+              const n = (res.indices ?? []).filter((i) => scopeSet.has(i)).length;
+              if (n > 0) {
+                withCounts.push({
+                  group: "faculty",
+                  label: match.name,
+                  sub: match.department || deptName,
+                  count: n,
+                });
+              }
+            } catch { /* skip */ }
+          }));
+          if (!cancelled) {
+            setRefineItems(withCounts.sort((a, b) => b.count - a.count).slice(0, 12));
+          }
+          return;
+        }
+
+        if (!rq) {
+          if (!cancelled) setRefineItems(deptItems);
+          return;
+        }
+
         const fac = await fetchKgAtlasFacultySearch(rq, 20).catch(() => ({ matches: [], indices: [] as number[] }));
         if (cancelled) return;
-        const facItems: SuggestItem[] = [];
-        for (const f of fac.matches ?? []) {
-          facItems.push({
-            group: "faculty",
-            label: f.name,
-            sub: f.department || "in current results",
-            count: f.paperCount ?? 0,
-          });
-        }
         const withCounts: SuggestItem[] = [];
-        await Promise.all(facItems.slice(0, 10).map(async (item) => {
-          const match = (fac.matches ?? []).find((f) => f.name === item.label);
-          if (!match) return;
+        await Promise.all((fac.matches ?? []).slice(0, 10).map(async (match) => {
           try {
             const res = await fetchKgFacultyAtlasIndices([match.facultyId]);
             const n = (res.indices ?? []).filter((i) => baseSet.has(i)).length;
-            if (n > 0) withCounts.push({ ...item, count: n, sub: match.department || "in current results" });
+            if (n > 0) {
+              withCounts.push({
+                group: "faculty",
+                label: match.name,
+                sub: match.department || "in current results",
+                count: n,
+              });
+            }
           } catch { /* skip */ }
         }));
         if (!cancelled) {
@@ -924,7 +1631,10 @@ export default function ResearchAtlasTiles() {
       }
     })();
     return () => { cancelled = true; };
-  }, [suggestOpen, query, hasSearched, baseMatchCount]);
+  }, [
+    suggestOpen, query, hasSearched, baseMatchCount, midEpoch,
+    primaryEntity, searchQuery, refineSearchQuery, refineEntity, deepRefineSearchQuery,
+  ]);
 
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -1066,7 +1776,8 @@ export default function ResearchAtlasTiles() {
 
       const root = document.createElement("div");
       root.style.cssText = [
-        "pointer-events:none",
+        "pointer-events:auto",
+        "cursor:pointer",
         "user-select:none",
         "transform:translate(-6px,-50%)",
         "display:flex",
@@ -1076,6 +1787,25 @@ export default function ResearchAtlasTiles() {
         "white-space:nowrap",
         "text-align:left",
       ].join(";");
+      root.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (viewOnlyRef.current) return;
+        // CSS2D labels sit above the canvas — prefer a paper under the cursor.
+        const paper = pickPaperRef.current(ev.clientX, ev.clientY);
+        if (paper) {
+          selectPaperRef.current(paper);
+          return;
+        }
+        onThemeLabelClickRef.current(themeName);
+      });
+      root.addEventListener("mousemove", (ev) => {
+        if (viewOnlyRef.current) return;
+        const paper = pickPaperRef.current(ev.clientX, ev.clientY);
+        hoverPaperRef.current(paper, ev.clientX, ev.clientY);
+      });
+      root.addEventListener("mouseleave", () => {
+        hoverPaperRef.current(null, 0, 0);
+      });
 
       const titleEl = document.createElement("span");
       titleEl.dataset.theme = themeName;
@@ -1146,6 +1876,7 @@ export default function ResearchAtlasTiles() {
         root,
         titleEl,
         countEl,
+        obj,
         line,
         tip,
         fullCount: anchor.count,
@@ -1153,22 +1884,181 @@ export default function ResearchAtlasTiles() {
       });
     });
 
+    // Domain cluster labels — one per domain anchor, grouped by parent theme.
+    // Hidden until the user drills into a theme (see syncDrillLabels). Each
+    // domain gets a distinct hue so the sub-clusters read as separate groups.
+    const labelByDomain = new Map<string, DomainLabelEntry[]>();
+    const domainTips: THREE.Mesh[] = [];
+    const anchorsByTheme = new Map<string, typeof dict.domainAnchors>();
+    for (const a of dict.domainAnchors) {
+      if (!a.domain || !a.theme) continue;
+      const list = anchorsByTheme.get(a.theme) ?? [];
+      list.push(a);
+      anchorsByTheme.set(a.theme, list);
+    }
+    for (const [themeName, anchors] of anchorsByTheme) {
+      const sorted = [...anchors].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+      const entries: DomainLabelEntry[] = [];
+      sorted.forEach((anchor, di) => {
+        const color = `hsl(${(di * 47) % 360}, 72%, 66%)`;
+        const dist = Math.hypot(anchor.x, anchor.y, anchor.z) || 1;
+        const nx = anchor.x / dist;
+        const ny = anchor.y / dist;
+        const nz = anchor.z / dist;
+        const labelDist = dist + 0.3;
+        const stagger = ((di % 6) - 2.5) * 0.06;
+        let tx = -nz;
+        let ty = 0;
+        let tz = nx;
+        const tl = Math.hypot(tx, ty, tz) || 1;
+        tx = (tx / tl) * stagger;
+        ty = (ty / tl) * stagger;
+        tz = (tz / tl) * stagger;
+
+        const dRoot = document.createElement("div");
+        dRoot.style.cssText = [
+          "pointer-events:auto",
+          "cursor:pointer",
+          "user-select:none",
+          "transform:translate(-6px,-50%)",
+          "display:none",
+          "opacity:0",
+          "flex-direction:column",
+          "align-items:flex-start",
+          "gap:1px",
+          "white-space:nowrap",
+          "text-align:left",
+        ].join(";");
+        const dTheme = themeName;
+        const dDomain = anchor.domain;
+        dRoot.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          if (viewOnlyRef.current) return;
+          // Prefer papers under the label so filtration/drill never traps clicks.
+          const paper = pickPaperRef.current(ev.clientX, ev.clientY);
+          if (paper) {
+            selectPaperRef.current(paper);
+            return;
+          }
+          onDomainLabelClickRef.current(dTheme, dDomain);
+        });
+        dRoot.addEventListener("mousemove", (ev) => {
+          if (viewOnlyRef.current) return;
+          const paper = pickPaperRef.current(ev.clientX, ev.clientY);
+          hoverPaperRef.current(paper, ev.clientX, ev.clientY);
+        });
+        dRoot.addEventListener("mouseleave", () => {
+          hoverPaperRef.current(null, 0, 0);
+        });
+
+        const dTitle = document.createElement("span");
+        dTitle.title = anchor.domain;
+        dTitle.style.cssText = [
+          "display:block",
+          "font-size:11px",
+          "font-weight:600",
+          `color:${color}`,
+          "line-height:1.2",
+          "letter-spacing:0.01em",
+          "text-shadow:0 0 8px rgba(0,0,0,0.95),0 1px 3px rgba(0,0,0,0.9)",
+        ].join(";");
+        dTitle.textContent =
+          anchor.domain.length > 30 ? `${anchor.domain.slice(0, 29)}…` : anchor.domain;
+
+        const dCount = document.createElement("span");
+        dCount.style.cssText = [
+          "display:block",
+          "font-size:9px",
+          "color:#94a3b8",
+          "font-weight:500",
+          "line-height:1.15",
+          "text-shadow:0 0 6px rgba(0,0,0,0.95),0 1px 2px rgba(0,0,0,0.85)",
+        ].join(";");
+        dCount.textContent = formatThemeCountLabel(anchor.count ?? 0);
+
+        dRoot.appendChild(dTitle);
+        dRoot.appendChild(dCount);
+
+        const dCluster = new THREE.Vector3(anchor.x, anchor.y, anchor.z);
+        const dLabelAt = new THREE.Vector3(
+          nx * labelDist + tx,
+          ny * labelDist + ty,
+          nz * labelDist + tz,
+        );
+        const dLine = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([dCluster, dLabelAt]),
+          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false }),
+        );
+        dLine.renderOrder = 4;
+        dLine.visible = false;
+
+        const dTip = new THREE.Mesh(
+          new THREE.SphereGeometry(0.016, 10, 10),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+            depthTest: false,
+          }),
+        );
+        dTip.position.copy(dCluster);
+        dTip.renderOrder = 4;
+        dTip.visible = false;
+        dTip.userData.isDomainTip = true;
+        dTip.userData.theme = themeName;
+        dTip.userData.domain = anchor.domain;
+
+        const dObj = new CSS2DObject(dRoot);
+        dObj.visible = false;
+        dObj.position.copy(dLabelAt);
+        scene.add(dObj);
+        scene.add(dLine);
+        scene.add(dTip);
+        labelObjs.push(dObj);
+        labelExtras.push(dLine, dTip);
+        domainTips.push(dTip);
+        entries.push({
+          root: dRoot,
+          titleEl: dTitle,
+          countEl: dCount,
+          obj: dObj,
+          line: dLine,
+          tip: dTip,
+          theme: themeName,
+          domain: anchor.domain,
+        });
+      });
+      labelByDomain.set(themeName, entries);
+    }
+
     const raycaster = new THREE.Raycaster();
     // Larger threshold so sparse filtered paper dots remain easy to click.
     raycaster.params.Points = { threshold: 0.08 };
     const mouse = new THREE.Vector2();
     const themeTips = Array.from(labelByTheme.values()).map((e) => e.tip);
+    const allTips = [...themeTips, ...domainTips];
 
-    const pickThemeTip = (clientX: number, clientY: number): string | null => {
-      if (!themesClickableRef.current) return null;
+    // Pick the nearest visible cluster tip (theme when not drilled, domain when
+    // drilled). Visibility gates which set is active, so both share one raycast.
+    const pickTip = (
+      clientX: number,
+      clientY: number,
+    ): { kind: "theme" | "domain"; theme: string; domain: string } | null => {
+      if (viewOnlyRef.current) return null;
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
-      const hits = raycaster.intersectObjects(themeTips, false);
+      const hits = raycaster.intersectObjects(allTips, false);
       for (const hit of hits) {
-        if (hit.object.userData?.isThemeTip && hit.object.visible) {
-          return String(hit.object.userData.theme || "");
+        if (!hit.object.visible) continue;
+        const ud = hit.object.userData ?? {};
+        if (ud.isDomainTip) {
+          return { kind: "domain", theme: String(ud.theme || ""), domain: String(ud.domain || "") };
+        }
+        if (ud.isThemeTip) {
+          return { kind: "theme", theme: String(ud.theme || ""), domain: "" };
         }
       }
       return null;
@@ -1182,22 +2072,28 @@ export default function ResearchAtlasTiles() {
 
       // While a filter is active the base cloud is hidden — pick from the overlay.
       if (overlay.visible && overlayPointsRef.current.length) {
-        raycaster.params.Points = { threshold: 0.1 };
+        // Generous threshold: filtered/drilled dots are often sparse on screen.
+        raycaster.params.Points = { threshold: 0.16 };
         const hits = raycaster.intersectObject(overlay);
         raycaster.params.Points = { threshold: 0.08 };
         if (hits.length && hits[0].index != null) {
           const p = overlayPointsRef.current[hits[0].index];
           if (p) {
+            // While drilled the point is drawn at its laid-out cluster position,
+            // so the marker must use that (not the original) coordinate.
+            const laid = drillThemeRef.current
+              ? drillLayoutRef.current?.posById.get(p.i)
+              : undefined;
             return {
               i: p.i,
               id: p.id,
               title: p.title || "",
               theme: p.theme,
-              domain: "",
+              domain: p.domain || "",
               citations: 0,
-              x: p.x,
-              y: p.y,
-              z: p.z,
+              x: laid ? laid[0] : p.x,
+              y: laid ? laid[1] : p.y,
+              z: laid ? laid[2] : p.z,
             };
           }
         }
@@ -1232,7 +2128,7 @@ export default function ResearchAtlasTiles() {
         return;
       }
       setHovered(null);
-      setCursor(pickThemeTip(ev.clientX, ev.clientY) ? "pointer" : "grab");
+      setCursor(pickTip(ev.clientX, ev.clientY) ? "pointer" : "grab");
     };
     const onClick = (ev: MouseEvent) => {
       if (viewOnlyRef.current) return;
@@ -1245,14 +2141,18 @@ export default function ResearchAtlasTiles() {
         setClusterBreakdown(null);
         return;
       }
-      const theme = pickThemeTip(ev.clientX, ev.clientY);
-      if (theme) onThemeLabelClickRef.current(theme);
+      const tip = pickTip(ev.clientX, ev.clientY);
+      if (tip?.kind === "theme") onThemeLabelClickRef.current(tip.theme);
+      else if (tip?.kind === "domain") onDomainLabelClickRef.current(tip.theme, tip.domain);
     };
     const onLeave = () => { setHovered(null); setCursor("grab"); };
 
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("click", onClick);
     canvas.addEventListener("mouseleave", onLeave);
+
+    // Label DOM sits above the canvas; expose pick so label handlers can prefer papers.
+    pickPaperRef.current = pick;
 
     const onResize = () => {
       const w = container.clientWidth;
@@ -1282,7 +2182,7 @@ export default function ResearchAtlasTiles() {
     engineRef.current = {
       renderer, scene, camera, controls, labelRenderer, tileManager,
       tileGroup: group, overlay, overlayGeom, overlayMat, baseMaterial, marker,
-      labelByTheme, frameId: 0, dirty: true, lastStream: 0,
+      labelByTheme, labelByDomain, frameId: 0, dirty: true, lastStream: 0,
     };
     setAtlasReady(true);
 
@@ -1309,6 +2209,7 @@ export default function ResearchAtlasTiles() {
 
     return () => {
       setAtlasReady(false);
+      pickPaperRef.current = () => null;
       cancelAnimationFrame(engineRef.current?.frameId ?? 0);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("click", onClick);
@@ -1378,6 +2279,7 @@ export default function ResearchAtlasTiles() {
   const closeThemeCluster = useCallback(() => {
     setClusterTheme(null);
     setClusterBreakdown(null);
+    setClusterDomain(null);
     setClusterLoading(false);
   }, []);
 
@@ -1390,19 +2292,21 @@ export default function ResearchAtlasTiles() {
     setClusterTheme(theme);
     setClusterLoading(true);
 
-    // Prefer the exact filtered overlay set (correct for faculty/dept searches).
+    // Overlay set is authoritative under faculty/dept refines; show it immediately,
+    // then merge department→faculty nesting from the server breakdown.
     const local = buildThemeBreakdownFromOverlay(theme, q, overlayPointsRef.current);
-    if (local.totalPapers > 0) {
-      setClusterBreakdown(local);
-      setClusterLoading(false);
-      return;
-    }
+    if (local.totalPapers > 0) setClusterBreakdown(local);
 
     try {
       const data = await fetchKgAtlasClusterBreakdown(theme, q);
-      setClusterBreakdown(data);
+      if (local.totalPapers > 0) {
+        setClusterBreakdown(mergeFacultyIntoBreakdown(local, data));
+      } else {
+        setClusterBreakdown(data);
+      }
     } catch {
-      setClusterBreakdown(local);
+      if (local.totalPapers > 0) setClusterBreakdown(local);
+      else setClusterBreakdown({ theme, query: q, totalPapers: 0, departments: [] });
     } finally {
       setClusterLoading(false);
     }
@@ -1416,36 +2320,180 @@ export default function ResearchAtlasTiles() {
     themesClickableRef.current = themesClickable;
     const e = engineRef.current;
     if (!e) return;
-    syncThemeLabelPresentation(filterActiveRef.current, themesClickable);
+    syncThemeLabelPresentation(filterActiveRef.current, !isViewMode);
+    // Re-apply drill visibility: syncThemeLabelPresentation resets theme labels
+    // to visible, which would otherwise resurface them over the domain labels.
+    syncDrillLabels();
     if (!themesClickable) {
       setClusterTheme(null);
       setClusterBreakdown(null);
+      setClusterDomain(null);
     }
-  }, [themesClickable, atlasReady, syncThemeLabelPresentation]);
+  }, [themesClickable, isViewMode, atlasReady, syncThemeLabelPresentation, syncDrillLabels]);
+
+  // Keep the drill ref + label visibility in sync with the drilled theme.
+  useEffect(() => {
+    drillThemeRef.current = drillTheme;
+    // Restore theme labels to their normal (non-drilled) presentation first;
+    // syncDrillLabels then either hides them again (while drilled) or leaves
+    // them visible (after Clear all), and toggles the domain labels to match.
+    syncThemeLabelPresentation(filterActiveRef.current, !isViewMode);
+    syncDrillLabels();
+  }, [drillTheme, isViewMode, syncThemeLabelPresentation, syncDrillLabels, atlasReady]);
+
+  // The drill layout is built asynchronously (after the point fetch), so re-run
+  // label sync whenever the drilled results settle (matchCount) or the focused
+  // domain changes — this guarantees domain labels appear once the layout exists.
+  useEffect(() => {
+    syncDrillLabels();
+  }, [matchCount, focusedDomain, syncDrillLabels]);
+
+  // Clicking a theme label drills into it: filter to the theme and reveal its
+  // domain sub-clusters. Clicking a domain narrows within the drilled theme.
+  const drillIntoTheme = useCallback((theme: string) => {
+    setSelected(null);
+    setActiveLevel(null);
+    setClusterTheme(null);
+    setClusterBreakdown(null);
+    setSuggestOpen(false);
+    setQuery("");
+    primaryPickRef.current = null;
+    refinePickRef.current = null;
+    setRefineQuery("");
+    setRefineSearchQuery("");
+    focusedDomainRef.current = null;
+    setFocusedDomain(null);
+    setDrillTheme(theme);
+    setSearchQuery(theme);
+  }, []);
+
+  // Isolate a single domain within the drilled theme: hide the other domains'
+  // points + labels, then fly the camera to that cluster. Clicking the same
+  // domain again (or its label) expands back to the full theme.
+  const focusDomain = useCallback((domain: string) => {
+    const e = engineRef.current;
+    const layout = drillLayoutRef.current;
+    if (!e || !layout || !drillThemeRef.current) return;
+
+    const next = focusedDomainRef.current === domain ? null : domain;
+    // Cap at 2 filters: theme + one narrowing. If a narrowing (refine) is already
+    // active, block adding a domain focus as a 3rd filter. Exiting focus is allowed.
+    if (next && (refineSearchQuery.trim() || deepRefineSearchQuery.trim())) {
+      toast.info("You can apply up to 3 filters. Clear a narrowing to explore a domain.");
+      return;
+    }
+    focusedDomainRef.current = next;
+    setFocusedDomain(next);
+    setSelected(null);
+
+    const all = drillPointsRef.current;
+    setMatchCount(
+      next ? all.filter((p) => (p.domain || "Other") === next).length : all.length,
+    );
+    rebuildOverlay(all);
+    syncDrillLabels();
+
+    const c = next ? layout.centers.find((x) => x.domain === next) : null;
+    if (c) {
+      const blobR = Math.min(0.3, 0.08 + Math.sqrt(c.count) * 0.006);
+      e.controls.target.set(c.cx, c.cy, c.cz);
+      e.camera.position.set(c.cx, c.cy, c.cz + Math.max(0.55, blobR * 4));
+    } else {
+      // Expanded back to the whole theme — frame the full ring.
+      e.controls.target.set(0, 0, 0);
+      e.camera.position.set(0, 0, 2.4);
+    }
+    e.controls.update();
+    e.dirty = true;
+    streamNow();
+  }, [rebuildOverlay, syncDrillLabels, streamNow, refineSearchQuery, deepRefineSearchQuery]);
+
+  // Open the right sidebar with a domain's departments + papers — WITHOUT
+  // isolating/zooming the domain on the canvas (that's what focusDomain does).
+  const openDomainCluster = useCallback((domain: string) => {
+    setSelected(null);
+    setClusterDomain(domain);
+    setClusterTheme(drillThemeRef.current);
+    setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), drillPointsRef.current));
+    setClusterLoading(false);
+  }, [searchQuery]);
 
   onThemeLabelClickRef.current = (theme) => {
-    if (!themesClickableRef.current) return;
-    if (searchQuery.trim()) {
-      void openThemeCluster(theme);
-    } else {
-      closeThemeCluster();
+    if (viewOnlyRef.current) return;
+    drillIntoTheme(theme);
+  };
+
+  onDomainLabelClickRef.current = (theme, domain) => {
+    if (viewOnlyRef.current) return;
+    if (drillThemeRef.current === theme && domain) focusDomain(domain);
+  };
+
+  selectPaperRef.current = (paper) => {
+    setSelected(paper);
+    setActiveLevel(null);
+    setClusterTheme(null);
+    setClusterBreakdown(null);
+  };
+
+  hoverPaperRef.current = (paper, clientX, clientY) => {
+    if (viewOnlyRef.current) {
+      setHovered(null);
+      setCursor("grab");
+      return;
     }
+    const container = containerRef.current;
+    if (paper && container) {
+      const rect = container.getBoundingClientRect();
+      setTooltipPos({ x: clientX - rect.left, y: clientY - rect.top });
+      setHovered(paper);
+      setCursor("pointer");
+      return;
+    }
+    setHovered(null);
+    setCursor("grab");
   };
 
   const clearSearch = () => {
     setQuery(""); setSearchQuery("");
     setRefineQuery(""); setRefineSearchQuery("");
+    setDeepRefineQuery(""); setDeepRefineSearchQuery("");
+    setRefineEntity(null);
+    setDeepRefineEntity(null);
+    deepRefinePickRef.current = null;
+    refinePickRef.current = null;
+    midPointsRef.current = [];
+    midIndicesRef.current = new Set();
     setActiveLevel(null);
     setSelected(null); setHovered(null); setSuggestOpen(false);
     setFilterThemeCounts([]);
+    setDrillDomainCounts([]);
+    setDrillTheme(null);
+    focusedDomainRef.current = null;
+    setFocusedDomain(null);
+    drillLayoutRef.current = null;
+    drillPointsRef.current = [];
     closeThemeCluster();
+  };
+
+  const clearDeepRefine = () => {
+    deepRefinePickRef.current = null;
+    setDeepRefineQuery("");
+    setDeepRefineSearchQuery("");
+    setDeepRefineEntity(null);
+    setQuery("");
   };
 
   const clearRefine = () => {
     refinePickRef.current = null;
+    deepRefinePickRef.current = null;
     setRefineQuery("");
     setRefineSearchQuery("");
     setRefineEntity(null);
+    setDeepRefineQuery("");
+    setDeepRefineSearchQuery("");
+    setDeepRefineEntity(null);
+    midPointsRef.current = [];
+    midIndicesRef.current = new Set();
     setQuery("");
   };
 
@@ -1470,6 +2518,7 @@ export default function ResearchAtlasTiles() {
     const fromOverlay = overlayPointsRef.current.find((p) => p.i === paper.i);
     setClusterTheme(null);
     setClusterBreakdown(null);
+    setClusterDomain(null);
     setSelected({
       ...paper,
       id: fromOverlay?.id || paper.id,
@@ -1542,9 +2591,9 @@ export default function ResearchAtlasTiles() {
       {!isViewMode && (
       <header className="absolute top-0 inset-x-0 z-20 pointer-events-none">
         <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-52 sm:pr-64">
-          <div ref={searchBoxRef} className="flex-1 max-w-3xl mx-auto pointer-events-auto relative">
+          <div ref={searchBoxRef} className="flex-1 max-w-3xl mx-auto relative pointer-events-none">
             <form
-              className="relative flex items-center rounded-xl border border-slate-700/70 bg-slate-900/90 p-1.5 shadow-lg backdrop-blur-md"
+              className="relative flex items-center rounded-xl border border-slate-700/70 bg-slate-900/90 p-1.5 shadow-lg backdrop-blur-md pointer-events-auto"
               onSubmit={(ev) => {
                 ev.preventDefault();
                 submitSearch();
@@ -1554,7 +2603,8 @@ export default function ResearchAtlasTiles() {
               <Input
                 value={query}
                 onChange={(e) => {
-                  if (hasSearched) refinePickRef.current = null;
+                  if (deepRefineSearchQuery.trim()) deepRefinePickRef.current = null;
+                  else if (hasSearched) refinePickRef.current = null;
                   else primaryPickRef.current = null;
                   setQuery(e.target.value);
                   setSuggestOpen(true);
@@ -1566,9 +2616,15 @@ export default function ResearchAtlasTiles() {
                 aria-expanded={suggestOpen}
                 aria-autocomplete="list"
                 placeholder={
-                  hasSearched
-                    ? `Narrow within “${searchQuery.trim()}”…`
-                    : "Search faculty, department, theme, domain, topic, or paper…"
+                  deepRefineSearchQuery.trim()
+                    ? "Clear a filter to narrow further…"
+                    : refineSearchQuery.trim() && refineEntity === "department"
+                      ? `Narrow to a professor in “${refineSearchQuery.trim()}”…`
+                      : hasSearched
+                        ? primaryEntity === "department"
+                          ? `Narrow to a professor in “${searchQuery.trim()}”…`
+                          : `Narrow within “${searchQuery.trim()}”…`
+                        : "Search faculty, department, theme, domain, topic, or paper…"
                 }
                 className="h-11 border-0 bg-transparent pl-10 pr-20 text-sm text-white shadow-none placeholder:text-slate-400 focus-visible:ring-0"
               />
@@ -1593,20 +2649,32 @@ export default function ResearchAtlasTiles() {
             </form>
 
             {suggestOpen && !loading && (
-              <div className="absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md z-50">
+              <div className="absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md z-50 pointer-events-auto">
                 <p className="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
                   {hasSearched
-                    ? `Departments & faculty inside “${searchQuery.trim()}”`
+                    ? refineSearchQuery.trim() && refineEntity === "department"
+                      ? `Faculty in “${refineSearchQuery.trim()}”`
+                      : primaryEntity === "department"
+                        ? `Faculty in “${searchQuery.trim()}”`
+                        : `Departments & faculty inside “${searchQuery.trim()}”`
                     : query.trim()
-                      ? `Matching themes, topics, faculty & departments for “${query.trim()}”`
+                      ? `Keywords, papers & more for “${query.trim()}”`
                       : "Top themes, topics, faculty & departments"}
                 </p>
                 {hasSearched ? (
                   !dropdownItems.length ? (
                     <p className="px-3 py-3 text-sm text-slate-500">
-                      {query.trim()
-                        ? "No matching faculty or departments in these results"
-                        : "Type a faculty or department name…"}
+                      {refineSearchQuery.trim() && refineEntity === "department"
+                        ? (query.trim()
+                          ? "No matching faculty in this department"
+                          : "Type a professor name, or pick from the list…")
+                        : primaryEntity === "department"
+                          ? (query.trim()
+                            ? "No matching faculty in this department"
+                            : "No faculty with papers in these results")
+                          : query.trim()
+                            ? "No matching faculty or departments in these results"
+                            : "Type a faculty or department name…"}
                     </p>
                   ) : (
                     dropdownItems.map((item, idx) => {
@@ -1625,6 +2693,8 @@ export default function ResearchAtlasTiles() {
                           <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", badge.className)}>
                             {badge.text}
                           </span>
+                          {item.group === "keyword" && <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
+                          {item.group === "paper" && <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
                           {item.group === "faculty" && <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
                           {item.group === "department" && <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
                           <span className="flex-1 min-w-0">
@@ -1633,7 +2703,9 @@ export default function ResearchAtlasTiles() {
                               <span className="block truncate text-[11px] text-slate-500">{item.sub}</span>
                             )}
                           </span>
-                          <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
+                          {item.group !== "paper" && (
+                            <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
+                          )}
                         </button>
                       );
                     })
@@ -1643,7 +2715,7 @@ export default function ResearchAtlasTiles() {
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading suggestions…
                   </p>
                 ) : !dropdownItems.length ? (
-                  <p className="px-3 py-3 text-sm text-slate-500">No matching themes, topics, faculty, or departments</p>
+                  <p className="px-3 py-3 text-sm text-slate-500">No matching papers, themes, faculty, or departments</p>
                 ) : (
                   dropdownItems.map((item, idx) => {
                     const badge = SUGGEST_BADGE[item.group];
@@ -1661,6 +2733,8 @@ export default function ResearchAtlasTiles() {
                         <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", badge.className)}>
                           {badge.text}
                         </span>
+                        {item.group === "keyword" && <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
+                        {item.group === "paper" && <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
                         {item.group === "faculty" && <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
                         {item.group === "department" && <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
                         <span className="flex-1 min-w-0">
@@ -1669,7 +2743,9 @@ export default function ResearchAtlasTiles() {
                             <span className="block truncate text-[11px] text-slate-500">{item.sub}</span>
                           )}
                         </span>
-                        <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
+                        {item.group !== "paper" && (
+                          <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
+                        )}
                       </button>
                     );
                   })
@@ -1678,9 +2754,13 @@ export default function ResearchAtlasTiles() {
             )}
 
             {hasSearched && (
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 pointer-events-auto">
                 <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {refineSearchQuery.trim() ? "Narrowing:" : "Searching:"}
+                  {refineSearchQuery.trim()
+                    ? "Narrowing:"
+                    : drillTheme
+                      ? "Exploring theme:"
+                      : "Searching:"}
                 </span>
                 <span
                   title={searchQuery.trim()}
@@ -1698,7 +2778,12 @@ export default function ResearchAtlasTiles() {
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                     <span
                       title={refineSearchQuery.trim()}
-                      className="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
+                      className={cn(
+                        "inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md px-3 py-1 text-xs font-medium shadow-sm",
+                        deepRefineSearchQuery.trim()
+                          ? "bg-slate-700 text-slate-100"
+                          : "bg-blue-600 text-white",
+                      )}
                     >
                       <span className="truncate">{refineSearchQuery.trim()}</span>
                       <button
@@ -1706,6 +2791,44 @@ export default function ResearchAtlasTiles() {
                         onClick={clearRefine}
                         className="rounded-full p-0.5 hover:bg-white/20"
                         aria-label={`Remove refinement ${refineSearchQuery.trim()}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </>
+                )}
+                {deepRefineSearchQuery.trim() && (
+                  <>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span
+                      title={deepRefineSearchQuery.trim()}
+                      className="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
+                    >
+                      <span className="truncate">{deepRefineSearchQuery.trim()}</span>
+                      <button
+                        type="button"
+                        onClick={clearDeepRefine}
+                        className="rounded-full p-0.5 hover:bg-white/20"
+                        aria-label={`Remove faculty filter ${deepRefineSearchQuery.trim()}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </>
+                )}
+                {drillTheme && focusedDomain && (
+                  <>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span
+                      title={focusedDomain}
+                      className="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
+                    >
+                      <span className="truncate">{focusedDomain}</span>
+                      <button
+                        type="button"
+                        onClick={() => focusDomain(focusedDomain)}
+                        className="rounded-full p-0.5 hover:bg-white/20"
+                        aria-label={`Exit domain ${focusedDomain}`}
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -1732,47 +2855,81 @@ export default function ResearchAtlasTiles() {
       </header>
       )}
 
-      {!isViewMode && filterThemeCounts.length > 0 && searchQuery.trim() && (
+      {!isViewMode && searchQuery.trim() && (drillTheme
+        ? drillDomainCounts.length > 0
+        : filterThemeCounts.length > 0) && (
         <aside
           className="absolute bottom-4 left-4 z-30 w-[min(100%-2rem,280px)] max-h-[min(42vh,320px)] flex flex-col rounded-xl border border-slate-700/70 bg-slate-950/90 shadow-2xl backdrop-blur-md overflow-hidden"
-          aria-label="Matched themes"
+          aria-label={drillTheme ? "Domains in theme" : "Matched themes"}
         >
           <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-700/60">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Themes ({filterThemeCounts.length})
+              {drillTheme ? `Domains (${drillDomainCounts.length})` : `Themes (${filterThemeCounts.length})`}
             </p>
             <p className="text-[10px] text-slate-300 font-medium">
               {formatCount(matchCount)} papers
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-1">
-            {filterThemeCounts.map(({ theme, count, color }) => (
-              <button
-                key={theme}
-                type="button"
-                onClick={() => void openThemeCluster(theme)}
-                title={`Open departments in ${theme}`}
-                className={cn(
-                  "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70",
-                  clusterTheme === theme
-                    ? "border-slate-500 bg-slate-800/60"
-                    : "border-transparent hover:border-slate-600",
-                )}
-              >
-                <span
-                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold leading-snug" style={{ color }}>
-                    {themeDisplayName(theme)}
-                  </span>
-                  <span className="mt-0.5 block text-[11px] text-slate-400">
-                    ({formatCount(count)} papers)
-                  </span>
-                </span>
-              </button>
-            ))}
+            {drillTheme
+              ? drillDomainCounts.map(({ domain, count, hue }) => {
+                  const color = `hsl(${hue}, 70%, 62%)`;
+                  const active = clusterDomain === domain;
+                  return (
+                    <button
+                      key={domain}
+                      type="button"
+                      onClick={() => openDomainCluster(domain)}
+                      title={`Show departments in ${domain}`}
+                      className={cn(
+                        "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70",
+                        active
+                          ? "border-slate-500 bg-slate-800/60"
+                          : "border-transparent hover:border-slate-600",
+                      )}
+                    >
+                      <span
+                        className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold leading-snug" style={{ color }}>
+                          {domain}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-slate-400">
+                          ({formatCount(count)} papers)
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              : filterThemeCounts.map(({ theme, count, color }) => (
+                  <button
+                    key={theme}
+                    type="button"
+                    onClick={() => void openThemeCluster(theme)}
+                    title={`Open departments in ${theme}`}
+                    className={cn(
+                      "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70",
+                      clusterTheme === theme
+                        ? "border-slate-500 bg-slate-800/60"
+                        : "border-transparent hover:border-slate-600",
+                    )}
+                  >
+                    <span
+                      className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-semibold leading-snug" style={{ color }}>
+                        {themeDisplayName(theme)}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-slate-400">
+                        ({formatCount(count)} papers)
+                      </span>
+                    </span>
+                  </button>
+                ))}
           </div>
         </aside>
       )}
@@ -1811,6 +2968,7 @@ export default function ResearchAtlasTiles() {
       {clusterTheme && !isViewMode && (
         <ThemeClusterPanel
           theme={clusterTheme}
+          domain={clusterDomain}
           query={searchQuery.trim()}
           breakdown={clusterBreakdown}
           loading={clusterLoading}

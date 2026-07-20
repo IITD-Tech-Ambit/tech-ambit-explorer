@@ -99,7 +99,6 @@ const TaxonomyBrowse = () => {
         }
         return sanitized;
     }, [departmentsQuery.data?.departments]);
-    const droppedDepartmentCount = (departmentsQuery.data?.departments?.length ?? 0) - sanitizedDepartments.length;
     const departmentCodeLookup = useMemo(() => {
         const lookup = new Map<string, string>();
         for (const dept of sanitizedDepartments) {
@@ -276,7 +275,7 @@ const TaxonomyBrowse = () => {
                                             : level === "domains" ? "Filter domains by name…"
                                             : "Filter sub-domains by name…"
                                         }
-                                        className="pl-11 pr-10 h-12 rounded-full border-2 bg-background shadow-sm"
+                                        className="pl-11 pr-10 h-11 rounded-xl border border-border/80 bg-background shadow-sm focus-visible:ring-1 focus-visible:ring-primary/30"
                                     />
                                     {nodeFilter && (
                                         <button
@@ -296,13 +295,11 @@ const TaxonomyBrowse = () => {
                                     updateParams({ department: value === ALL_DEPARTMENTS ? undefined : value })
                                 }
                             >
-                                <SelectTrigger className="h-12 w-full sm:w-[280px] shrink-0 rounded-full border-2 bg-background shadow-sm">
-                                    <span className="inline-flex items-center gap-2 truncate">
-                                        <Building2 className="w-4 h-4 shrink-0 text-muted-foreground" />
-                                        <SelectValue placeholder="All departments" />
-                                    </span>
+                                <SelectTrigger className="h-11 w-full sm:w-[260px] shrink-0 gap-2 rounded-xl border border-border/80 bg-background shadow-sm hover:border-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0">
+                                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <SelectValue placeholder="All departments" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-80">
+                                <SelectContent className="max-h-80 rounded-xl">
                                     <SelectItem value={ALL_DEPARTMENTS}>All departments</SelectItem>
                                     {sanitizedDepartments.map((d) => (
                                         <SelectItem key={d.code} value={d.code}>{d.name}</SelectItem>
@@ -313,11 +310,6 @@ const TaxonomyBrowse = () => {
                         {departmentsQuery.isError && (
                             <p className="text-xs text-muted-foreground">
                                 Department filters are temporarily unavailable. Browse by area still works.
-                            </p>
-                        )}
-                        {!departmentsQuery.isError && droppedDepartmentCount > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                                Skipped {droppedDepartmentCount} invalid department entr{droppedDepartmentCount === 1 ? "y" : "ies"} from API data.
                             </p>
                         )}
                     </div>
