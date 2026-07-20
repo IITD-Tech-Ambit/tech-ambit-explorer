@@ -312,18 +312,36 @@ const SourceItem = ({
 
   const content = (
     <div className="group/item flex items-start gap-3 px-4 py-3 hover:bg-primary/[0.03] transition-colors duration-150">
-      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center mt-0.5 ring-1 ring-primary/15">
+      <span
+        className={`flex-shrink-0 w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center mt-0.5 ring-1 ${
+          isIP
+            ? "bg-accent/10 text-accent ring-accent/15"
+            : "bg-primary/10 text-primary ring-primary/15"
+        }`}
+      >
         {source.index}
       </span>
 
       <div className="flex-1 min-w-0 space-y-1.5">
-        <p className="text-[12px] font-medium text-foreground leading-snug line-clamp-2 group-hover/item:text-primary transition-colors duration-150">
+        <p
+          className={`text-[12px] font-medium text-foreground leading-snug line-clamp-2 transition-colors duration-150 ${
+            isIP ? "group-hover/item:text-accent" : "group-hover/item:text-primary"
+          }`}
+        >
           {source.title}
         </p>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {isIP && source.document_type && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide text-secondary-foreground bg-secondary/70 flex-shrink-0">
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide flex-shrink-0"
+              style={{
+                background: "hsl(var(--accent)/0.12)",
+                color: "hsl(var(--accent))",
+                border: "1px solid hsl(var(--accent)/0.22)",
+              }}
+            >
+              <Lightbulb className="w-2.5 h-2.5 flex-shrink-0" />
               {source.document_type}
             </span>
           )}
@@ -355,7 +373,7 @@ const SourceItem = ({
 
       
       {isIP ? (
-        <Lightbulb className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
+        <Lightbulb className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-accent flex-shrink-0 mt-0.5 transition-colors duration-150" />
       ) : href && (
         <ExternalLink className="w-3 h-3 text-muted-foreground/25 group-hover/item:text-primary/60 flex-shrink-0 mt-0.5 transition-colors duration-150" />
       )}
@@ -387,6 +405,7 @@ const SourcesBlock = ({
   onOpenIPSource?: (source: ChatSource) => void;
 }) => {
   const [open, setOpen] = useState(false);
+  const ipCount = sources.filter(isIPSource).length;
   return (
     <div
       className="rounded-xl overflow-hidden"
@@ -415,6 +434,9 @@ const SourcesBlock = ({
         </div>
         <span className="text-[11px] font-semibold text-foreground/80 flex-1">
           {sources.length} Source{sources.length !== 1 ? "s" : ""}
+          {ipCount > 0 && (
+            <span className="text-muted-foreground/50 font-medium"> · {ipCount} Patent{ipCount !== 1 ? "s" : ""}</span>
+          )}
         </span>
         <ChevronDown
           className={`w-3.5 h-3.5 text-muted-foreground/50 transition-transform duration-200 ${
