@@ -3,13 +3,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
-    FileText, TrendingUp,
+    FileText, TrendingUp, FileBadge2,
 } from "lucide-react";
 import type { ElementType } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useFacultyByKerberos, useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
+import { useFacultyPatents } from "@/lib/api/hooks/useIPSearch";
 import PublicationTimeline from "@/components/PublicationTimeline";
+import PatentTimeline from "@/components/PatentTimeline";
 import { getDepartmentUrl } from "@/lib/deptUrls";
 
 const kerberosFromEmail = (email?: string) =>
@@ -33,6 +35,7 @@ const FacultyProfile = () => {
 
     const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyByKerberos(kerberos);
     const { data: summaryData, isLoading: isSummaryLoading } = useFacultyResearchSummary(kerberos);
+    const { data: patentsData, isLoading: isPatentsLoading } = useFacultyPatents(kerberos, faculty?.name ?? "");
 
     if (isFacultyLoading) {
         return (
@@ -82,6 +85,15 @@ const FacultyProfile = () => {
 
     const scopusId = summaryData?.scopusId || faculty.scopusId;
     const googleScholarId = faculty.googleScholarId;
+    const patents = patentsData?.results ?? [];
+    const totalPatents = patentsData?.pagination?.total ?? 0;
+    // While the patents fetch is still in flight we don't yet know whether there'll be a second
+    // column, so optimistically reserve the 2-col layout (a loading placeholder briefly occupies
+    // it) rather than flashing 1-col -> 2-col. Once it resolves, collapse to a single full-width
+    // column for Publications when there are genuinely 0 patents — a `grid-cols-2` template
+    // doesn't collapse on its own just because one child renders null, so this has to be driven
+    // from here rather than from PatentTimeline's own empty-state return.
+    const showPatentsColumn = isPatentsLoading || patents.length > 0;
 
     const handleNavigateAuthor = (authorId: string, matchedProfile: string | null, name: string) => {
         if (matchedProfile) {
@@ -207,11 +219,14 @@ const FacultyProfile = () => {
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl">
                                 <BigStatCard icon={Award} label="H-Index" value={hIndex} color="primary" />
                                 <BigStatCard icon={BookOpen} label="Citations" value={citations.toLocaleString()} color="accent" />
                                 {totalPapers > 0 && (
                                     <BigStatCard icon={FileText} label="Papers" value={totalPapers} color="primary" />
+                                )}
+                                {!isPatentsLoading && totalPatents > 0 && (
+                                    <BigStatCard icon={FileBadge2} label="Patents" value={totalPatents} color="accent" />
                                 )}
                             </div>
                         </div>
@@ -221,10 +236,10 @@ const FacultyProfile = () => {
 
             {/* Main Body */}
             <div className="container mx-auto px-4 py-10">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+                <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto">
 
-                    {/* Left Sidebar */}
-                    <div className="lg:col-span-1 space-y-6">
+                    {/* Left Sidebar — a slim fixed-width rail on lg+ so the timelines get most of the width */}
+                    <div className="lg:w-72 lg:flex-shrink-0 space-y-6">
                         {faculty.research_areas && faculty.research_areas.length > 0 && (
                             <SectionCard icon={TrendingUp} title="Research Areas">
                                 <div className="flex flex-wrap gap-1.5">
@@ -275,24 +290,49 @@ const FacultyProfile = () => {
                         )}
                     </div>
 
-                    {/* Right Main Content */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {isSummaryLoading ? (
-                            <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                                <p className="text-sm text-muted-foreground">Loading research data…</p>
+                    {/* Right Main Content — Publications and Patents sit side by side on xl+ when there
+                        are patents to show; the grid itself only claims a 2nd column in that case, so
+                        Publications genuinely spans full width (not just visually, but in the actual
+                        grid template) for the many faculty with 0 patents. */}
+                    <div className="flex-1 min-w-0">
+                        <div className={`grid grid-cols-1 gap-6 items-start ${showPatentsColumn ? "xl:grid-cols-2" : ""}`}>
+                            <div className="space-y-6 min-w-0">
+                                {isSummaryLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                        <p className="text-sm text-muted-foreground">Loading research data…</p>
+                                    </div>
+                                ) : (
+                                    summaryData?.timeline && summaryData.timeline.length > 0 && (
+                                        <PublicationTimeline
+                                            timeline={summaryData.timeline}
+                                            kerberos={kerberos}
+                                            totalYears={summaryData.stats.totalYears}
+                                            yearLimit={summaryData.yearLimit}
+                                            onNavigateAuthor={handleNavigateAuthor}
+                                        />
+                                    )
+                                )}
                             </div>
-                        ) : (
-                            summaryData?.timeline && summaryData.timeline.length > 0 && (
-                                <PublicationTimeline
-                                    timeline={summaryData.timeline}
-                                    kerberos={kerberos}
-                                    totalYears={summaryData.stats.totalYears}
-                                    yearLimit={summaryData.yearLimit}
-                                    onNavigateAuthor={handleNavigateAuthor}
-                                />
-                            )
-                        )}
+
+                            {showPatentsColumn && (
+                                <div className="space-y-6 min-w-0">
+                                    {isPatentsLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                            <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                                            <p className="text-sm text-muted-foreground">Loading patent record…</p>
+                                        </div>
+                                    ) : (
+                                        <PatentTimeline
+                                            documents={patents}
+                                            kerberos={kerberos}
+                                            facultyName={faculty.name}
+                                            pagination={patentsData?.pagination ?? null}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

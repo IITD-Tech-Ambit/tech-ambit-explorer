@@ -80,12 +80,12 @@ const Directory = () => {
         <div className="min-h-screen page-bg">
             <Navigation />
 
-            <section className="gradient-subtle pt-32 pb-16 section-bg">
+            <section className="gradient-subtle pt-10 md:pt-14 pb-10 section-bg">
                 <div className="container mx-auto px-4">
-                    <h1 className="text-5xl font-bold mb-4 animate-fade-in">
+                    <h1 className="text-3xl md:text-4xl font-bold mb-3 animate-fade-in">
                         Who We Are
                     </h1>
-                    <p className="text-xl text-muted-foreground mb-8 max-w-3xl animate-slide-up">
+                    <p className="text-base md:text-lg text-muted-foreground mb-6 max-w-2xl animate-slide-up">
                         Connect with our distinguished faculty driving cutting-edge 
                         discoveries at IIT Delhi.
                     </p>
@@ -117,7 +117,7 @@ const Directory = () => {
                     </div>
 
                     {/* Category Filter Tabs */}
-                    <div className="mt-10 animate-slide-up">
+                    <div className="mt-6 animate-slide-up">
                         <div className="flex flex-wrap items-center gap-3">
                             {categoryConfig.map(({ key, label, icon: Icon, description }) => (
                                 <button
@@ -141,7 +141,7 @@ const Directory = () => {
                 </div>
             </section>
 
-            <section className="container mx-auto px-4 py-8">
+            <section className="container mx-auto px-4 pt-8 pb-16">
                 {isSearching && searchData && (
                     <div className="flex items-center justify-between mb-6">
                         <p className="text-sm text-muted-foreground">
@@ -193,9 +193,7 @@ const Directory = () => {
                         </p>
                     </div>
                 )}
-            </section>
 
-            <section className="container mx-auto px-4 pb-20">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-20">
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />

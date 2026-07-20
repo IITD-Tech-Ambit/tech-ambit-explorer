@@ -3,19 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Layers, Compass, Network, Building2, ArrowLeft, Search, X } from "lucide-react";
-import {
-    useTaxonomyDepartments, useTaxonomyThemes, useTaxonomyDomains,
-    useTaxonomySubdomains, useTaxonomyCounts,
-} from "@/lib/api/hooks/useTaxonomy";
-import { rankByPaperCount, type TaxonomyNode } from "@/lib/api/services/taxonomyService";
-import TaxonomyNodeGrid from "@/components/explore/taxonomy/TaxonomyNodeGrid";
-import TaxonomyNodePagination from "@/components/explore/taxonomy/TaxonomyNodePagination";
-import TaxonomySelectionBar, { type SelectionChip } from "@/components/explore/taxonomy/TaxonomySelectionBar";
+import { Building2, Search } from "lucide-react";
+import { useTaxonomyDepartments } from "@/lib/api/hooks/useTaxonomy";
+import TaxonomyFieldPicker from "@/components/explore/taxonomy/TaxonomyFieldPicker";
 import TaxonomyFacultySection from "@/components/explore/taxonomy/TaxonomyFacultySection";
 
 const ALL_DEPARTMENTS = "__ALL__";
@@ -24,31 +17,21 @@ const normalizeNonEmpty = (value: string | null | undefined): string | undefined
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
 };
-// Domains (35 total) get a larger page — a clean multiple of the 4-column
-// dense grid, so every full page fills evenly with no ragged trailing row.
-// Sub-domains max out around 11 per domain, so a smaller page keeps
-// pagination meaningfully usable there instead of never triggering.
-const DOMAINS_PER_PAGE = 20;
-const SUBDOMAINS_PER_PAGE = 8;
 
 /**
- * Browse Research Areas — a guided path through the classified corpus:
- * pick a Thematic Area, then a Domain (and Sub-domain where available), then
- * see the faculty behind that combination. Domain/Sub-domain browsing is
- * always theme-scoped (no direct "all domains" entry), one step at a time.
- * Faculty results resolve to the shared FacultyCard and link to
- * /faculty/:kerberos like the Directory.
+ * Browse Research Areas — a cascading field picker (Thematic Area → Domain,
+ * each choice collapsing into a removable pill), mirroring UQ Experts'
+ * "Browse by fields of research" picker. A single "Browse N experts" action
+ * at the bottom updates in place as the selection deepens — nothing appears
+ * automatically on selection, and results re-hide if the selection changes.
  */
 const TaxonomyBrowse = () => {
     const [searchParams, setSearchParams] = useSearchParams();
 
     const theme = normalizeNonEmpty(searchParams.get("theme"));
     const domain = normalizeNonEmpty(searchParams.get("domain"));
-    const subdomain = normalizeNonEmpty(searchParams.get("subdomain"));
     const department = normalizeNonEmpty(searchParams.get("department"));
     const facultyPage = Math.max(1, parseInt(searchParams.get("fpage") ?? "1", 10) || 1);
-    const domainPage = Math.max(1, parseInt(searchParams.get("dpage") ?? "1", 10) || 1);
-    const subdomainPage = Math.max(1, parseInt(searchParams.get("spage") ?? "1", 10) || 1);
 
     const updateParams = useCallback((updates: Record<string, string | undefined>) => {
         setSearchParams((prev) => {
@@ -57,24 +40,19 @@ const TaxonomyBrowse = () => {
                 if (value === undefined) next.delete(key);
                 else next.set(key, value);
             }
-            // Any filter change resets paging for whichever level(s) it affects
+            // Any filter change resets faculty paging
             if (!("fpage" in updates)) next.delete("fpage");
-            if (!("dpage" in updates)) next.delete("dpage");
-            if (!("spage" in updates)) next.delete("spage");
             return next;
         });
     }, [setSearchParams]);
 
-    const hasSelection = !!(theme || domain || subdomain);
-
-    // Ephemeral client-side filter to narrow the visible node grid (esp. useful
-    // for the 35 domains / 186 sub-domains). Reset whenever the browse context changes.
-    const [nodeFilter, setNodeFilter] = useState("");
-    const filterNodes = useCallback(<T extends TaxonomyNode>(nodes: T[] | undefined): T[] | undefined => {
-        const q = nodeFilter.trim().toLowerCase();
-        if (!q || !nodes) return nodes;
-        return nodes.filter((n) => n.name.toLowerCase().includes(q));
-    }, [nodeFilter]);
+    // Results are an explicit "Browse" action (the single button in the
+    // picker), not automatic on selection — resets whenever the underlying
+    // selection changes, so it has to be clicked again for the new choice.
+    const [revealed, setRevealed] = useState(false);
+    useEffect(() => {
+        setRevealed(false);
+    }, [theme, domain]);
 
     // Data — every call is a precomputed, cached lookup on the backend
     const departmentsQuery = useTaxonomyDepartments();
@@ -109,14 +87,10 @@ const TaxonomyBrowse = () => {
     const canonicalDepartment = department ? departmentCodeLookup.get(department.toLowerCase()) : undefined;
     const selectedDepartmentValue = canonicalDepartment ?? ALL_DEPARTMENTS;
 
-    const themesQuery = useTaxonomyThemes(canonicalDepartment);
-    const domainsQuery = useTaxonomyDomains(theme, canonicalDepartment);
-    const subdomainsQuery = useTaxonomySubdomains(domain, theme, canonicalDepartment);
     const filters = useMemo(
-        () => ({ theme, domain, subdomain, department: canonicalDepartment }),
-        [theme, domain, subdomain, canonicalDepartment]
+        () => ({ theme, domain, department: canonicalDepartment }),
+        [theme, domain, canonicalDepartment]
     );
-    const countsQuery = useTaxonomyCounts(filters, hasSelection);
 
     useEffect(() => {
         if (!searchParams.has("department")) return;
@@ -127,128 +101,19 @@ const TaxonomyBrowse = () => {
         }
     }, [searchParams, department, sanitizedDepartments.length, canonicalDepartment, updateParams]);
 
-    const selectedDomainNode = domainsQuery.data?.domains.find((d) => d.slug === domain);
-    const hasSubdomainsFromDomainCount =
-        selectedDomainNode && typeof selectedDomainNode.subdomain_count === "number"
-            ? selectedDomainNode.subdomain_count > 0
-            : undefined;
-    const hasSubdomainsFromSubdomainQuery = subdomainsQuery.data
-        ? subdomainsQuery.data.subdomains.length > 0
-        : undefined;
-    const domainHasSubdomains = !!domain && (
-        hasSubdomainsFromDomainCount
-        ?? hasSubdomainsFromSubdomainQuery
-        ?? subdomainsQuery.isLoading
-    );
-
-    useEffect(() => {
-        if (!domain || !subdomain) return;
-
-        // Domain is now terminal: stale ?subdomain=... params must collapse to
-        // the domain-level leaf view instead of showing an empty sub-domain page.
-        if (hasSubdomainsFromDomainCount === false) {
-            updateParams({ subdomain: undefined });
-            return;
-        }
-
-        if (subdomainsQuery.isLoading || subdomainsQuery.isError) return;
-
-        const available = subdomainsQuery.data?.subdomains ?? [];
-        if (available.length === 0 || !available.some((item) => item.slug === subdomain)) {
-            updateParams({ subdomain: undefined });
-        }
-    }, [
-        domain,
-        subdomain,
-        hasSubdomainsFromDomainCount,
-        subdomainsQuery.isLoading,
-        subdomainsQuery.isError,
-        subdomainsQuery.data,
-        updateParams,
-    ]);
-
-    // Display names for chips, resolved from already-cached lists
-    const themeName = themesQuery.data?.themes.find((t) => t.slug === theme)?.name;
-    const domainName =
-        domainsQuery.data?.domains.find((d) => d.slug === domain)?.name
-        ?? subdomainsQuery.data?.domain.name;
-    const subdomainName = subdomainsQuery.data?.subdomains.find((s) => s.slug === subdomain)?.name;
-
-    const chips: SelectionChip[] = [
-        theme && {
-            key: "theme", label: "Theme", value: themeName ?? theme,
-            onRemove: () => updateParams({ theme: undefined, domain: undefined, subdomain: undefined }),
-        },
-        domain && {
-            key: "domain", label: "Domain", value: domainName ?? domain,
-            onRemove: () => updateParams({ domain: undefined, subdomain: undefined }),
-        },
-        subdomain && {
-            key: "subdomain", label: "Sub-domain", value: subdomainName ?? subdomain,
-            onRemove: () => updateParams({ subdomain: undefined }),
-        },
-    ].filter(Boolean) as SelectionChip[];
-
-    // Drill level: what the node grid currently shows. Domains/sub-domains are
-    // always theme-scoped — there is no "browse all domains" entry point.
-    // In 2-level taxonomies, a domain with zero sub-domains becomes a leaf.
-    const level: "themes" | "domains" | "subdomains" | "leaf" =
-        (subdomain || (domain && !domainHasSubdomains)) ? "leaf"
-        : domain ? "subdomains"
-        : theme ? "domains"
-        : "themes";
-
-    useEffect(() => {
-        setNodeFilter("");
-    }, [level, department]);
-
-    /**
-     * Slice an already-filtered node list into one page. Clamps the current
-     * page to the valid range itself (rather than resetting the URL on every
-     * keystroke) so narrowing the node-filter text never strands the view on
-     * an empty out-of-range page.
-     */
-    const paginate = useCallback(<T extends TaxonomyNode>(nodes: T[] | undefined, page: number, perPage: number) => {
-        if (!nodes) return { pageItems: undefined, totalPages: 0, currentPage: page };
-        const totalPages = Math.max(1, Math.ceil(nodes.length / perPage));
-        const currentPage = Math.min(page, totalPages);
-        const start = (currentPage - 1) * perPage;
-        return { pageItems: nodes.slice(start, start + perPage), totalPages, currentPage };
-    }, []);
-
-    // Kept short and unconditional — the active theme/domain is already shown
-    // as a removable chip in the selection bar directly below, so repeating
-    // the (potentially long) name here would only truncate awkwardly.
-    const gridTitle =
-        level === "themes" ? "Thematic Areas"
-        : level === "domains" ? "Domains"
-        : level === "subdomains" ? "Sub-domains"
-        : null;
-
-    const visibleCount =
-        level === "themes" ? filterNodes(themesQuery.data?.themes)?.length
-        : level === "domains" ? filterNodes(domainsQuery.data?.domains)?.length
-        : level === "subdomains" ? filterNodes(subdomainsQuery.data?.subdomains)?.length
-        : undefined;
-
-    const selectNode = (key: "theme" | "domain" | "subdomain") => (node: TaxonomyNode) =>
-        updateParams({ [key]: node.slug });
-
     return (
         <div className="page-bg min-h-screen flex flex-col">
             <Navigation />
 
-            {/* Hero */}
             <section className="relative overflow-hidden gradient-subtle section-bg border-b border-border/60">
                 <div className="absolute top-1/4 -left-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute bottom-0 right-0 w-80 h-80 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
-                <div className="relative container mx-auto px-4 py-10 md:py-14">
+                <div className="relative container mx-auto px-4 py-10 md:py-12">
                     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
                         <div className="max-w-2xl">
-                            <h1 className="text-3xl md:text-4xl font-bold mb-3">Browse Research Areas</h1>
+                            <h1 className="text-3xl md:text-4xl font-bold mb-3">Browse by Thematic Area</h1>
                             <p className="text-muted-foreground text-base md:text-lg">
-                                Start with a strategic Thematic Area, drill into a Domain (and
-                                Sub-domain when available), and discover the faculty behind each area.
+                                Filter by Thematic Area and Domain to find the experts working in it.
                             </p>
                         </div>
                         <Button variant="outline" asChild className="self-start md:self-auto">
@@ -259,173 +124,49 @@ const TaxonomyBrowse = () => {
                         </Button>
                     </div>
 
-                    {/* Controls: filter + department row */}
-                    <div className="mt-8 flex flex-col gap-4">
-                        <div className="flex flex-col sm:flex-row items-stretch gap-3">
-                            {/* Only worth a search box once there are enough nodes to scan
-                                through — 9 fixed themes never need it. */}
-                            {level !== "leaf" && level !== "themes" && (
-                                <div className="relative flex-1 min-w-0">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                                    <Input
-                                        value={nodeFilter}
-                                        onChange={(e) => setNodeFilter(e.target.value)}
-                                        placeholder={
-                                            level === "themes" ? "Filter thematic areas by name…"
-                                            : level === "domains" ? "Filter domains by name…"
-                                            : "Filter sub-domains by name…"
-                                        }
-                                        className="pl-11 pr-10 h-11 rounded-xl border border-border/80 bg-background shadow-sm focus-visible:ring-1 focus-visible:ring-primary/30"
-                                    />
-                                    {nodeFilter && (
-                                        <button
-                                            onClick={() => setNodeFilter("")}
-                                            aria-label="Clear filter"
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-muted-foreground hover:bg-muted transition-colors"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-
-                            <Select
-                                value={selectedDepartmentValue}
-                                onValueChange={(value) =>
-                                    updateParams({ department: value === ALL_DEPARTMENTS ? undefined : value })
-                                }
-                            >
-                                <SelectTrigger className="h-11 w-full sm:w-[260px] shrink-0 gap-2 rounded-xl border border-border/80 bg-background shadow-sm hover:border-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0">
-                                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <SelectValue placeholder="All departments" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-80 rounded-xl">
-                                    <SelectItem value={ALL_DEPARTMENTS}>All departments</SelectItem>
-                                    {sanitizedDepartments.map((d) => (
-                                        <SelectItem key={d.code} value={d.code}>{d.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    <div className="mt-8 flex flex-col gap-2">
+                        <Select
+                            value={selectedDepartmentValue}
+                            onValueChange={(value) =>
+                                updateParams({ department: value === ALL_DEPARTMENTS ? undefined : value })
+                            }
+                        >
+                            <SelectTrigger className="h-11 w-full sm:w-[280px] gap-2 rounded-xl border border-border/80 bg-background shadow-sm hover:border-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0">
+                                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <SelectValue placeholder="All departments" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-80 rounded-xl">
+                                <SelectItem value={ALL_DEPARTMENTS}>All departments</SelectItem>
+                                {sanitizedDepartments.map((d) => (
+                                    <SelectItem key={d.code} value={d.code}>{d.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         {departmentsQuery.isError && (
                             <p className="text-xs text-muted-foreground">
-                                Department filters are temporarily unavailable. Browse by area still works.
+                                Department filters are temporarily unavailable. Browsing by area still works.
                             </p>
                         )}
                     </div>
                 </div>
             </section>
 
-            <TaxonomySelectionBar
-                chips={chips}
-                paperCount={countsQuery.data?.paper_count}
-                facultyCount={countsQuery.data?.faculty_count}
-                isCountLoading={countsQuery.isLoading}
-                onClearAll={() => updateParams({ theme: undefined, domain: undefined, subdomain: undefined })}
-            />
+            <main className="container mx-auto px-4 py-10 flex-1 space-y-10">
+                <div className="max-w-6xl mx-auto">
+                    <TaxonomyFieldPicker
+                        department={canonicalDepartment}
+                        selectedTheme={theme}
+                        selectedDomain={domain}
+                        onSelectTheme={(node) => updateParams({ theme: node.slug, domain: undefined })}
+                        onClearTheme={() => updateParams({ theme: undefined, domain: undefined })}
+                        onSelectDomain={(node) => updateParams({ domain: node.slug })}
+                        onClearDomain={() => updateParams({ domain: undefined })}
+                        onBrowse={() => setRevealed(true)}
+                    />
+                </div>
 
-            <main className="container mx-auto px-4 py-10 flex-1 space-y-12">
-                {level !== "leaf" && (
-                    <section aria-label={gridTitle ?? "Research areas"}>
-                        <div className="flex items-center gap-3 mb-5">
-                            {hasSelection && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-2 shrink-0"
-                                    onClick={() =>
-                                        level === "subdomains"
-                                            ? updateParams({ domain: undefined })
-                                            : updateParams({ theme: undefined })
-                                    }
-                                >
-                                    <ArrowLeft className="w-4 h-4" />
-                                </Button>
-                            )}
-                            <h2 className="text-xl font-semibold flex items-center gap-2 min-w-0">
-                                <Compass className="w-5 h-5 shrink-0 text-primary" />
-                                <span className="truncate">{gridTitle}</span>
-                            </h2>
-                            {visibleCount !== undefined && (
-                                <span className="shrink-0 text-sm font-medium text-muted-foreground rounded-full bg-muted px-2.5 py-0.5">
-                                    {visibleCount}
-                                </span>
-                            )}
-                        </div>
-
-                        {level === "themes" && (
-                            <TaxonomyNodeGrid
-                                nodes={rankByPaperCount(themesQuery.data?.themes)}
-                                isLoading={themesQuery.isLoading}
-                                icon={Layers}
-                                onSelect={selectNode("theme")}
-                                useThemeAccents
-                                emptyMessage="No thematic areas found for this department."
-                            />
-                        )}
-                        {level === "domains" && (() => {
-                            const { pageItems, totalPages, currentPage } = paginate(rankByPaperCount(filterNodes(domainsQuery.data?.domains)), domainPage, DOMAINS_PER_PAGE);
-                            return (
-                                <>
-                                    <TaxonomyNodeGrid
-                                        nodes={pageItems}
-                                        isLoading={domainsQuery.isLoading}
-                                        icon={Network}
-                                        onSelect={selectNode("domain")}
-                                        density="dense"
-                                        detailFor={(n) =>
-                                            n.subdomain_count ? `${n.subdomain_count} sub-domains` : undefined
-                                        }
-                                        emptyMessage={nodeFilter ? `No domains match "${nodeFilter}".` : "No domains found for this combination of filters."}
-                                    />
-                                    <TaxonomyNodePagination
-                                        page={currentPage}
-                                        totalPages={totalPages}
-                                        onPageChange={(page) => updateParams({ dpage: String(page) })}
-                                    />
-                                </>
-                            );
-                        })()}
-                        {level === "subdomains" && (() => {
-                            const { pageItems, totalPages, currentPage } = paginate(rankByPaperCount(filterNodes(subdomainsQuery.data?.subdomains)), subdomainPage, SUBDOMAINS_PER_PAGE);
-                            return (
-                                <>
-                                    <TaxonomyNodeGrid
-                                        nodes={pageItems}
-                                        isLoading={subdomainsQuery.isLoading}
-                                        icon={Compass}
-                                        onSelect={selectNode("subdomain")}
-                                        density="dense"
-                                        emptyMessage={nodeFilter ? `No sub-domains match "${nodeFilter}".` : "No sub-domains found for this combination of filters."}
-                                    />
-                                    <TaxonomyNodePagination
-                                        page={currentPage}
-                                        totalPages={totalPages}
-                                        onPageChange={(page) => updateParams({ spage: String(page) })}
-                                    />
-                                </>
-                            );
-                        })()}
-                    </section>
-                )}
-
-                {hasSelection && (
-                    <div className="rounded-3xl bg-muted/40 border border-border/50 p-5 md:p-8">
-                        {level === "leaf" && (domain || subdomain) && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="mb-4 h-8 px-2"
-                                onClick={() =>
-                                    subdomain
-                                        ? updateParams({ subdomain: undefined })
-                                        : updateParams({ domain: undefined })
-                                }
-                            >
-                                <ArrowLeft className="w-4 h-4 mr-1" />
-                                {subdomain ? "Back to sub-domains" : "Back to domains"}
-                            </Button>
-                        )}
+                {revealed && (
+                    <div className="max-w-6xl mx-auto animate-fade-in">
                         <TaxonomyFacultySection
                             filters={filters}
                             page={facultyPage}

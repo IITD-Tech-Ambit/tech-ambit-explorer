@@ -4,7 +4,6 @@ import {
   getTaxonomyDepartments,
   getTaxonomyThemes,
   getTaxonomyDomains,
-  getTaxonomySubdomains,
   getTaxonomyCounts,
   getTaxonomyFaculty,
   getTaxonomyFacultyPapers,
@@ -36,20 +35,11 @@ export function useTaxonomyThemes(department?: string) {
   });
 }
 
-export function useTaxonomyDomains(theme?: string, department?: string) {
+export function useTaxonomyDomains(theme?: string, department?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.taxonomy.domains(theme, department),
     queryFn: () => getTaxonomyDomains({ theme, department }),
-    staleTime: TAXONOMY_STALE_TIME,
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function useTaxonomySubdomains(domain: string | undefined, theme?: string, department?: string) {
-  return useQuery({
-    queryKey: queryKeys.taxonomy.subdomains(domain ?? '', theme, department),
-    queryFn: () => getTaxonomySubdomains(domain!, { theme, department }),
-    enabled: !!domain,
+    enabled,
     staleTime: TAXONOMY_STALE_TIME,
     placeholderData: keepPreviousData,
   });

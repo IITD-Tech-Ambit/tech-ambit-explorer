@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +21,9 @@ interface TaxonomyFacultySectionProps {
 }
 
 const PER_PAGE = 12;
+// The larger of the two rollup-side recommended_count ceilings (theme-only:
+// 48, domain: 12), so the default view never needs a second round trip.
+const INITIAL_PER_PAGE = 48;
 const PAPERS_PREVIEW = 2;
 
 type PapersModalState = {
@@ -106,15 +109,33 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
     const [papersModal, setPapersModal] = useState<PapersModalState>(null);
     const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
 
-    const facultyQuery = useTaxonomyFaculty(filters, page, PER_PAGE);
-    const kerberosPage = facultyQuery.data?.kerberos_list ?? [];
+    // Recommended view (default): show only the statistically-relevant
+    // prefix for this area, no pagination controls. "Show all" flips to the
+    // full paginated list. Reset whenever the browse filters change so a
+    // narrower/broader area doesn't inherit the previous area's expansion.
+    const [showAll, setShowAll] = useState(false);
+    useEffect(() => {
+        setShowAll(false);
+    }, [filters.theme, filters.domain, filters.subdomain, filters.department]);
+
+    const facultyQuery = useTaxonomyFaculty(filters, showAll ? page : 1, showAll ? PER_PAGE : INITIAL_PER_PAGE);
+    const recommendedCount = facultyQuery.data?.recommended_count ?? 0;
+    const total = facultyQuery.data?.faculty_total ?? 0;
+    const kerberosPage = showAll
+        ? facultyQuery.data?.kerberos_list ?? []
+        : (facultyQuery.data?.kerberos_list ?? []).slice(0, recommendedCount);
     const cardsQuery = useTaxonomyFacultyCards(kerberosPage);
 
     const pagination = facultyQuery.data?.pagination;
-    const total = facultyQuery.data?.faculty_total ?? 0;
     const isLoading = facultyQuery.isLoading || (kerberosPage.length > 0 && cardsQuery.isLoading);
+    const canShowAll = !showAll && total > recommendedCount;
 
     const openProfile = (kerberos: string) => navigate(`/faculty/${kerberos}`);
+
+    const revealAll = () => {
+        setShowAll(true);
+        onPageChange(1);
+    };
 
     return (
         <section aria-label="Faculty in this research area">
@@ -123,10 +144,12 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
                     <Users className="w-5 h-5 text-accent" />
                     Faculty
                     {!facultyQuery.isLoading && (
-                        <span className="text-sm font-normal text-muted-foreground">({total})</span>
+                        <span className="text-sm font-normal text-muted-foreground">
+                            ({showAll ? total : recommendedCount}{!showAll && canShowAll ? ` of ${total}` : ""})
+                        </span>
                     )}
                 </h2>
-                {pagination && pagination.total_pages > 1 && (
+                {showAll && pagination && pagination.total_pages > 1 && (
                     <span className="text-sm text-muted-foreground">
                         Page {pagination.page} of {pagination.total_pages}
                     </span>
@@ -175,7 +198,15 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
                         })}
                     </div>
 
-                    {pagination && pagination.total_pages > 1 && (
+                    {canShowAll && (
+                        <div className="mt-8 flex justify-center">
+                            <Button variant="outline" onClick={revealAll}>
+                                Show all {total} experts
+                            </Button>
+                        </div>
+                    )}
+
+                    {showAll && pagination && pagination.total_pages > 1 && (
                         <div className="mt-8 flex items-center justify-center gap-3">
                             <Button
                                 variant="outline"
