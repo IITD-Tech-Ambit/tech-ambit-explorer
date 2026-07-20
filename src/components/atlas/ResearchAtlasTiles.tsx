@@ -765,6 +765,12 @@ export default function ResearchAtlasTiles({
   /** Result after level-2 refine (e.g. theme ∩ department) — faculty deep-refine filters within this. */
   const midPointsRef = useRef<AtlasPointCoord[]>([]);
   const midIndicesRef = useRef<Set<number>>(new Set());
+  /**
+   * Point set currently driving domain counts / left sidebar (respects refine).
+   * Kept separate from drillPointsRef (full theme) so the right sidebar total
+   * matches the left when a department/faculty narrowing is active.
+   */
+  const domainCountPointsRef = useRef<AtlasPointCoord[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1041,6 +1047,7 @@ export default function ResearchAtlasTiles({
     // Refresh each domain's paper count from the current point set so labels
     // reflect a narrowing/refine (positions stay stable via the drill layout).
     // Use `points` (pre-focus) so a focused view still shows real per-domain totals.
+    domainCountPointsRef.current = points;
     if (layout) {
       const domCounts = new Map<string, number>();
       for (const p of points) {
@@ -2348,6 +2355,15 @@ export default function ResearchAtlasTiles({
     syncDrillLabels();
   }, [matchCount, focusedDomain, syncDrillLabels]);
 
+  // Keep an open domain sidebar in sync when the narrowing set changes
+  // (e.g. Chemical Engineering refine applied while the panel is open).
+  useEffect(() => {
+    if (!clusterDomain) return;
+    const pts = domainCountPointsRef.current;
+    if (!pts.length) return;
+    setClusterBreakdown(buildDomainBreakdownFromPoints(clusterDomain, searchQuery.trim(), pts));
+  }, [clusterDomain, matchCount, drillDomainCounts, searchQuery]);
+
   // Clicking a theme label drills into it: filter to the theme and reveal its
   // domain sub-clusters. Clicking a domain narrows within the drilled theme.
   const drillIntoTheme = useCallback((theme: string) => {
@@ -2410,11 +2426,18 @@ export default function ResearchAtlasTiles({
 
   // Open the right sidebar with a domain's departments + papers — WITHOUT
   // isolating/zooming the domain on the canvas (that's what focusDomain does).
+  // Use domainCountPointsRef (current narrowed set) so the header total matches
+  // the left sidebar — not drillPointsRef (full theme before refine).
   const openDomainCluster = useCallback((domain: string) => {
     setSelected(null);
     setClusterDomain(domain);
     setClusterTheme(drillThemeRef.current);
-    setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), drillPointsRef.current));
+    const pts = domainCountPointsRef.current.length
+      ? domainCountPointsRef.current
+      : midPointsRef.current.length
+        ? midPointsRef.current
+        : drillPointsRef.current;
+    setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), pts));
     setClusterLoading(false);
   }, [searchQuery]);
 
@@ -2472,6 +2495,7 @@ export default function ResearchAtlasTiles({
     setFocusedDomain(null);
     drillLayoutRef.current = null;
     drillPointsRef.current = [];
+    domainCountPointsRef.current = [];
     closeThemeCluster();
   };
 
