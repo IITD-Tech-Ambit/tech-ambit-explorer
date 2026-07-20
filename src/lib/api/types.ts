@@ -405,7 +405,11 @@ export interface IPDocument {
     inventors: IPInventor[];
     applicants: string[];
     country?: string;
-    department?: string | null;
+    department?: {
+        _id: string;
+        name: string;
+        code?: string;
+    } | null;
     application_status?: string | null;
     publication_year?: number;
     filing_date?: string;

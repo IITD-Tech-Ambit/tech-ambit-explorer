@@ -3,7 +3,7 @@ import {
   X, Send, Loader2,
   Sparkles, Brain, BookOpen,
   Users, TrendingUp, Building2, Check,
-  LogIn,
+  LogIn, Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +24,7 @@ const STARTER_QUESTIONS = [
   { q: "Research trends in renewable energy?", icon: TrendingUp },
   { q: "Compare two faculty members", icon: Users },
   { q: "What departments does IIT Delhi have?", icon: Building2 },
+  { q: "Which patents has IIT Delhi filed?", icon: Lightbulb, highlight: true },
 ];
 
 const loadMessages = (): ChatMessageData[] => {
@@ -294,14 +295,27 @@ const ChatbotWidget = () => {
             Welcome, {user.name.split(" ")[0]}
           </p>
         )}
-        <h3
-          className={cn(
-            "font-bold text-foreground tracking-tight",
-            isExp ? "text-[18px]" : "text-[15px]",
-          )}
-        >
-          Explore IIT Delhi Research
-        </h3>
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <h3
+            className={cn(
+              "font-bold text-foreground tracking-tight",
+              isExp ? "text-[18px]" : "text-[15px]",
+            )}
+          >
+            Explore IIT Delhi Research
+          </h3>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[9px] font-bold uppercase tracking-wide flex-shrink-0"
+            style={{
+              background: "hsl(var(--accent)/0.12)",
+              color: "hsl(var(--accent))",
+              border: "1px solid hsl(var(--accent)/0.28)",
+            }}
+          >
+            <Lightbulb className="w-2.5 h-2.5" />
+            Now with Patents &amp; IP
+          </span>
+        </div>
         <p
           className={cn(
             "text-muted-foreground leading-relaxed",
@@ -318,27 +332,38 @@ const ChatbotWidget = () => {
           isExp ? "grid-cols-2 gap-2.5 max-w-lg" : "grid-cols-2 gap-1.5 max-w-[300px]",
         )}
       >
-        {STARTER_QUESTIONS.map(({ q, icon: Icon }) => (
+        {STARTER_QUESTIONS.map(({ q, icon: Icon, highlight }) => (
           <button
             key={q}
             onClick={() => sendMessage(q)}
             className={cn(
-              "group flex items-start text-left rounded-xl transition-all duration-200",
+              "group relative flex items-start text-left rounded-xl transition-all duration-200",
               "hover:scale-[1.02] active:scale-[0.97] touch-manipulation",
               isExp ? "gap-2.5 p-3.5" : "gap-2 p-2",
+              highlight && "col-span-2",
             )}
             style={{
-              background: "hsl(var(--muted)/0.3)",
-              border: "1px solid hsl(var(--border)/0.6)",
+              background: highlight ? "hsl(var(--accent)/0.06)" : "hsl(var(--muted)/0.3)",
+              border: highlight ? "1px solid hsl(var(--accent)/0.25)" : "1px solid hsl(var(--border)/0.6)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "hsl(var(--primary)/0.05)";
-              e.currentTarget.style.borderColor = "hsl(var(--primary)/0.28)";
-              e.currentTarget.style.boxShadow = "0 4px 16px -4px hsl(var(--primary)/0.14)";
+              e.currentTarget.style.background = highlight
+                ? "hsl(var(--accent)/0.1)"
+                : "hsl(var(--primary)/0.05)";
+              e.currentTarget.style.borderColor = highlight
+                ? "hsl(var(--accent)/0.4)"
+                : "hsl(var(--primary)/0.28)";
+              e.currentTarget.style.boxShadow = highlight
+                ? "0 4px 16px -4px hsl(var(--accent)/0.2)"
+                : "0 4px 16px -4px hsl(var(--primary)/0.14)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "hsl(var(--muted)/0.3)";
-              e.currentTarget.style.borderColor = "hsl(var(--border)/0.6)";
+              e.currentTarget.style.background = highlight
+                ? "hsl(var(--accent)/0.06)"
+                : "hsl(var(--muted)/0.3)";
+              e.currentTarget.style.borderColor = highlight
+                ? "hsl(var(--accent)/0.25)"
+                : "hsl(var(--border)/0.6)";
               e.currentTarget.style.boxShadow = "none";
             }}
           >
@@ -348,14 +373,17 @@ const ChatbotWidget = () => {
                 isExp ? "w-7 h-7 mt-0.5" : "w-6 h-6 mt-0.5",
               )}
               style={{
-                background: "hsl(var(--primary)/0.1)",
-                border: "1px solid hsl(var(--primary)/0.15)",
+                background: highlight ? "hsl(var(--accent)/0.12)" : "hsl(var(--primary)/0.1)",
+                border: highlight ? "1px solid hsl(var(--accent)/0.2)" : "1px solid hsl(var(--primary)/0.15)",
               }}
             >
               <Icon
                 className={cn(
-                  "text-primary/70 group-hover:text-primary transition-colors",
+                  "transition-colors",
                   isExp ? "w-3.5 h-3.5" : "w-3 h-3",
+                  highlight
+                    ? "text-accent/80 group-hover:text-accent"
+                    : "text-primary/70 group-hover:text-primary",
                 )}
               />
             </div>
@@ -367,6 +395,17 @@ const ChatbotWidget = () => {
             >
               {q}
             </span>
+            {highlight && (
+              <span
+                className="absolute top-1.5 right-1.5 px-1.5 py-[2px] rounded-full text-[8px] font-bold uppercase tracking-wide flex-shrink-0"
+                style={{
+                  background: "hsl(var(--accent)/0.15)",
+                  color: "hsl(var(--accent))",
+                }}
+              >
+                New
+              </span>
+            )}
           </button>
         ))}
       </div>
