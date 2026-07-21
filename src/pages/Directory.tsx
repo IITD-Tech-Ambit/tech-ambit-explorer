@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, Microscope, GraduationCap, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, GraduationCap, Search, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import FacultyCard from "@/components/directory/FacultyCard";
@@ -15,14 +15,13 @@ import {
     Accordion,
 } from "@/components/ui/accordion";
 
-type CategoryFilter = 'all' | 'departments' | 'schools' | 'centres' | 'researchlabs';
+type CategoryFilter = 'all' | 'departments' | 'schools' | 'centres';
 
 const categoryConfig: { key: CategoryFilter; label: string; icon: React.ElementType; description: string }[] = [
     { key: 'all', label: 'All', icon: Building2, description: 'All faculty members' },
     { key: 'departments', label: 'Departments', icon: GraduationCap, description: 'Department faculties' },
     { key: 'schools', label: 'Schools', icon: School, description: 'School faculties' },
     { key: 'centres', label: 'Centres', icon: FlaskConical, description: 'Centre faculties' },
-    { key: 'researchlabs', label: 'Research Labs', icon: Microscope, description: 'Research lab faculties' },
 ];
 
 const Directory = () => {

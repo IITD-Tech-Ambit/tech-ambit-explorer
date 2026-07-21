@@ -71,3 +71,10 @@ bun.lockb
 # local env backups
 .env-backup*/
 .env-backup*
+
+# ==================== LOCAL SOURCE SHEETS / PDFS ====================
+# Used only to generate department/school/centre rosters locally.
+# Runtime uses committed JSON under research-ambit-main/data/.
+sheets/
+*.xlsx
+ALL_iitd*.pdf
