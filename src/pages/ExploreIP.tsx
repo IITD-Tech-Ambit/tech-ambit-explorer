@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
@@ -304,6 +304,20 @@ const ExploreIP = () => {
             </div>
             <h3 className="text-lg font-semibold mb-1.5">No Results Found</h3>
             <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
+            {mode === 'basic' && (
+              <>
+                <p className="text-sm text-muted-foreground mt-1">Basic mode only matches exact keywords — Advanced mode also understands meaning and related terms.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 gap-1.5"
+                  onClick={() => changeMode("advanced")}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Try Advanced mode
+                </Button>
+              </>
+            )}
           </div>
         )}
 
