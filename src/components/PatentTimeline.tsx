@@ -102,6 +102,7 @@ const PatentTimeline = ({ documents: initialDocuments, kerberos, facultyName, pa
     if (!documents.length) return null;
 
     return (
+        <>
         <div className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur shadow-sm overflow-hidden">
             <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border/50 bg-muted/20">
                 <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center">
@@ -220,16 +221,17 @@ const PatentTimeline = ({ documents: initialDocuments, kerberos, facultyName, pa
                     )}
                 </div>
             </div>
-
-            {selectedDocument && (
-                <IPDocumentModal
-                    document={selectedDocument}
-                    highlightTokens={[]}
-                    onClose={() => setSelectedDocument(null)}
-                    onInventorClick={(_name, inventorKerberos) => openFacultyProfile(inventorKerberos)}
-                />
-            )}
         </div>
+
+        {selectedDocument && (
+            <IPDocumentModal
+                document={selectedDocument}
+                highlightTokens={[]}
+                onClose={() => setSelectedDocument(null)}
+                onInventorClick={(_name, inventorKerberos) => openFacultyProfile(inventorKerberos)}
+            />
+        )}
+        </>
     );
 };
 
