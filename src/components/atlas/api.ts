@@ -80,6 +80,13 @@ export const fetchKgFacultyAtlasIndices = (facultyIds: string[]) => {
   );
 };
 
+export const fetchKgAtlasYearIndices = (sinceYear: number) => {
+  const params = new URLSearchParams({ sinceYear: String(sinceYear) });
+  return kgFetch<{ sinceYear: number; matchCount: number; indices: number[] }>(
+    `/atlas/year-indices?${params}`,
+  );
+};
+
 export const fetchKgAtlasSuggest = (q: string, limit = 8) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (q.trim()) params.set("q", q.trim());
