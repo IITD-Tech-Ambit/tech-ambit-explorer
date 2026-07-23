@@ -61,6 +61,32 @@ export interface ChatChartEvent {
   chart: ChartPayload;
 }
 
+/** Deep-link descriptor for the "Go to Explore" / "Browse in Research Areas"
+ *  button — reopens the same query/filters (search) or the same theme/domain/
+ *  department selection (research_area) on the corresponding page. */
+export interface ExploreLink {
+  kind: 'research' | 'ip' | 'research_area';
+  // search kinds (research | ip)
+  query?: string;
+  mode?: string;
+  sort?: string;
+  search_in?: string[];
+  filters?: {
+    year_from?: number;
+    year_to?: number;
+    field_associated?: string;
+    document_type?: string;
+    type_of_ip?: string;
+    field_of_invention?: string;
+    country?: string;
+  };
+  // research_area kind (slugs / department code)
+  theme?: string;
+  domain?: string;
+  department?: string;
+  label?: string;
+}
+
 export interface ThinkingStep {
   step: string;
   detail: string | null;
@@ -74,6 +100,8 @@ export interface ChatStreamCallbacks {
   /** Thinking insight while the backend processes — do NOT expose tool names */
   onThinking?: (step: ThinkingStep) => void;
   onChart?: (chart: ChatChartEvent) => void;
+  /** Deep-link to reopen this search on the Explore page ("Go to Explore" button) */
+  onExplore?: (link: ExploreLink) => void;
   /** Session missing/expired (gateway 401) — caller should show the login prompt */
   onUnauthorized?: () => void;
   /** Daily message quota exhausted (429) */
@@ -101,7 +129,7 @@ export async function fetchChatQuota(): Promise<ChatQuota | null> {
 
 /**
  * Stream a chat answer from the RAG endpoint (Server-Sent Events over fetch).
- * Events: thinking | sources | chart | token | done | error.
+ * Events: thinking | sources | chart | explore | token | done | error.
  */
 export async function streamChat(
   message: string,
@@ -164,6 +192,9 @@ export async function streamChat(
           break;
         case 'chart':
           callbacks.onChart?.(parsed as ChatChartEvent);
+          break;
+        case 'explore':
+          callbacks.onExplore?.(parsed as ExploreLink);
           break;
         case 'token':
           callbacks.onToken(parsed.text as string);

@@ -6,9 +6,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
   ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
-  UserRound, Lightbulb,
+  UserRound, Lightbulb, Compass,
 } from "lucide-react";
-import { isIPSource, type ChatSource, type ChatChartEvent, type LineChartData, type BarChartData, type PieChartData } from "@/lib/api/services/chatService";
+import { isIPSource, type ChatSource, type ChatChartEvent, type ExploreLink, type LineChartData, type BarChartData, type PieChartData } from "@/lib/api/services/chatService";
 import {
   ResponsiveContainer,
   LineChart,
@@ -31,8 +31,76 @@ export interface ChatMessageData {
   content: string;
   sources?: ChatSource[];
   chart?: ChatChartEvent;
+  explore?: ExploreLink;
   error?: boolean;
 }
+
+/**
+ * Build an Explore-page deep link from the bot's search parameters, so the
+ * button reopens the SAME query + filters. The Explore page reads these URL
+ * params (see useExploreSearchState / useIPExploreState).
+ */
+function buildExploreHref(link: ExploreLink): string {
+  // Research Areas taxonomy: deep-link the theme/domain/department selection and
+  // auto-reveal the experts view (experts=1 is read by TaxonomyBrowse).
+  if (link.kind === "research_area") {
+    const p = new URLSearchParams();
+    if (link.theme) p.set("theme", link.theme);
+    if (link.domain) p.set("domain", link.domain);
+    if (link.department) p.set("department", link.department);
+    p.set("experts", "1");
+    return `/research-areas?${p.toString()}`;
+  }
+
+  const params = new URLSearchParams();
+  params.set("q", link.query || "");
+  params.set("mode", link.mode || "advanced");
+  const f = link.filters || {};
+  if (f.year_from != null) params.set("year_from", String(f.year_from));
+  if (f.year_to != null) params.set("year_to", String(f.year_to));
+
+  if (link.kind === "ip") {
+    if (link.sort === "date") params.set("sort", link.sort);
+    if (f.type_of_ip) params.set("type_of_ip", f.type_of_ip);
+    if (f.field_of_invention) params.set("field_of_invention", f.field_of_invention);
+    if (f.country) params.set("country", f.country);
+    return `/explore/ip?${params.toString()}`;
+  }
+
+  // research
+  if (link.sort === "date" || link.sort === "citations") params.set("sort", link.sort);
+  if (link.search_in?.includes("author")) params.set("search_in", "author");
+  if (f.document_type) params.set("filter", f.document_type);
+  return `/explore?${params.toString()}`;
+}
+
+const ExploreButton = ({ link }: { link: ExploreLink }) => {
+  const label =
+    link.kind === "research_area"
+      ? (link.label ? `View experts: ${link.label}` : "Browse in Research Areas")
+      : link.kind === "ip"
+        ? "Explore all patents"
+        : "Explore all results";
+  return (
+    <a
+      href={buildExploreHref(link)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="
+        inline-flex items-center gap-1.5 self-start
+        px-3 py-1.5 rounded-lg text-[11px] font-semibold no-underline
+        text-primary bg-primary/8 border border-primary/25
+        hover:bg-primary/14 hover:border-primary/45 hover:shadow-sm
+        transition-all duration-150
+      "
+      title="Open this search on the Explore page (new tab)"
+    >
+      <Compass className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>{label}</span>
+      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-60" />
+    </a>
+  );
+};
 
 export interface ChatMessageProps {
   message: ChatMessageData;
@@ -459,11 +527,38 @@ const SourcesBlock = ({
 
 // Faculty links (/faculty/kerberos) → pill chip; everything else → styled external link
 
+// Internal portal pages the bot can send users to — rendered as a button-style
+// chip (opens in a new tab) so navigation reads as an action, not prose.
+const PORTAL_PAGES = ["/explore", "/research-areas", "/directory", "/atlas", "/magazines", "/contributors"];
+
 const MarkdownLink = ({
   href,
   children,
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
   const isFaculty = href?.startsWith("/faculty/");
+  const isPortalPage = !!href && PORTAL_PAGES.some((p) => href === p || href.startsWith(`${p}?`) || href.startsWith(`${p}/`));
+
+  if (!isFaculty && isPortalPage) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="
+          inline-flex items-center gap-1.5 align-middle mx-0.5
+          px-2.5 py-1 rounded-lg
+          text-[11px] font-semibold no-underline
+          text-primary bg-primary/8 border border-primary/25
+          hover:bg-primary/14 hover:border-primary/45 hover:shadow-sm
+          transition-all duration-150 cursor-pointer
+        "
+      >
+        <Compass className="w-3 h-3 flex-shrink-0 opacity-80" />
+        <span>{children}</span>
+        <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-50" />
+      </a>
+    );
+  }
 
   if (isFaculty) {
     return (
@@ -754,6 +849,8 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatM
       {message.sources && message.sources.length > 0 && (
         <SourcesBlock sources={message.sources} onOpenIPSource={onOpenIPSource} />
       )}
+
+      {message.explore && !message.error && <ExploreButton link={message.explore} />}
 
       {!message.error && (message.content || message.chart) && (
         <AssistantActions

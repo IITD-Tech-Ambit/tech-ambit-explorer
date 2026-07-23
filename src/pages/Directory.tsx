@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, GraduationCap, Search, X } from "lucide-react";
@@ -24,10 +24,18 @@ const categoryConfig: { key: CategoryFilter; label: string; icon: React.ElementT
     { key: 'centres', label: 'Centres', icon: FlaskConical, description: 'Centre faculties' },
 ];
 
+const isCategoryFilter = (v: string | null): v is CategoryFilter =>
+    v === 'all' || v === 'departments' || v === 'schools' || v === 'centres';
+
 const Directory = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [page, setPage] = useState(1);
-    const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+    // Deep-linkable section (e.g. /directory?category=centres from the chatbot).
+    const [activeCategory, setActiveCategory] = useState<CategoryFilter>(() => {
+        const c = searchParams.get('category');
+        return isCategoryFilter(c) ? c : 'all';
+    });
     const [openAccordions, setOpenAccordions] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 300);
@@ -69,6 +77,8 @@ const Directory = () => {
         setPage(1);
         setOpenAccordions([]);
         setSearchQuery('');
+        // Keep the URL in step so the section stays shareable/refreshable.
+        setSearchParams(category === 'all' ? {} : { category }, { replace: true });
     };
 
     const clearSearch = () => {

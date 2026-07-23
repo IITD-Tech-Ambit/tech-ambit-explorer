@@ -79,8 +79,8 @@ export function useExploreSearchState() {
   });
   const recentQueries = useMemo(() => searchHistory.map((h) => h.query), [searchHistory]);
 
-  const [yearFrom, setYearFrom] = useState("");
-  const [yearTo, setYearTo] = useState("");
+  const [yearFrom, setYearFrom] = useState(() => searchParams.get("year_from") || "");
+  const [yearTo, setYearTo] = useState(() => searchParams.get("year_to") || "");
   const [sortBy, setSortBy] = useState<"relevance" | "date" | "citations">(() => {
     const sort = searchParams.get("sort");
     return sort === "date" || sort === "citations" ? sort : "relevance";
@@ -116,6 +116,8 @@ export function useExploreSearchState() {
     setRefinementChain(q ? [q, ...refines] : []);
     setCurrentPage(page ? parseInt(page, 10) : 1);
     setActiveFilter(filter);
+    setYearFrom(searchParams.get("year_from") || "");
+    setYearTo(searchParams.get("year_to") || "");
     setSortBy(sort === "date" || sort === "citations" ? sort : "relevance");
     setSearchMode(mode === "advanced" ? "advanced" : "basic");
     setSearchIn(si === "author" ? ["author"] : si === "all" ? [] : []);
@@ -159,10 +161,12 @@ export function useExploreSearchState() {
       if (filter !== "All") params.set("filter", filter);
       const sort = opts?.sort ?? sortBy;
       if (sort !== "relevance") params.set("sort", sort);
+      if (yearFrom) params.set("year_from", yearFrom);
+      if (yearTo) params.set("year_to", yearTo);
       skipUrlEffect.current = true;
       setSearchParams(params);
     },
-    [currentPage, searchMode, searchIn, activeFilter, sortBy, setSearchParams]
+    [currentPage, searchMode, searchIn, activeFilter, sortBy, yearFrom, yearTo, setSearchParams]
   );
 
   // Build search request: newest term is `query`, prior terms are `refine_chain`.

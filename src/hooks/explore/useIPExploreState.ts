@@ -31,15 +31,18 @@ export function useIPExploreState() {
     return page ? parseInt(page, 10) : 1;
   });
   const [mode, setMode] = useState<IPMode>(() => (searchParams.get("mode") === "advanced" ? "advanced" : "basic"));
-  const [sort, setSort] = useState<IPSort>("relevance");
+  const [sort, setSort] = useState<IPSort>(() => {
+    const s = searchParams.get("sort");
+    return s === "date" || s === "normalized" ? s : "relevance";
+  });
   const [perPage, setPerPage] = useState(20);
 
   const [showFilters, setShowFilters] = useState(false);
-  const [yearFrom, setYearFrom] = useState("");
-  const [yearTo, setYearTo] = useState("");
-  const [typeOfIp, setTypeOfIp] = useState("");
-  const [fieldOfInvention, setFieldOfInvention] = useState("");
-  const [country, setCountry] = useState("");
+  const [yearFrom, setYearFrom] = useState(() => searchParams.get("year_from") || "");
+  const [yearTo, setYearTo] = useState(() => searchParams.get("year_to") || "");
+  const [typeOfIp, setTypeOfIp] = useState(() => searchParams.get("type_of_ip") || "");
+  const [fieldOfInvention, setFieldOfInvention] = useState(() => searchParams.get("field_of_invention") || "");
+  const [country, setCountry] = useState(() => searchParams.get("country") || "");
 
   const [selectedInventor, setSelectedInventor] = useState<SelectedInventor | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<IPDocument | null>(null);
@@ -81,10 +84,17 @@ export function useIPExploreState() {
     const refines = searchParams.getAll("refine");
     const page = searchParams.get("page");
     const modeParam = searchParams.get("mode");
+    const sortParam = searchParams.get("sort");
     setSearchQuery("");
     setRefinementChain(q ? [q, ...refines] : []);
     setCurrentPage(page ? parseInt(page, 10) : 1);
     setMode(modeParam === "advanced" ? "advanced" : "basic");
+    setSort(sortParam === "date" || sortParam === "normalized" ? sortParam : "relevance");
+    setYearFrom(searchParams.get("year_from") || "");
+    setYearTo(searchParams.get("year_to") || "");
+    setTypeOfIp(searchParams.get("type_of_ip") || "");
+    setFieldOfInvention(searchParams.get("field_of_invention") || "");
+    setCountry(searchParams.get("country") || "");
     setSelectedInventor(null);
     setShowSuggestions(false);
   }, [searchParams]);
@@ -99,10 +109,16 @@ export function useIPExploreState() {
       if (page && page > 1) params.set("page", String(page));
       const m = opts?.mode ?? mode;
       params.set("mode", m);
+      if (sort !== "relevance") params.set("sort", sort);
+      if (yearFrom) params.set("year_from", yearFrom);
+      if (yearTo) params.set("year_to", yearTo);
+      if (typeOfIp) params.set("type_of_ip", typeOfIp);
+      if (fieldOfInvention) params.set("field_of_invention", fieldOfInvention);
+      if (country) params.set("country", country);
       skipUrlEffect.current = true;
       setSearchParams(params);
     },
-    [currentPage, mode, setSearchParams]
+    [currentPage, mode, sort, yearFrom, yearTo, typeOfIp, fieldOfInvention, country, setSearchParams]
   );
 
   const filters = useMemo<IPSearchFilters>(() => {

@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   streamChat, fetchChatQuota,
-  type ChatSource, type ChatChartEvent, type ThinkingStep, type ChatQuota,
+  type ChatSource, type ChatChartEvent, type ThinkingStep, type ChatQuota, type ExploreLink,
 } from "@/lib/api/services/chatService";
 import { useAuth } from "@/contexts/AuthContext";
 import ChatMessage, { type ChatMessageData } from "./ChatMessage";
@@ -176,6 +176,7 @@ const ChatbotWidget = () => {
           onThinking: (step) => setThinkingSteps((prev) => [...prev, step]),
           onSources: (sources: ChatSource[]) => updateLast((m) => ({ ...m, sources })),
           onChart: (chart: ChatChartEvent) => updateLast((m) => ({ ...m, chart })),
+          onExplore: (explore: ExploreLink) => updateLast((m) => ({ ...m, explore })),
           onToken: (token: string) => {
             setThinkingSteps([]);
             updateLast((m) => ({ ...m, content: m.content + token }));
