@@ -43,7 +43,7 @@ const mentors: TeamMember[] = [
     email: "mailto:harun@textile.iitd.ac.in",
   },
   {
-    name: "Prof. Omprakash",
+    name: "Prof. Om Prakash",
     role: "Mentor",
     avatar: mentor1Avatar,
     linkedin: "https://iprana-lab.github.io/",

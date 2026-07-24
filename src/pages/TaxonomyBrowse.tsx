@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -49,8 +49,15 @@ const TaxonomyBrowse = () => {
     // Results are an explicit "Browse" action (the single button in the
     // picker), not automatic on selection — resets whenever the underlying
     // selection changes, so it has to be clicked again for the new choice.
-    const [revealed, setRevealed] = useState(false);
+    // Exception: arriving via a deep link with ?experts=1 (e.g. the chatbot's
+    // "View experts" button) auto-reveals the experts for the pre-selected area.
+    const [revealed, setRevealed] = useState(() => searchParams.get("experts") === "1");
+    const skipFirstRevealReset = useRef(true);
     useEffect(() => {
+        if (skipFirstRevealReset.current) {
+            skipFirstRevealReset.current = false;
+            return;
+        }
         setRevealed(false);
     }, [theme, domain]);
 
