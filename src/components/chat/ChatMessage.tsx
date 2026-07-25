@@ -52,6 +52,14 @@ function buildExploreHref(link: ExploreLink): string {
     return `/research-areas?${p.toString()}`;
   }
 
+  // Directory: open the category tab with the unit's accordion expanded.
+  if (link.kind === "directory") {
+    const p = new URLSearchParams();
+    if (link.category) p.set("category", link.category);
+    if (link.unit) p.set("open", link.unit);
+    return `/directory?${p.toString()}`;
+  }
+
   const params = new URLSearchParams();
   params.set("q", link.query || "");
   params.set("mode", link.mode || "advanced");
@@ -85,11 +93,13 @@ function buildExploreHref(link: ExploreLink): string {
 
 const ExploreButton = ({ link }: { link: ExploreLink }) => {
   const label =
-    link.kind === "research_area"
-      ? (link.label ? `View experts: ${link.label}` : "Browse in Research Areas")
-      : link.kind === "ip"
-        ? "Explore all patents"
-        : "Explore all results";
+    link.kind === "directory"
+      ? (link.label || "View full list in Directory")
+      : link.kind === "research_area"
+        ? (link.label ? `View experts: ${link.label}` : "Browse in Research Areas")
+        : link.kind === "ip"
+          ? "Explore all patents"
+          : "Explore all results";
   return (
     <a
       href={buildExploreHref(link)}
