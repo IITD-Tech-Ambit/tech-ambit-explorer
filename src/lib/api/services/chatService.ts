@@ -65,7 +65,7 @@ export interface ChatChartEvent {
  *  button — reopens the same query/filters (search) or the same theme/domain/
  *  department selection (research_area) on the corresponding page. */
 export interface ExploreLink {
-  kind: 'research' | 'ip' | 'research_area';
+  kind: 'research' | 'ip' | 'research_area' | 'directory';
   // search kinds (research | ip)
   query?: string;
   mode?: string;
@@ -80,11 +80,17 @@ export interface ExploreLink {
     field_of_invention?: string;
     country?: string;
   };
+  // research kind — Explore client-side controls
+  group_by_department?: boolean;
+  author?: { id: string; name?: string } | null;
   // research_area kind (slugs / department code)
   theme?: string;
   domain?: string;
   department?: string;
   label?: string;
+  // directory kind
+  category?: string;   // departments | centres | schools
+  unit?: string;       // the unit name to open on the Directory page
 }
 
 export interface ThinkingStep {

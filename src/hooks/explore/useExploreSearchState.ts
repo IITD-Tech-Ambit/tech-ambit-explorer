@@ -41,7 +41,13 @@ export function useExploreSearchState() {
   const suggestionsRef = useRef<SearchSuggestionsHandle>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
 
-  const [selectedAuthor, setSelectedAuthor] = useState<SelectedAuthor | null>(null);
+  // Hydrate the author drill-down from the URL (?author=<scopusId>&authorName=…)
+  // so the chatbot's "Explore" button can reopen the click-a-professor view.
+  const [selectedAuthor, setSelectedAuthor] = useState<SelectedAuthor | null>(() => {
+    const authorId = searchParams.get("author");
+    if (!authorId) return null;
+    return { name: searchParams.get("authorName") || authorId, author_id: authorId };
+  });
   const [authorScopedPage, setAuthorScopedPage] = useState(1);
 
   const [activeFilter, setActiveFilter] = useState(() => searchParams.get("filter") || "All");
@@ -52,9 +58,18 @@ export function useExploreSearchState() {
     return mode === "advanced" ? "advanced" : "basic";
   });
 
-  const [clientSort, setClientSort] = useState<"relevance" | "citations">("relevance");
+  const [clientSort, setClientSort] = useState<"relevance" | "citations">(
+    () => (searchParams.get("csort") === "citations" ? "citations" : "relevance")
+  );
 
+  // Reset the client sort when the search MODE changes — but not on the initial
+  // mount, so a deep link's ?csort=citations survives arrival.
+  const clientSortFirstRun = useRef(true);
   useEffect(() => {
+    if (clientSortFirstRun.current) {
+      clientSortFirstRun.current = false;
+      return;
+    }
     setClientSort("relevance");
   }, [searchMode]);
 

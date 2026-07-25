@@ -52,6 +52,14 @@ function buildExploreHref(link: ExploreLink): string {
     return `/research-areas?${p.toString()}`;
   }
 
+  // Directory: open the category tab with the unit's accordion expanded.
+  if (link.kind === "directory") {
+    const p = new URLSearchParams();
+    if (link.category) p.set("category", link.category);
+    if (link.unit) p.set("open", link.unit);
+    return `/directory?${p.toString()}`;
+  }
+
   const params = new URLSearchParams();
   params.set("q", link.query || "");
   params.set("mode", link.mode || "advanced");
@@ -67,20 +75,31 @@ function buildExploreHref(link: ExploreLink): string {
     return `/explore/ip?${params.toString()}`;
   }
 
-  // research
-  if (link.sort === "date" || link.sort === "citations") params.set("sort", link.sort);
+  // research — Explore's Sort-by and Group-by-Dept are CLIENT-side controls
+  // (csort / groupdept), not the server sort. Author drill-down carries the
+  // Scopus id + name so the page re-opens the click-a-professor view.
+  if (link.sort === "citations") params.set("csort", "citations");
+  // Only force grouping ON when the bot grouped; otherwise leave it unset so the
+  // Explore page keeps the user's own saved Group-by-Dept preference.
+  if (link.group_by_department) params.set("groupdept", "1");
   if (link.search_in?.includes("author")) params.set("search_in", "author");
   if (f.document_type) params.set("filter", f.document_type);
+  if (link.author?.id) {
+    params.set("author", link.author.id);
+    if (link.author.name) params.set("authorName", link.author.name);
+  }
   return `/explore?${params.toString()}`;
 }
 
 const ExploreButton = ({ link }: { link: ExploreLink }) => {
   const label =
-    link.kind === "research_area"
-      ? (link.label ? `View experts: ${link.label}` : "Browse in Research Areas")
-      : link.kind === "ip"
-        ? "Explore all patents"
-        : "Explore all results";
+    link.kind === "directory"
+      ? (link.label || "View full list in Directory")
+      : link.kind === "research_area"
+        ? (link.label ? `View experts: ${link.label}` : "Browse in Research Areas")
+        : link.kind === "ip"
+          ? "Explore all patents"
+          : "Explore all results";
   return (
     <a
       href={buildExploreHref(link)}

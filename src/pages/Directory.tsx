@@ -36,7 +36,12 @@ const Directory = () => {
         const c = searchParams.get('category');
         return isCategoryFilter(c) ? c : 'all';
     });
-    const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+    // Deep-linkable: ?open=<unit name> (from the chatbot) expands that unit's
+    // accordion on arrival. Accordions are keyed by department name.
+    const [openAccordions, setOpenAccordions] = useState<string[]>(() => {
+        const open = searchParams.get('open');
+        return open ? [open] : [];
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const debouncedSearch = useDebounce(searchQuery, 300);
     const isSearching = debouncedSearch.length >= 2;
