@@ -80,6 +80,9 @@ export interface ExploreLink {
     field_of_invention?: string;
     country?: string;
   };
+  // research kind — Explore client-side controls
+  group_by_department?: boolean;
+  author?: { id: string; name?: string } | null;
   // research_area kind (slugs / department code)
   theme?: string;
   domain?: string;

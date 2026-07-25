@@ -67,10 +67,19 @@ function buildExploreHref(link: ExploreLink): string {
     return `/explore/ip?${params.toString()}`;
   }
 
-  // research
-  if (link.sort === "date" || link.sort === "citations") params.set("sort", link.sort);
+  // research — Explore's Sort-by and Group-by-Dept are CLIENT-side controls
+  // (csort / groupdept), not the server sort. Author drill-down carries the
+  // Scopus id + name so the page re-opens the click-a-professor view.
+  if (link.sort === "citations") params.set("csort", "citations");
+  // Only force grouping ON when the bot grouped; otherwise leave it unset so the
+  // Explore page keeps the user's own saved Group-by-Dept preference.
+  if (link.group_by_department) params.set("groupdept", "1");
   if (link.search_in?.includes("author")) params.set("search_in", "author");
   if (f.document_type) params.set("filter", f.document_type);
+  if (link.author?.id) {
+    params.set("author", link.author.id);
+    if (link.author.name) params.set("authorName", link.author.name);
+  }
   return `/explore?${params.toString()}`;
 }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { RelatedFaculty } from "@/lib/api";
 import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
 import type { SelectedAuthor } from "./useExploreSearchState";
@@ -34,9 +35,14 @@ export function useExplorePeople({
   setSelectedAuthor,
   setAuthorScopedPage,
 }: UseExplorePeopleArgs) {
+  const [searchParams] = useSearchParams();
+  // A deep link (?groupdept=1 from the chatbot button) wins over the saved
+  // preference on arrival; otherwise fall back to the user's last choice.
   const [groupByDepartment, setGroupByDepartment] = useState<boolean>(() => {
-    const saved = localStorage.getItem("explore-group-by-dept");
-    return saved === "true";
+    const fromUrl = searchParams.get("groupdept");
+    if (fromUrl === "1") return true;
+    if (fromUrl === "0") return false;
+    return localStorage.getItem("explore-group-by-dept") === "true";
   });
 
   useEffect(() => {
