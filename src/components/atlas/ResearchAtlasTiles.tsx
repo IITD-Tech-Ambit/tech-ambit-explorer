@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, FileText, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
+  Building2, Calendar, ChevronDown, ChevronRight, Columns2, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,15 +15,16 @@ import {
   tileObjectId, type AtlasTree, type AtlasDict, type AtlasPointCoord, type DecodedTile,
 } from "./atlasTiles";
 import { allNodeKeys, themeColorHex, TileManager } from "./atlasOctree";
+import { createThemeSphereLayout, type ThemeSphereLayout } from "./atlasThemeSphereLayout";
 import { themeDisplayName } from "./atlasClusters";
+import DepartmentCompareView from "./DepartmentCompareView";
 import {
-  fetchKgAtlasDepartmentSearch, fetchKgAtlasFacultySearch, fetchKgAtlasSuggestSafe,
-  fetchKgAtlasClusterBreakdown, fetchKgAtlasRefine, fetchKgAtlasYearIndices, fetchKgDepartmentAtlasIndices,
+  fetchKgAtlasClusterBreakdown, fetchKgAtlasYearIndices, fetchKgDepartmentAtlasIndices,
   fetchKgFacultyAtlasIndices, fetchKgFacultyIndex, fetchKgPaperMeta, type KgPaperMeta,
 } from "./api";
 import { getPaperExternalUrl } from "./paperLink";
 import type {
-  KgAtlasClusterBreakdown, KgAtlasDepartmentMatch, KgAtlasFacultyMatch, KgAtlasSuggestResult,
+  KgAtlasClusterBreakdown,
   KgFacultyItem,
 } from "./types";
 
@@ -53,8 +54,7 @@ export interface PickedPaper {
 
 const CLUSTER_LEVELS = ["topic", "subdomain", "domain", "theme"] as const;
 type ClusterLevel = (typeof CLUSTER_LEVELS)[number];
-type AtlasMode = "view" | "interactive";
-type SearchEntity = "text" | "faculty" | "department";
+type AtlasMode = "view" | "interactive" | "compare";
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -270,26 +270,38 @@ type DrillLayout = {
   extent: number;
 };
 
-/** Deterministic per-point jitter (round 3D ball) so re-renders keep points put. */
-function drillJitter(seed: number, radius: number): [number, number, number] {
+/** Organic knowledge-graph cloud in full 3D: dense core, wispy irregular fringe. */
+function kgCloudJitter(
+  seed: number,
+  radius: number,
+  /** Higher → denser core (disk-like). Lower → open fluffy cluster. */
+  densityPower = 1.5,
+): [number, number, number] {
   const a = Math.sin(seed * 127.1) * 43758.5453;
   const b = Math.sin(seed * 269.5) * 43758.5453;
   const c = Math.sin(seed * 419.2) * 43758.5453;
+  const d = Math.sin(seed * 61.3) * 43758.5453;
+  const e = Math.sin(seed * 91.7) * 43758.5453;
+  const f = Math.sin(seed * 151.9) * 43758.5453;
   const r1 = a - Math.floor(a);
   const r2 = b - Math.floor(b);
   const r3 = c - Math.floor(c);
-  const rr = Math.cbrt(r1) * radius; // cbrt → uniform fill of the ball
+  const rr = r1 ** densityPower * radius;
   const theta = r2 * Math.PI * 2;
-  const cosPhi = r3 * 2 - 1; // uniform direction on the sphere
+  const cosPhi = r3 * 2 - 1;
   const sinPhi = Math.sqrt(Math.max(0, 1 - cosPhi * cosPhi));
+  // Mild anisotropy so silhouettes stay cloud-like in every viewing direction.
+  const sx = 0.8 + (d - Math.floor(d)) * 0.45;
+  const sy = 0.8 + (e - Math.floor(e)) * 0.45;
+  const sz = 0.8 + (f - Math.floor(f)) * 0.45;
   return [
-    Math.cos(theta) * sinPhi * rr,
-    Math.sin(theta) * sinPhi * rr,
-    cosPhi * rr,
+    Math.cos(theta) * sinPhi * rr * sx,
+    Math.sin(theta) * sinPhi * rr * sy,
+    cosPhi * rr * sz,
   ];
 }
 
-/** Evenly-spaced direction on the unit sphere (fibonacci lattice) — fallback spread axis. */
+/** Evenly-spaced direction on the unit sphere (fibonacci lattice). */
 function fibonacciDir(k: number, n: number): [number, number, number] {
   const cosPhi = 1 - (2 * (k + 0.5)) / Math.max(1, n);
   const sinPhi = Math.sqrt(Math.max(0, 1 - cosPhi * cosPhi));
@@ -298,11 +310,9 @@ function fibonacciDir(k: number, n: number): [number, number, number] {
 }
 
 /**
- * Spread a theme's points into separate per-domain clusters scattered in 3D —
- * the drilled equivalent of the theme blobs. Each domain starts from its real
- * UMAP centroid direction (so semantically close domains stay neighbors), then
- * a short relaxation pushes overlapping blobs apart. Positions are keyed by
- * atlas index so a later refine keeps points in their cluster.
+ * Domain drill layout in true 3D: every domain centre sits on a sphere (none
+ * locked in the middle); each domain is a fluffy volumetric blob. Orbiting
+ * shows real parallax. Domain hues are unchanged.
  */
 function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
   const byDomain = new Map<string, AtlasPointCoord[]>();
@@ -317,60 +327,57 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
   );
   const n = domains.length;
 
-  // Big diffuse clusters, like the theme overview: radius grows with paper count.
-  const blobRadius = (count: number) => Math.min(0.8, 0.16 + Math.sqrt(count) * 0.015);
-  // Clear separation between clusters: points trail up to ~1.5x the core
-  // radius (wisps), so the gap must absorb both clusters' fringes.
-  const gap = 0.5;
-  const labelGap = 0.22; // keep label hit-boxes off the papers
+  // Larger fluffy clouds + more air between them.
+  const blobRadius = (count: number) => Math.min(0.95, 0.26 + Math.sqrt(count) * 0.016);
+  const gap = 0.55;
+  const labelGap = 0.3;
 
   type Node = {
     domain: string; pts: AtlasPointCoord[]; blobR: number; hue: number;
     x: number; y: number; z: number;
-    /** Domain centroid in the original UMAP space. */
-    ox: number; oy: number; oz: number;
   };
   const radii = domains.map(([, pts]) => blobRadius(pts.length));
   const maxBlobR = radii.reduce((m, r) => Math.max(m, r), 0);
-  // Evenly-spaced sphere shell (fibonacci lattice): the layout reads as a
-  // balanced circle from every viewing direction, like the theme overview.
-  // Radius chosen so neighbours on the shell (~3.81·R/√n apart) just clear
-  // two of the biggest blobs plus the gap.
+
+  // Bigger sphere so neighbouring centres stay clearly separated.
   const spreadR = n <= 1
     ? 0
     : Math.max(
-        maxBlobR + gap / 2 + 0.2,
-        // 1.3x the core radii so the wispy fringes stay separated too.
-        ((2 * maxBlobR * 1.3 + gap) * Math.sqrt(n) / 3.81) * 1.05,
+        1.55,
+        ((2 * maxBlobR + gap) * Math.sqrt(n) / 3.81) * 1.35,
       );
 
   const nodes: Node[] = domains.map(([domain, pts], k) => {
-    // Domain centroid in UMAP space — used to keep each cluster's real shape.
-    let ox = 0, oy = 0, oz = 0;
-    for (const p of pts) { ox += p.x; oy += p.y; oz += p.z; }
-    ox /= pts.length; oy /= pts.length; oz /= pts.length;
+    const hue = (k * 47) % 360;
+    const blobR = radii[k];
+    if (n <= 1) {
+      return { domain, pts, blobR, hue, x: 0, y: 0, z: 0 };
+    }
+    // All domains on the 3D sphere — no dedicated centre hub.
     const [dx, dy, dz] = fibonacciDir(k, n);
+    // Keep radii similar so clusters don't bunch near the middle.
+    const t = 0.88 + 0.12 * ((k * 5) % n) / Math.max(1, n - 1);
     return {
-      domain, pts,
-      blobR: radii[k],
-      hue: (k * 47) % 360,
-      x: dx * spreadR, y: dy * spreadR, z: dz * spreadR,
-      ox, oy, oz,
+      domain, pts, blobR, hue,
+      x: dx * spreadR * t,
+      y: dy * spreadR * t,
+      z: dz * spreadR * t,
     };
   });
 
-  // Collision relaxation: push overlapping blobs apart along their axis until
-  // every pair of surfaces clears the gap. n is tiny, so this is instant.
-  for (let iter = 0; iter < 120; iter++) {
+  // Soft 3D collision — keep clouds distinct without flattening onto a plane.
+  for (let iter = 0; iter < 100; iter++) {
     let moved = false;
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
         let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
         let d = Math.hypot(dx, dy, dz);
-        if (d < 1e-6) { [dx, dy, dz] = fibonacciDir(j, n); d = 1e-6; }
-        // 1.3x the core radii so the wispy fringes stay separated too.
-        const minD = (a.blobR + b.blobR) * 1.3 + gap;
+        if (d < 1e-6) {
+          const [fx, fy, fz] = fibonacciDir(j, n);
+          dx = fx; dy = fy; dz = fz; d = 1e-6;
+        }
+        const minD = a.blobR + b.blobR + gap;
         if (d < minD) {
           const push = (minD - d) / 2 / d;
           a.x -= dx * push; a.y -= dy * push; a.z -= dz * push;
@@ -382,7 +389,6 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
     if (!moved) break;
   }
 
-  // Re-centre so the cloud spins around its own middle.
   if (n > 1) {
     let mx = 0, my = 0, mz = 0;
     for (const node of nodes) { mx += node.x; my += node.y; mz += node.z; }
@@ -396,58 +402,18 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
   let extent = 0;
 
   for (const node of nodes) {
-    // Keep each cluster's real UMAP texture (sub-clumps, wisps) but round it
-    // into a 3D ball: whiten the offsets — divide each axis by its own spread —
-    // so elongated/flat clusters become spherical without losing structure.
-    let vx = 0, vy = 0, vz = 0;
     for (const p of node.pts) {
-      vx += (p.x - node.ox) ** 2;
-      vy += (p.y - node.oy) ** 2;
-      vz += (p.z - node.oz) ** 2;
-    }
-    const m = node.pts.length || 1;
-    const sMax = Math.sqrt(Math.max(vx, vy, vz) / m);
-    const floor = Math.max(sMax * 0.05, 1e-6);
-    const sx = Math.max(Math.sqrt(vx / m), floor);
-    const sy = Math.max(Math.sqrt(vy / m), floor);
-    const sz = Math.max(Math.sqrt(vz / m), floor);
-
-    const offsets = node.pts.map((p): [number, number, number] => [
-      (p.x - node.ox) / sx,
-      (p.y - node.oy) / sy,
-      (p.z - node.oz) / sz,
-    ]);
-    const dists = offsets.map((o) => Math.hypot(o[0], o[1], o[2]));
-    const sorted = [...dists].sort((a, b) => a - b);
-    const p85 = sorted[Math.floor(0.85 * (sorted.length - 1))] || 0;
-    const maxD = sorted[sorted.length - 1] || 0;
-    // Normalise so ~85% of points land inside blobR; cap outliers at ~1.5x.
-    const norm = Math.max(p85, maxD / 1.5);
-    const scale = norm > 1e-4 && sMax > 1e-5 ? node.blobR / norm : 0;
-
-    node.pts.forEach((p, idx) => {
-      if (scale > 0 && dists[idx] > 1e-5) {
-        const [ux, uy, uz] = offsets[idx];
-        posById.set(p.i, [
-          node.x + ux * scale,
-          node.y + uy * scale,
-          node.z + uz * scale,
-        ]);
-      } else {
-        // Degenerate cluster (all papers at one spot) — fall back to jitter.
-        const [jx, jy, jz] = drillJitter(p.i + 1, node.blobR * 0.5);
-        posById.set(p.i, [node.x + jx, node.y + jy, node.z + jz]);
-      }
+      const [jx, jy, jz] = kgCloudJitter(p.i + 11, node.blobR, 0.85);
+      posById.set(p.i, [node.x + jx, node.y + jy, node.z + jz]);
       hueById.set(p.i, node.hue);
-    });
+    }
 
-    // Push the label outward from the cloud centre, past the blob surface.
     const dist = Math.hypot(node.x, node.y, node.z);
     const off = node.blobR + labelGap;
     const lx = dist < 1e-4 ? node.x : node.x + (node.x / dist) * off;
     const ly = dist < 1e-4 ? node.y + off : node.y + (node.y / dist) * off;
     const lz = dist < 1e-4 ? node.z : node.z + (node.z / dist) * off;
-    extent = Math.max(extent, dist + node.blobR * 1.5);
+    extent = Math.max(extent, dist + node.blobR);
     centers.push({
       domain: node.domain,
       count: node.pts.length,
@@ -464,200 +430,130 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
 /** Default camera distance for the drilled domain overview (keeps labels clear of the header / Clear all). */
 function drillOverviewCameraZ(layout: DrillLayout | null): number {
   if (!layout || layout.centers.length <= 1) return 3.6;
-  // Frame the whole 3D cloud + outward labels in a 55° fov with some margin.
-  return Math.max(4.0, (layout.extent + 0.5) * 2.6);
+  return Math.max(4.8, (layout.extent + 0.55) * 2.55);
 }
 
-const KEYWORD_STOPWORDS = new Set([
-  "the", "a", "an", "of", "and", "or", "for", "to", "in", "on", "at", "with",
-  "by", "using", "used", "use", "based", "via", "from", "into", "over", "under",
-  "new", "novel", "study", "studies", "analysis", "approach", "approaches",
-  "effect", "effects", "role", "review", "toward", "towards", "between", "their",
-  "its", "this", "that", "these", "those", "as", "is", "are", "be", "we", "our",
-]);
-
-/**
- * Short keyword/phrase completions from paper titles within the current overlay
- * (e.g. "carbon" → "carbon dioxide", "carbon fiber"). Mirrors backend suggest.
- */
-function extractKeywordSuggestionsFromPoints(
-  query: string,
-  points: AtlasPointCoord[],
-  limit = 8,
-): SuggestItem[] {
-  const q = query.trim().toLowerCase();
-  const qTokens = q.split(/[^a-z0-9]+/).filter(Boolean);
-  if (!qTokens.length || !points.length) return [];
-  const head = qTokens[qTokens.length - 1];
-  if (head.length < 2) return [];
-
-  const counts = new Map<string, number>();
-  const bump = (phrase: string) => counts.set(phrase, (counts.get(phrase) ?? 0) + 1);
-
-  for (const p of points) {
-    const words = String(p.title ?? "")
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean);
-    for (let i = 0; i < words.length; i++) {
-      if (!words[i].startsWith(head) || words[i].length < 2) continue;
-      let phrase = words[i];
-      bump(phrase);
-      for (let len = 1; len <= 2; len++) {
-        const next = words[i + len];
-        if (!next || KEYWORD_STOPWORDS.has(next) || next.length < 2) break;
-        phrase = `${phrase} ${next}`;
-        bump(phrase);
-      }
-    }
-  }
-
-  return [...counts.entries()]
-    .filter(([term]) => !KEYWORD_STOPWORDS.has(term) && term !== q)
-    .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([term, count]) => ({
-      group: "keyword" as const,
-      label: term,
-      sub: "in current results",
-      count,
-    }));
-}
-
-function classifySearchEntity(
-  q: string,
-  faculty: KgAtlasFacultyMatch[],
-  departments: KgAtlasDepartmentMatch[],
-  picked: SuggestItem["group"] | null = null,
-): SearchEntity {
-  if (picked === "faculty" || picked === "department") return picked;
-  const ql = q.trim().toLowerCase();
-  if (!ql) return "text";
-  if (departments.some((d) => d.department.toLowerCase() === ql)) return "department";
-  if (faculty.some((f) => f.name.toLowerCase() === ql)) return "faculty";
-  // Strong prefix match (typed partial department / faculty name)
-  if (departments.some((d) => d.department.toLowerCase().startsWith(ql) && ql.length >= 4)) {
-    return "department";
-  }
-  if (faculty.some((f) => f.name.toLowerCase().startsWith(ql) && ql.length >= 4)) {
-    return "faculty";
-  }
-  return "text";
-}
-
-/** Resolve atlas paper indices for a faculty name (optional department disambiguation). */
-async function facultyAtlasIndicesForQuery(query: string, deptHint = ""): Promise<number[]> {
-  const q = query.trim();
-  if (!q) return [];
-  const fac = await fetchKgAtlasFacultySearch(q, 20).catch(() => ({
-    matches: [] as KgAtlasFacultyMatch[],
-    indices: [] as number[],
-  }));
-  let facultyId = "";
-  const exact = (fac.matches ?? []).find((f) => f.name.toLowerCase() === q.toLowerCase());
-  if (exact) facultyId = exact.facultyId;
-  else if ((fac.matches ?? []).length === 1) facultyId = fac.matches![0].facultyId;
-  else if (deptHint.trim()) {
-    const deptLower = deptHint.trim().toLowerCase();
-    const inDept = (fac.matches ?? []).find((f) =>
-      (f.department || "").toLowerCase().includes(deptLower)
-      || deptLower.includes((f.department || "").toLowerCase()),
-    );
-    if (inDept) facultyId = inDept.facultyId;
-    else if ((fac.matches ?? [])[0]) facultyId = fac.matches![0].facultyId;
-  } else if ((fac.matches ?? [])[0]) {
-    facultyId = fac.matches![0].facultyId;
-  }
-  let indices = fac.indices ?? [];
-  if (facultyId) {
-    const res = await fetchKgFacultyAtlasIndices([facultyId]).catch(() => null);
-    if (res?.indices?.length) indices = res.indices;
-  }
-  return indices;
-}
-
-/** Faculty papers within an already-loaded primary set (department / theme overlay). */
-async function pointsIntersectingFacultyInBase(
-  facultyQuery: string,
-  baseSet: Set<number>,
-  basePoints: AtlasPointCoord[],
-  deptHint = "",
-): Promise<AtlasPointCoord[]> {
-  const facIndices = await facultyAtlasIndicesForQuery(facultyQuery, deptHint);
-  const keep = new Set(facIndices.filter((i) => baseSet.has(i)));
-  if (!keep.size) return [];
-  const byIndex = new Map(basePoints.map((p) => [p.i, p]));
-  const points: AtlasPointCoord[] = [];
-  const missing: number[] = [];
-  for (const i of keep) {
-    const p = byIndex.get(i);
-    if (p) points.push(p);
-    else missing.push(i);
-  }
-  if (missing.length) {
-    const coords = await fetchAtlasPointCoords(missing);
-    for (const i of missing) {
-      const p = coords.get(i);
-      if (p) points.push(p);
-    }
-  }
-  return points;
-}
-
-/** One row in the search suggestion dropdown (flattened for keyboard nav). */
-interface SuggestItem {
-  group: "keyword" | "paper" | "theme" | "topic" | "domain" | "faculty" | "department";
-  label: string;
-  sub: string;
+type ThemeFilterCluster = {
+  theme: string;
   count: number;
-  /** Set for paper suggestions so a click can open that exact dot. */
-  paperId?: string;
-  paperIndex?: number;
-}
-
-const SUGGEST_BADGE: Record<SuggestItem["group"], { text: string; className: string }> = {
-  keyword: { text: "Keyword", className: "bg-slate-800 text-slate-200" },
-  paper: { text: "Paper", className: "bg-sky-950 text-sky-300" },
-  theme: { text: "Theme", className: "bg-slate-800 text-cyan-400" },
-  topic: { text: "Topic", className: "bg-slate-800 text-amber-300" },
-  domain: { text: "Domain", className: "bg-teal-950 text-teal-300" },
-  faculty: { text: "Faculty", className: "bg-violet-950 text-violet-300" },
-  department: { text: "Department", className: "bg-emerald-950 text-emerald-300" },
+  cx: number; cy: number; cz: number;
+  lx: number; ly: number; lz: number;
+  blobR: number;
 };
 
-function flattenSuggestions(result: KgAtlasSuggestResult): SuggestItem[] {
-  const items: SuggestItem[] = [];
-  // Faculty and departments always come first so they're never buried by the
-  // keyword/paper matches, even with the dropdown's small item cap.
-  for (const f of result.faculty) {
-    items.push({ group: "faculty", label: f.name, sub: f.department, count: f.paperCount });
+type ThemeFilterLayout = {
+  posById: Map<number, [number, number, number]>;
+  centers: ThemeFilterCluster[];
+  extent: number;
+};
+
+/**
+ * When filters/search show theme clouds (not domain-drilled), rebuild each
+ * theme as an open 3D cluster on a sphere — atlas tile coords are flat discs.
+ */
+function buildThemeFilterLayout(points: AtlasPointCoord[]): ThemeFilterLayout {
+  const byTheme = new Map<string, AtlasPointCoord[]>();
+  for (const p of points) {
+    const t = p.theme || "Other";
+    const list = byTheme.get(t);
+    if (list) list.push(p);
+    else byTheme.set(t, [p]);
   }
-  for (const d of result.departments) {
-    items.push({
-      group: "department", label: d.department,
-      sub: `${formatCount(d.facultyCount)} faculty`, count: d.paperCount,
+  const themes = [...byTheme.entries()].sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+  const n = themes.length;
+
+  // Spherical themes with more point spread (match unfiltered bake feel).
+  const blobRadius = (count: number) => Math.min(1.45, 0.48 + Math.sqrt(count) * 0.032);
+  const gap = 0.5;
+  const labelGap = 0.32;
+
+  type Node = {
+    theme: string; pts: AtlasPointCoord[]; blobR: number;
+    x: number; y: number; z: number;
+  };
+  const radii = themes.map(([, pts]) => blobRadius(pts.length));
+  const maxBlobR = radii.reduce((m, r) => Math.max(m, r), 0);
+  const spreadR = n <= 1
+    ? 0
+    : Math.max(1.8, ((2 * maxBlobR + gap) * Math.sqrt(n) / 3.81) * 1.4);
+
+  const nodes: Node[] = themes.map(([theme, pts], k) => {
+    const blobR = radii[k];
+    if (n <= 1) return { theme, pts, blobR, x: 0, y: 0, z: 0 };
+    const [dx, dy, dz] = fibonacciDir(k, n);
+    const t = 0.88 + 0.12 * ((k * 5) % n) / Math.max(1, n - 1);
+    return {
+      theme, pts, blobR,
+      x: dx * spreadR * t,
+      y: dy * spreadR * t,
+      z: dz * spreadR * t,
+    };
+  });
+
+  for (let iter = 0; iter < 100; iter++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+        let d = Math.hypot(dx, dy, dz);
+        if (d < 1e-6) {
+          const [fx, fy, fz] = fibonacciDir(j, n);
+          dx = fx; dy = fy; dz = fz; d = 1e-6;
+        }
+        const minD = a.blobR + b.blobR + gap;
+        if (d < minD) {
+          const push = (minD - d) / 2 / d;
+          a.x -= dx * push; a.y -= dy * push; a.z -= dz * push;
+          b.x += dx * push; b.y += dy * push; b.z += dz * push;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  if (n > 1) {
+    let mx = 0, my = 0, mz = 0;
+    for (const node of nodes) { mx += node.x; my += node.y; mz += node.z; }
+    mx /= n; my /= n; mz /= n;
+    for (const node of nodes) { node.x -= mx; node.y -= my; node.z -= mz; }
+  }
+
+  const posById = new Map<number, [number, number, number]>();
+  const centers: ThemeFilterCluster[] = [];
+  let extent = 0;
+
+  for (const node of nodes) {
+    // More open fill so larger spheres stay fluffy (not white-hot cores).
+    for (const p of node.pts) {
+      const [jx, jy, jz] = kgCloudJitter(p.i + 31, node.blobR, 0.65);
+      posById.set(p.i, [node.x + jx, node.y + jy, node.z + jz]);
+    }
+    const dist = Math.hypot(node.x, node.y, node.z);
+    // Push tiny-theme labels farther out so they don't collide with big-cluster labels.
+    const off = node.blobR + labelGap + (node.pts.length < 40 ? 0.25 : 0);
+    const lx = dist < 1e-4 ? node.x : node.x + (node.x / dist) * off;
+    const ly = dist < 1e-4 ? node.y + off : node.y + (node.y / dist) * off;
+    const lz = dist < 1e-4 ? node.z : node.z + (node.z / dist) * off;
+    extent = Math.max(extent, dist + node.blobR);
+    centers.push({
+      theme: node.theme,
+      count: node.pts.length,
+      cx: node.x, cy: node.y, cz: node.z,
+      lx, ly, lz,
+      blobR: node.blobR,
     });
   }
-  for (const k of result.keywords ?? []) {
-    items.push({ group: "keyword", label: k.term, sub: "", count: k.paperCount });
-  }
-  for (const p of result.papers ?? []) {
-    items.push({
-      group: "paper",
-      label: p.title || "Untitled",
-      sub: [p.theme, p.department].filter(Boolean).join(" · "),
-      count: 0,
-      paperId: p.id,
-      paperIndex: p.i,
-    });
-  }
-  for (const t of result.themes) {
-    items.push({ group: "theme", label: t.label, sub: "", count: t.paperCount });
-  }
-  for (const t of result.topics) {
-    items.push({ group: "topic", label: t.label, sub: "", count: t.paperCount });
-  }
-  return items;
+
+  return { posById, centers, extent };
+}
+
+function themeFilterCameraZ(layout: ThemeFilterLayout | null): number {
+  if (!layout || layout.centers.length <= 1) return 3.2;
+  return Math.max(3.8, (layout.extent + 0.4) * 2.05);
 }
 
 /** Build department list for a theme from the current search overlay points. */
@@ -1146,38 +1042,25 @@ export default function ResearchAtlasTiles({
 
   const treeRef = useRef<AtlasTree | null>(null);
   const dictRef = useRef<AtlasDict | null>(null);
+  /** Client sphere layout for the unfiltered tile cloud. */
+  const themeSphereLayoutRef = useRef<ThemeSphereLayout | null>(null);
   const overlayIndicesRef = useRef<number[]>([]);
   const overlayPointsRef = useRef<AtlasPointCoord[]>([]);
   const filterActiveRef = useRef(false);
   /** Per-theme filtered counts (null = not filtering) — drives theme label visibility. */
   const filterCountsRef = useRef<Record<string, number> | null>(null);
-  /** Full result of the primary search — refine filters within this set. */
-  const basePointsRef = useRef<AtlasPointCoord[]>([]);
-  const baseIndicesRef = useRef<Set<number>>(new Set());
-  /** Result after level-2 refine (e.g. theme ∩ department) — faculty deep-refine filters within this. */
-  const midPointsRef = useRef<AtlasPointCoord[]>([]);
-  const midIndicesRef = useRef<Set<number>>(new Set());
   /**
-   * Point set currently driving domain counts / left sidebar (respects refine).
+   * Point set currently driving domain counts / left sidebar.
    * Kept separate from drillPointsRef (full theme) so the right sidebar total
-   * matches the left when a department/faculty narrowing is active.
+   * matches the left when filtering is active.
    */
   const domainCountPointsRef = useRef<AtlasPointCoord[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [refineQuery, setRefineQuery] = useState("");
-  const [refineSearchQuery, setRefineSearchQuery] = useState("");
-  /** Level-3 narrow: typically a professor within the level-2 department. */
-  const [deepRefineQuery, setDeepRefineQuery] = useState("");
-  const [deepRefineSearchQuery, setDeepRefineSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
-  const [baseMatchCount, setBaseMatchCount] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
-  /** Bumped whenever theme∩department mid-set is rebuilt so faculty refine can re-intersect. */
-  const [midEpoch, setMidEpoch] = useState(0);
   const [hovered, setHovered] = useState<PickedPaper | null>(null);
   const [selected, setSelected] = useState<PickedPaper | null>(null);
   const [detail, setDetail] = useState<KgPaperMeta | null>(null);
@@ -1198,10 +1081,6 @@ export default function ResearchAtlasTiles({
     },
     [atlasMode, mode, onModeChange],
   );
-  const [suggestOpen, setSuggestOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<KgAtlasSuggestResult | null>(null);
-  const [suggestActive, setSuggestActive] = useState(-1);
-  const [refineItems, setRefineItems] = useState<SuggestItem[]>([]);
   const [clusterTheme, setClusterTheme] = useState<string | null>(null);
   const [clusterBreakdown, setClusterBreakdown] = useState<KgAtlasClusterBreakdown | null>(null);
   /** When the cluster sidebar is scoped to a focused domain (vs a whole theme). */
@@ -1211,20 +1090,12 @@ export default function ResearchAtlasTiles({
   const [focusedDomain, setFocusedDomain] = useState<string | null>(null);
   const [filterThemeCounts, setFilterThemeCounts] = useState<{ theme: string; count: number; color: string }[]>([]);
   const [drillDomainCounts, setDrillDomainCounts] = useState<{ domain: string; count: number; hue: number }[]>([]);
-  const [primaryEntity, setPrimaryEntity] = useState<SearchEntity>("text");
-  const [refineEntity, setRefineEntity] = useState<SearchEntity | null>(null);
-  const [deepRefineEntity, setDeepRefineEntity] = useState<SearchEntity | null>(null);
   const [facultyOptions, setFacultyOptions] = useState<KgFacultyItem[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [selectedFacultyId, setSelectedFacultyId] = useState("");
   const [selectedYears, setSelectedYears] = useState(0);
-  const searchBoxRef = useRef<HTMLDivElement>(null);
   const onThemeLabelClickRef = useRef<(theme: string) => void>(() => {});
   const onDomainLabelClickRef = useRef<(theme: string, domain: string) => void>(() => {});
-  /** Pick a domain from refine suggestions after a theme drill (focus + sidebar). */
-  const pickDomainSuggestRef = useRef<(domain: string) => void>(() => {});
-  /** Domain to focus once a theme drill finishes loading its layout. */
-  const pendingDomainFocusRef = useRef<string | null>(null);
   /** Raycast papers from label DOM handlers (labels sit above the canvas). */
   const pickPaperRef = useRef<(clientX: number, clientY: number) => PickedPaper | null>(() => null);
   const selectPaperRef = useRef<(paper: PickedPaper) => void>(() => {});
@@ -1235,17 +1106,18 @@ export default function ResearchAtlasTiles({
   ) => void>(() => {});
   const drillThemeRef = useRef<string | null>(null);
   const drillLayoutRef = useRef<DrillLayout | null>(null);
+  /** Open 3D theme clouds while filters/search are active (not domain-drilled). */
+  const themeFilterLayoutRef = useRef<ThemeFilterLayout | null>(null);
   /** Full point set of the drilled theme (all domains) — lets focus re-filter. */
   const drillPointsRef = useRef<AtlasPointCoord[]>([]);
   /** Domain currently isolated/zoomed within the drilled theme, or null. */
   const focusedDomainRef = useRef<string | null>(null);
-  const primaryPickRef = useRef<"faculty" | "department" | null>(null);
-  const refinePickRef = useRef<"faculty" | "department" | null>(null);
-  const deepRefinePickRef = useRef<"faculty" | "department" | null>(null);
   const themesClickableRef = useRef(true);
   const viewOnlyRef = useRef(false);
 
   const isViewMode = atlasMode === "view";
+  const isCompareMode = atlasMode === "compare";
+  const isExploreMode = atlasMode === "interactive";
   const structuredFilterActive = Boolean(
     selectedDepartment || selectedFacultyId || selectedYears,
   );
@@ -1269,7 +1141,7 @@ export default function ResearchAtlasTiles({
   useEffect(() => {
     const t = window.setTimeout(() => window.dispatchEvent(new Event("resize")), 520);
     return () => window.clearTimeout(t);
-  }, [isViewMode]);
+  }, [isViewMode, isCompareMode]);
 
   const markDirty = useCallback(() => {
     if (engineRef.current) engineRef.current.dirty = true;
@@ -1291,6 +1163,17 @@ export default function ResearchAtlasTiles({
     // Bias the look-target slightly down so the ring sits under the header chips.
     e.controls.target.set(0, -0.2, 0);
     e.camera.position.set(0, -0.2, drillOverviewCameraZ(drillLayoutRef.current));
+    e.controls.update();
+    e.dirty = true;
+    streamNow();
+  }, [streamNow]);
+
+  /** Frame the open 3D theme clouds used by faculty/dept/year filters. */
+  const frameThemeFilterOverview = useCallback(() => {
+    const e = engineRef.current;
+    if (!e) return;
+    e.controls.target.set(0, -0.15, 0);
+    e.camera.position.set(0.55, 0.35, themeFilterCameraZ(themeFilterLayoutRef.current));
     e.controls.update();
     e.dirty = true;
     streamNow();
@@ -1349,12 +1232,55 @@ export default function ResearchAtlasTiles({
     const focus = drill ? focusedDomainRef.current : null;
     const focusN = norm(focus ?? "");
 
+    const themeFilter = !drill ? themeFilterLayoutRef.current : null;
+    const themeCenterByName = new Map<string, ThemeFilterCluster>();
+    if (themeFilter) {
+      for (const c of themeFilter.centers) themeCenterByName.set(norm(c.theme), c);
+    }
+    const dict = dictRef.current;
+
     for (const [theme, entry] of e.labelByTheme) {
       let show = !drill;
       if (show && counts) show = (counts[theme] ?? 0) > 0;
       entry.obj.visible = show;
       entry.line.visible = show;
       entry.tip.visible = show;
+      if (!show) continue;
+
+      // While filtering, move labels onto the open 3D cluster layout.
+      const fc = themeCenterByName.get(norm(theme));
+      if (fc) {
+        entry.tip.position.set(fc.cx, fc.cy, fc.cz);
+        entry.obj.position.set(fc.lx, fc.ly, fc.lz);
+        entry.line.geometry.setFromPoints([
+          new THREE.Vector3(fc.cx, fc.cy, fc.cz),
+          new THREE.Vector3(fc.lx, fc.ly, fc.lz),
+        ]);
+      } else if (dict) {
+        const sphere = themeSphereLayoutRef.current?.centers.find(
+          (c) => norm(c.theme) === norm(theme),
+        );
+        if (sphere) {
+          entry.tip.position.set(sphere.cx, sphere.cy, sphere.cz);
+          entry.obj.position.set(sphere.lx, sphere.ly, sphere.lz);
+          entry.line.geometry.setFromPoints([
+            new THREE.Vector3(sphere.cx, sphere.cy, sphere.cz),
+            new THREE.Vector3(sphere.lx, sphere.ly, sphere.lz),
+          ]);
+        } else {
+          const themeId = dict.themes.indexOf(theme);
+          const anchor = dict.themeAnchors.find((a) => a.theme === theme);
+          if (anchor && themeId >= 0) {
+            const pos = themeLabelWorldPos(anchor.x, anchor.y, anchor.z, themeId);
+            entry.tip.position.set(pos.clusterX, pos.clusterY, pos.clusterZ);
+            entry.obj.position.set(pos.x, pos.y, pos.z);
+            entry.line.geometry.setFromPoints([
+              new THREE.Vector3(pos.clusterX, pos.clusterY, pos.clusterZ),
+              new THREE.Vector3(pos.x, pos.y, pos.z),
+            ]);
+          }
+        }
+      }
     }
 
     // Match domains by normalized name so subtle whitespace/case differences
@@ -1424,13 +1350,16 @@ export default function ResearchAtlasTiles({
     const dict = dictRef.current;
     if (!e) return;
 
-    // While drilled, re-lay-out points into separate per-domain clusters and
-    // color them by domain (see buildDomainSpreadLayout); otherwise keep the
-    // original positions colored by theme.
+    // While drilled, use per-domain layout; otherwise (filters/search) rebuild
+    // each theme as an open 3D cloud so filtered results aren't flat discs.
     const layout = drillThemeRef.current ? drillLayoutRef.current : null;
     // When a domain is focused, isolate its points (hide the other domains).
     const focus = drillThemeRef.current ? focusedDomainRef.current : null;
     const src = focus ? points.filter((p) => (p.domain || "Other") === focus) : points;
+    const themeFilter = !layout && src.length > 0
+      ? buildThemeFilterLayout(src)
+      : null;
+    themeFilterLayoutRef.current = themeFilter;
 
     const n = src.length;
     const positions = new Float32Array(n * 3);
@@ -1440,7 +1369,7 @@ export default function ResearchAtlasTiles({
 
     for (let k = 0; k < n; k++) {
       const p = src[k];
-      const pos = layout?.posById.get(p.i);
+      const pos = layout?.posById.get(p.i) ?? themeFilter?.posById.get(p.i);
       if (pos) {
         positions[k * 3] = pos[0];
         positions[k * 3 + 1] = pos[1];
@@ -1452,10 +1381,10 @@ export default function ResearchAtlasTiles({
       }
       const hue = layout?.hueById.get(p.i);
       if (hue != null) {
-        // Deeper, more saturated base — additive blending brightens dense
-        // cores, so starting darker keeps the hue visible instead of white.
+        // Domain drill hues — additive glow brightens dense cores, so start darker.
         tmp.setHSL(hue / 360, 0.9, 0.5);
       } else {
+        // Exact theme palette + brightness (same as the unfiltered atlas cloud).
         const themeId = dict ? dict.themes.indexOf(p.theme) : -1;
         tmp.set(themeColorHex(themeId >= 0 ? themeId : 0));
       }
@@ -1468,12 +1397,13 @@ export default function ResearchAtlasTiles({
     e.overlayGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     e.overlayGeom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     e.overlayGeom.setDrawRange(0, n);
-    // The drilled cloud is framed from further away, so bump the point size to
-    // keep domain blobs looking as dense and fluffy as the theme overview.
-    e.overlayMat.uniforms.uSize.value = layout ? 0.13 : 0.07;
-    // Dense drilled clusters accumulate a lot of additive brightness; drop the
-    // per-point alpha so cores stay coloured instead of blowing out to white.
-    e.overlayMat.uniforms.uAlpha.value = layout ? 0.38 : 0.95;
+    // Same Additive theme look as the base atlas — no brightness boost.
+    e.overlayMat.blending = THREE.AdditiveBlending;
+    e.overlayMat.depthTest = false;
+    e.overlayMat.uniforms.uSize.value = layout ? 0.12 : 0.09;
+    e.overlayMat.uniforms.uAlpha.value = layout ? 0.55 : 0.95;
+    e.overlayMat.uniforms.uMaxPx.value = 14.0 * Math.min(window.devicePixelRatio, 2);
+    e.overlayMat.needsUpdate = true;
     e.overlay.visible = n > 0;
     // Hide the full atlas cloud while filtering so only matched papers show.
     e.tileGroup.visible = n === 0;
@@ -1527,6 +1457,10 @@ export default function ResearchAtlasTiles({
         if (cancelled) return;
         treeRef.current = tree;
         dictRef.current = dict;
+        themeSphereLayoutRef.current = createThemeSphereLayout(
+          dict.themes,
+          dict.themeAnchors,
+        );
       })
       .catch((err) => { if (!cancelled) setError(String(err?.message || err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -1536,7 +1470,6 @@ export default function ResearchAtlasTiles({
   useEffect(() => {
     const theme = searchParams.get("theme")?.trim();
     if (theme) {
-      setQuery("");
       setDrillTheme(theme);
       setSearchQuery(theme);
     }
@@ -1598,12 +1531,7 @@ export default function ResearchAtlasTiles({
           indices = points.map((point) => point.i);
         }
 
-        basePointsRef.current = points;
-        baseIndicesRef.current = new Set(indices);
         overlayIndicesRef.current = indices;
-        midPointsRef.current = [];
-        midIndicesRef.current = new Set();
-        setBaseMatchCount(points.length);
         setMatchCount(points.length);
         drillLayoutRef.current = drillTheme ? buildDomainSpreadLayout(points) : null;
         drillPointsRef.current = drillTheme ? points : [];
@@ -1620,6 +1548,7 @@ export default function ResearchAtlasTiles({
         );
         rebuildOverlay(points);
         if (drillTheme && drillLayoutRef.current) frameDrillOverview();
+        else if (!drillTheme && themeFilterLayoutRef.current) frameThemeFilterOverview();
       } catch (err) {
         if (!cancelled) {
           toast.error(err instanceof Error ? err.message : "Could not apply filters");
@@ -1631,188 +1560,19 @@ export default function ResearchAtlasTiles({
     return () => { cancelled = true; };
   }, [
     structuredFilterActive, selectedDepartment, selectedFacultyId, selectedYears, drillTheme,
-    loading, atlasReady, rebuildOverlay, frameDrillOverview,
+    loading, atlasReady, rebuildOverlay, frameDrillOverview, frameThemeFilterOverview,
   ]);
 
-  const hasSearched = Boolean(searchQuery.trim()) || structuredFilterActive;
-
-  // Typeahead: primary suggest when idle; refine suggest when already searching.
-  useEffect(() => {
-    if (!suggestOpen || loading || hasSearched) return;
-    let cancelled = false;
-    fetchKgAtlasSuggestSafe(query.trim())
-      .then((result) => { if (!cancelled) setSuggestions(result); })
-      .catch(() => {
-        if (!cancelled) {
-          setSuggestions({ query: query.trim(), themes: [], topics: [], faculty: [], departments: [] });
-        }
-      });
-    return () => { cancelled = true; };
-  }, [query, suggestOpen, loading, hasSearched]);
-
-  useEffect(() => {
-    if (!suggestOpen) return;
-    const onPointerDown = (ev: PointerEvent) => {
-      if (!searchBoxRef.current?.contains(ev.target as Node)) setSuggestOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [suggestOpen]);
-
-  const suggestItems = useMemo(
-    () => (suggestions ? flattenSuggestions(suggestions) : []),
-    [suggestions],
-  );
-
-  const dropdownItems = (hasSearched ? refineItems : suggestItems).slice(0, 10);
-
-  useEffect(() => { setSuggestActive(-1); }, [dropdownItems]);
-
-  const applyPrimarySearch = useCallback((term: string, pick: "faculty" | "department" | null = null) => {
-    const t = term.trim();
-    if (!t) return;
-    primaryPickRef.current = pick;
-    refinePickRef.current = null;
-    deepRefinePickRef.current = null;
-    setSearchQuery(t);
-    setQuery("");
-    setRefineQuery("");
-    setRefineSearchQuery("");
-    setDeepRefineQuery("");
-    setDeepRefineSearchQuery("");
-    setDeepRefineEntity(null);
-    setSuggestOpen(false);
-    setActiveLevel(null);
-    setSelected(null);
-    setClusterTheme(null);
-    setClusterBreakdown(null);
-    setDrillTheme(null);
-    drillLayoutRef.current = null;
-    setDrillDomainCounts([]);
-  }, []);
-
-  const applyDeepRefineSearch = useCallback((term: string, pick: "faculty" | "department" | null = null) => {
-    const t = term.trim();
-    if (!t || !searchQuery.trim() || !refineSearchQuery.trim()) return;
-    deepRefinePickRef.current = pick ?? "faculty";
-    setDeepRefineQuery(t);
-    setDeepRefineSearchQuery(t);
-    setDeepRefineEntity(pick ?? "faculty");
-    setQuery("");
-    setSuggestOpen(false);
-    setSelected(null);
-    setClusterTheme(null);
-    setClusterBreakdown(null);
-  }, [searchQuery, refineSearchQuery]);
-
-  const applyRefineSearch = useCallback((term: string, pick: "faculty" | "department" | null = null) => {
-    const t = term.trim();
-    if (!t || !searchQuery.trim()) return;
-    if (focusedDomainRef.current) {
-      toast.info("Exit the focused domain before narrowing further.");
-      return;
-    }
-    // Level 3: theme → department → professor
-    if (refineSearchQuery.trim()) {
-      if (deepRefineSearchQuery.trim()) {
-        toast.info("You can apply up to 3 filters (theme → department → faculty). Clear one to change.");
-        return;
-      }
-      if (refineEntity !== "department" && pick !== "faculty") {
-        toast.info("Third-level narrowing is for faculty within the selected department.");
-        return;
-      }
-      applyDeepRefineSearch(t, pick ?? "faculty");
-      return;
-    }
-    refinePickRef.current = pick;
-    deepRefinePickRef.current = null;
-    setDeepRefineQuery("");
-    setDeepRefineSearchQuery("");
-    setDeepRefineEntity(null);
-    setRefineQuery(t);
-    setRefineSearchQuery(t);
-    setQuery("");
-    setSuggestOpen(false);
-    setSelected(null);
-    setClusterTheme(null);
-    setClusterBreakdown(null);
-  }, [searchQuery, refineSearchQuery, deepRefineSearchQuery, refineEntity, applyDeepRefineSearch]);
-
-  const submitSearch = useCallback(() => {
-    const term = query.trim();
-    if (!term) return;
-    if (!hasSearched) applyPrimarySearch(term);
-    else applyRefineSearch(term);
-  }, [query, hasSearched, applyPrimarySearch, applyRefineSearch]);
-
-  const pickSuggestion = useCallback((item: SuggestItem) => {
-    if (item.group === "paper" && item.paperId) {
-      // Open the exact paper's detail panel; carry coords if the dot is loaded.
-      const fromOverlay = overlayPointsRef.current.find((p) => p.i === item.paperIndex);
-      selectPaperRef.current({
-        i: item.paperIndex ?? fromOverlay?.i ?? 0,
-        id: item.paperId,
-        title: item.label,
-        theme: fromOverlay?.theme || "",
-        domain: fromOverlay?.domain || "",
-        citations: 0,
-        x: fromOverlay?.x ?? 0,
-        y: fromOverlay?.y ?? 0,
-        z: fromOverlay?.z ?? 0,
-      });
-      setSuggestOpen(false);
-      return;
-    }
-    if (item.group === "domain") {
-      pickDomainSuggestRef.current(item.label);
-      return;
-    }
-    const pick = item.group === "faculty" || item.group === "department" ? item.group : null;
-    if (!hasSearched) applyPrimarySearch(item.label, pick);
-    else applyRefineSearch(item.label, pick);
-  }, [hasSearched, applyPrimarySearch, applyRefineSearch]);
-
-  const onSearchKeyDown = useCallback((ev: React.KeyboardEvent<HTMLInputElement>) => {
-    if (ev.key === "Escape") { setSuggestOpen(false); return; }
-    if (!suggestOpen || !dropdownItems.length) return;
-    if (ev.key === "ArrowDown") {
-      ev.preventDefault();
-      setSuggestActive((i) => (i + 1) % dropdownItems.length);
-    } else if (ev.key === "ArrowUp") {
-      ev.preventDefault();
-      setSuggestActive((i) => (i <= 0 ? dropdownItems.length - 1 : i - 1));
-    } else if (ev.key === "Enter" && suggestActive >= 0) {
-      ev.preventDefault();
-      pickSuggestion(dropdownItems[suggestActive]);
-    }
-  }, [suggestOpen, dropdownItems, suggestActive, pickSuggestion]);
-
-  // Primary search — stores the base set that nested refine filters within.
+  // Theme drill / ?theme= deep link — load text indices and filter to exact theme.
   useEffect(() => {
     let cancelled = false;
     if (structuredFilterActive) return;
     const q = searchQuery.trim();
     if (!q || loading || !atlasReady) {
       if (!q || loading) {
-        basePointsRef.current = [];
-        baseIndicesRef.current = new Set();
         overlayIndicesRef.current = [];
-        setBaseMatchCount(0);
         setMatchCount(0);
-        setRefineQuery("");
-        setRefineSearchQuery("");
-        setDeepRefineQuery("");
-        setDeepRefineSearchQuery("");
-        setPrimaryEntity("text");
-        setRefineEntity(null);
-        setDeepRefineEntity(null);
-        primaryPickRef.current = null;
-        refinePickRef.current = null;
-        deepRefinePickRef.current = null;
         drillLayoutRef.current = null;
-        midPointsRef.current = [];
-        midIndicesRef.current = new Set();
         rebuildOverlay([]);
         setClusterTheme(null);
         setClusterBreakdown(null);
@@ -1820,78 +1580,22 @@ export default function ResearchAtlasTiles({
       return;
     }
     setSearchLoading(true);
-    setRefineQuery("");
-    setRefineSearchQuery("");
-    setDeepRefineQuery("");
-    setDeepRefineSearchQuery("");
-    setRefineEntity(null);
-    setDeepRefineEntity(null);
-    refinePickRef.current = null;
-    deepRefinePickRef.current = null;
-    midPointsRef.current = [];
-    midIndicesRef.current = new Set();
     (async () => {
-      const union = new Set<number>();
       try {
-        const [textIdx, fac, dept] = await Promise.all([
-          searchAtlasIndices(q, OVERLAY_CAP).catch(() => []),
-          fetchKgAtlasFacultySearch(q).catch(() => ({ matches: [], indices: [] as number[] })),
-          fetchKgAtlasDepartmentSearch(q).catch(() => ({ matches: [], indices: [] as number[] })),
-        ]);
+        const textIdx = await searchAtlasIndices(q, OVERLAY_CAP).catch(() => []);
         if (cancelled) return;
 
-        const entity = classifySearchEntity(
-          q, fac.matches ?? [], dept.matches ?? [], primaryPickRef.current,
-        );
-        setPrimaryEntity(entity);
-
-        // Department / faculty searches must use ONLY that entity's paper index.
-        // Unioning with full-text search is why "Chemical Engineering" also showed
-        // Physics / Biochemical papers (title tokens like "chemical" / "engineering").
-        let indices: number[] = [];
-        if (entity === "department") {
-          const exactName =
-            (dept.matches ?? []).find((d) => d.department.toLowerCase() === q.toLowerCase())?.department
-            ?? (dept.matches ?? [])[0]?.department
-            ?? q;
-          const exact = await fetchKgDepartmentAtlasIndices([exactName]).catch(() => null);
-          indices = (exact?.indices?.length ? exact.indices : (dept.indices ?? [])).slice(0, OVERLAY_CAP);
-        } else if (entity === "faculty") {
-          const exactFac =
-            (fac.matches ?? []).find((f) => f.name.toLowerCase() === q.toLowerCase())
-            ?? (fac.matches ?? [])[0];
-          if (exactFac?.facultyId) {
-            const facIdx = await fetchKgFacultyAtlasIndices([exactFac.facultyId]).catch(() => null);
-            indices = (facIdx?.indices?.length ? facIdx.indices : (fac.indices ?? [])).slice(0, OVERLAY_CAP);
-          } else {
-            indices = (fac.indices ?? []).slice(0, OVERLAY_CAP);
-          }
-        } else {
-          for (const i of textIdx) union.add(i);
-          for (const i of fac.indices) union.add(i);
-          for (const i of dept.indices) union.add(i);
-          indices = [...union].slice(0, OVERLAY_CAP);
-        }
-
+        const indices = textIdx.slice(0, OVERLAY_CAP);
         const coords = await fetchAtlasPointCoords(indices);
         if (cancelled) return;
         let points = indices.map((i) => coords.get(i)).filter((p): p is AtlasPointCoord => !!p);
         // When the query exactly names a theme, show only that theme's papers.
-        // The text index also matches the theme's words (e.g. "materials",
-        // "devices") inside other themes' titles/domains, which otherwise leaks
-        // a few stray cross-theme dots into a theme search.
         const dictThemes = dictRef.current?.themes ?? [];
         const exactTheme = dictThemes.find((t) => t.toLowerCase() === q.toLowerCase());
         if (exactTheme) points = points.filter((p) => p.theme === exactTheme);
 
-        basePointsRef.current = points;
-        baseIndicesRef.current = new Set(points.map((p) => p.i));
         overlayIndicesRef.current = points.map((p) => p.i);
-        setBaseMatchCount(points.length);
         setMatchCount(points.length);
-        // Drilled into a theme → spread its points into separate domain clusters.
-        // Fresh drill resets any per-domain focus and stores the full set so a
-        // later domain click can isolate/expand without a re-fetch.
         drillLayoutRef.current = drillThemeRef.current
           ? buildDomainSpreadLayout(points)
           : null;
@@ -1910,401 +1614,15 @@ export default function ResearchAtlasTiles({
         rebuildOverlay(points);
         if (drillThemeRef.current && drillLayoutRef.current) {
           frameDrillOverview();
+        } else if (!drillThemeRef.current && themeFilterLayoutRef.current) {
+          frameThemeFilterOverview();
         }
       } finally {
         if (!cancelled) setSearchLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [searchQuery, loading, rebuildOverlay, atlasReady, frameDrillOverview, structuredFilterActive]);
-
-  // Nested refine — authoritative server intersection within the primary query.
-  useEffect(() => {
-    let cancelled = false;
-    const base = basePointsRef.current;
-    const rq = refineSearchQuery.trim();
-    const baseQ = searchQuery.trim();
-
-    if (!baseQ || !base.length) return;
-
-    if (!rq) {
-      midPointsRef.current = [];
-      midIndicesRef.current = new Set();
-      overlayIndicesRef.current = base.map((p) => p.i);
-      setMatchCount(base.length);
-      setRefineEntity(null);
-      setDeepRefineQuery("");
-      setDeepRefineSearchQuery("");
-      setDeepRefineEntity(null);
-      deepRefinePickRef.current = null;
-      rebuildOverlay(base);
-      return;
-    }
-
-    setSearchLoading(true);
-    (async () => {
-      try {
-        const entityHint =
-          refinePickRef.current === "department" || refinePickRef.current === "faculty"
-            ? refinePickRef.current
-            : null;
-        const baseEntityHint =
-          primaryEntity === "department" || primaryEntity === "faculty"
-            ? primaryEntity
-            : null;
-        const baseSet = baseIndicesRef.current;
-        const rqLower = rq.toLowerCase();
-        let points: AtlasPointCoord[] = [];
-        let entity: SearchEntity = "text";
-        const deptPrimary =
-          primaryEntity === "department" || primaryPickRef.current === "department";
-
-        // Department primary + faculty narrow: intersect faculty index with the
-        // loaded department set. Server refine still text-searches the base
-        // query unless the KG service is on atlas-refine-v3+.
-        const facProbe = await fetchKgAtlasFacultySearch(rq, 20).catch(() => ({
-          matches: [] as KgAtlasFacultyMatch[],
-          indices: [] as number[],
-        }));
-        if (cancelled) return;
-        const refineLooksFaculty =
-          entityHint === "faculty"
-          || (deptPrimary
-            && entityHint !== "department"
-            && classifySearchEntity(rq, facProbe.matches ?? [], [], refinePickRef.current) === "faculty");
-
-        if (refineLooksFaculty && baseSet.size > 0) {
-          const deptHint = deptPrimary ? baseQ : "";
-          points = await pointsIntersectingFacultyInBase(rq, baseSet, base, deptHint);
-          entity = "faculty";
-        } else {
-          const result = await fetchKgAtlasRefine(
-            baseQ,
-            rq,
-            OVERLAY_CAP,
-            entityHint,
-            baseEntityHint,
-          );
-          if (cancelled) return;
-
-          points = (result.points ?? []).map((p) => ({
-            i: p.i,
-            id: p.id || "",
-            title: p.title || "",
-            theme: p.theme || "",
-            domain: p.domain || "",
-            department: p.department || "",
-            x: p.x,
-            y: p.y,
-            z: p.z,
-          }));
-
-          const deptNames = [...new Set(
-            points.map((p) => (p.department || "").trim()).filter(Boolean),
-          )];
-          const deptForClassify = deptNames.map((department) => ({
-            department,
-            facultyCount: 0,
-            atlasCount: points.filter((p) => (p.department || "").trim() === department).length,
-          }));
-          entity = classifySearchEntity(rq, facProbe.matches ?? [], deptForClassify, refinePickRef.current);
-          if (entity === "text" && deptNames.some((n) => n.toLowerCase() === rqLower)) {
-            entity = "department";
-          }
-          if (refinePickRef.current === "department") entity = "department";
-          if (refinePickRef.current === "faculty") entity = "faculty";
-
-          if (entity === "department") {
-            points = points.filter((p) => {
-              const d = (p.department || "").trim().toLowerCase();
-              if (!d) return true;
-              return d === rqLower || d.includes(rqLower) || rqLower.includes(d);
-            });
-          }
-
-          // Stale refine API used text search for department bases — recover faculty picks.
-          if (
-            points.length === 0
-            && deptPrimary
-            && classifySearchEntity(rq, facProbe.matches ?? [], [], refinePickRef.current) === "faculty"
-          ) {
-            points = await pointsIntersectingFacultyInBase(rq, baseSet, base, baseQ);
-            entity = "faculty";
-          }
-
-          if (
-            typeof result.baseCount === "number"
-            && result.baseCount > 0
-            && !deptPrimary
-            && primaryEntity !== "faculty"
-          ) {
-            setBaseMatchCount(result.baseCount);
-          }
-        }
-
-        midPointsRef.current = points;
-        midIndicesRef.current = new Set(points.map((p) => p.i));
-        overlayIndicesRef.current = points.map((p) => p.i);
-        setMatchCount(points.length);
-
-        setRefineEntity(entity);
-        setMidEpoch((n) => n + 1);
-
-        // Level-3 faculty refine is applied by a separate effect when deepRefine is set.
-        if (!deepRefineSearchQuery.trim()) {
-          rebuildOverlay(points);
-        }
-      } catch {
-        if (cancelled) return;
-        midPointsRef.current = [];
-        midIndicesRef.current = new Set();
-        overlayIndicesRef.current = base.map((p) => p.i);
-        setMatchCount(base.length);
-        setRefineEntity(null);
-        rebuildOverlay(base);
-      } finally {
-        if (!cancelled) setSearchLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [refineSearchQuery, searchQuery, baseMatchCount, primaryEntity, rebuildOverlay, deepRefineSearchQuery]);
-
-  // Level-3: intersect theme∩department mid-set with a professor's atlas indices.
-  useEffect(() => {
-    let cancelled = false;
-    const dq = deepRefineSearchQuery.trim();
-    const mid = midPointsRef.current;
-    const midSet = midIndicesRef.current;
-
-    if (!refineSearchQuery.trim()) return;
-
-    if (!dq) {
-      if (mid.length) {
-        overlayIndicesRef.current = mid.map((p) => p.i);
-        setMatchCount(mid.length);
-        setDeepRefineEntity(null);
-        rebuildOverlay(mid);
-      }
-      return;
-    }
-
-    if (!mid.length) return;
-
-    setSearchLoading(true);
-    (async () => {
-      try {
-        const fac = await fetchKgAtlasFacultySearch(dq, 20).catch(() => ({
-          matches: [] as { facultyId: string; name: string; department: string }[],
-          indices: [] as number[],
-        }));
-        if (cancelled) return;
-
-        let facultyId = "";
-        const exact = (fac.matches ?? []).find((f) => f.name.toLowerCase() === dq.toLowerCase());
-        if (exact) facultyId = exact.facultyId;
-        else if ((fac.matches ?? []).length === 1) facultyId = fac.matches![0].facultyId;
-        else {
-          const deptLower = refineSearchQuery.trim().toLowerCase();
-          const inDept = (fac.matches ?? []).find((f) =>
-            (f.department || "").toLowerCase().includes(deptLower)
-            || deptLower.includes((f.department || "").toLowerCase()),
-          );
-          if (inDept) facultyId = inDept.facultyId;
-          else if ((fac.matches ?? [])[0]) facultyId = fac.matches![0].facultyId;
-        }
-
-        let facIndices: number[] = fac.indices ?? [];
-        if (facultyId) {
-          const res = await fetchKgFacultyAtlasIndices([facultyId]).catch(() => null);
-          if (res?.indices?.length) facIndices = res.indices;
-        }
-
-        const keep = new Set(facIndices.filter((i) => midSet.has(i)));
-        const points = mid.filter((p) => keep.has(p.i));
-        overlayIndicesRef.current = points.map((p) => p.i);
-        setMatchCount(points.length);
-        setDeepRefineEntity("faculty");
-        rebuildOverlay(points);
-      } catch {
-        if (cancelled) return;
-        overlayIndicesRef.current = mid.map((p) => p.i);
-        setMatchCount(mid.length);
-        setDeepRefineEntity(null);
-        rebuildOverlay(mid);
-      } finally {
-        if (!cancelled) setSearchLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [deepRefineSearchQuery, refineSearchQuery, midEpoch, rebuildOverlay]);
-
-  // Refine suggestions:
-  //  - after theme (no dept yet): domains + departments + faculty in primary results
-  //  - after department (level 2): professors in that department (level 3)
-  useEffect(() => {
-    if (!suggestOpen || !hasSearched || !basePointsRef.current.length) {
-      setRefineItems([]);
-      return;
-    }
-    let cancelled = false;
-    const rq = query.trim().toLowerCase();
-    const base = basePointsRef.current;
-    const baseSet = baseIndicesRef.current;
-    const midSet = midIndicesRef.current;
-    const scopeSet = midSet.size > 0 ? midSet : baseSet;
-    const scopePoints = midSet.size > 0 ? midPointsRef.current : base;
-    const deptLevelActive = Boolean(refineSearchQuery.trim()) && refineEntity === "department";
-    const primaryIsDepartment = primaryEntity === "department" && !refineSearchQuery.trim();
-    const facultyLevel = deptLevelActive || primaryIsDepartment;
-    const deptName = deptLevelActive
-      ? refineSearchQuery.trim()
-      : primaryIsDepartment
-        ? searchQuery.trim()
-        : "";
-    const deptLower = deptName.toLowerCase();
-    const themeScoped = Boolean(drillTheme) || Boolean(
-      (dictRef.current?.themes ?? []).some(
-        (t) => t.toLowerCase() === searchQuery.trim().toLowerCase(),
-      ),
-    );
-
-    const deptCounts = new Map<string, number>();
-    if (!facultyLevel) {
-      for (const p of scopePoints) {
-        const name = (p.department || "").trim() || "Unassigned";
-        if (rq && !name.toLowerCase().includes(rq)) continue;
-        deptCounts.set(name, (deptCounts.get(name) ?? 0) + 1);
-      }
-    }
-    const deptItems: SuggestItem[] = [...deptCounts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 8)
-      .map(([label, count]) => ({
-        group: "department" as const,
-        label,
-        sub: "in current results",
-        count,
-      }));
-
-    const domainItems: SuggestItem[] = [];
-    if (themeScoped && !facultyLevel) {
-      const domainCounts = new Map<string, number>();
-      for (const p of scopePoints) {
-        const name = (p.domain || "").trim() || "Other";
-        if (rq && !name.toLowerCase().includes(rq)) continue;
-        domainCounts.set(name, (domainCounts.get(name) ?? 0) + 1);
-      }
-      for (const [label, count] of [...domainCounts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 8)) {
-        domainItems.push({
-          group: "domain",
-          label,
-          sub: drillTheme || searchQuery.trim() || "in theme",
-          count,
-        });
-      }
-    }
-
-    const keywordItems: SuggestItem[] = (rq && themeScoped && !facultyLevel)
-      ? extractKeywordSuggestionsFromPoints(query.trim(), scopePoints, 8)
-      : [];
-
-    (async () => {
-      try {
-        if (facultyLevel) {
-          if (deepRefineSearchQuery.trim()) {
-            if (!cancelled) setRefineItems([]);
-            return;
-          }
-          const allFac = await fetchKgFacultyIndex().catch(() => []);
-          if (cancelled) return;
-          const inDept = allFac.filter((f) => {
-            const fd = (f.department || "").trim().toLowerCase();
-            if (!fd || !deptLower) return false;
-            if (fd !== deptLower && !fd.includes(deptLower) && !deptLower.includes(fd)) return false;
-            if (rq && !f.name.toLowerCase().includes(rq)) return false;
-            return true;
-          });
-          const withCounts: SuggestItem[] = [];
-          await Promise.all(inDept.slice(0, 30).map(async (match) => {
-            try {
-              const res = await fetchKgFacultyAtlasIndices([match.facultyId]);
-              const n = (res.indices ?? []).filter((i) => scopeSet.has(i)).length;
-              if (n > 0) {
-                withCounts.push({
-                  group: "faculty",
-                  label: match.name,
-                  sub: match.department || deptName,
-                  count: n,
-                });
-              }
-            } catch { /* skip */ }
-          }));
-          if (!cancelled) {
-            setRefineItems(withCounts.sort((a, b) => b.count - a.count).slice(0, 12));
-          }
-          return;
-        }
-
-        if (!rq) {
-          if (!cancelled) {
-            setRefineItems([
-              ...domainItems.slice(0, 6),
-              ...deptItems.slice(0, themeScoped ? 4 : 8),
-            ]);
-          }
-          return;
-        }
-
-        const fac = await fetchKgAtlasFacultySearch(rq, 20).catch(() => ({ matches: [], indices: [] as number[] }));
-        if (cancelled) return;
-        const withCounts: SuggestItem[] = [];
-        await Promise.all((fac.matches ?? []).slice(0, 10).map(async (match) => {
-          try {
-            const res = await fetchKgFacultyAtlasIndices([match.facultyId]);
-            const n = (res.indices ?? []).filter((i) => scopeSet.has(i)).length;
-            if (n > 0) {
-              withCounts.push({
-                group: "faculty",
-                label: match.name,
-                sub: match.department || "in current results",
-                count: n,
-              });
-            }
-          } catch { /* skip */ }
-        }));
-        if (!cancelled) {
-          const facultySorted = withCounts.sort((a, b) => b.count - a.count).slice(0, 6);
-          setRefineItems(
-            themeScoped
-              ? [
-                  ...keywordItems.slice(0, 6),
-                  ...domainItems.slice(0, 3),
-                  ...deptItems.slice(0, 2),
-                  ...facultySorted.slice(0, 2),
-                ]
-              : [
-                  ...deptItems.slice(0, 6),
-                  ...facultySorted,
-                ],
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setRefineItems(
-            themeScoped
-              ? [...keywordItems, ...domainItems, ...deptItems]
-              : deptItems,
-          );
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [
-    suggestOpen, query, hasSearched, baseMatchCount, midEpoch, drillTheme,
-    primaryEntity, searchQuery, refineSearchQuery, refineEntity, deepRefineSearchQuery,
-  ]);
+  }, [searchQuery, loading, rebuildOverlay, atlasReady, frameDrillOverview, frameThemeFilterOverview, structuredFilterActive]);
 
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -2319,14 +1637,10 @@ export default function ResearchAtlasTiles({
     setActiveLevel((prev) => (prev === level ? null : level));
     const applied = activeLevel === level ? "" : value;
     if (!applied) {
-      setQuery(""); setSearchQuery("");
-      setRefineQuery(""); setRefineSearchQuery("");
+      setSearchQuery("");
       return;
     }
-    setQuery(applied);
     setSearchQuery(applied);
-    setRefineQuery("");
-    setRefineSearchQuery("");
   }, [activeLevel]);
 
   useEffect(() => {
@@ -2339,6 +1653,9 @@ export default function ResearchAtlasTiles({
     const height = container.clientHeight;
     const tree = treeRef.current;
     const dict = dictRef.current;
+    const themeSphereLayout = themeSphereLayoutRef.current
+      ?? createThemeSphereLayout(dict.themes, dict.themeAnchors);
+    themeSphereLayoutRef.current = themeSphereLayout;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2349,7 +1666,7 @@ export default function ResearchAtlasTiles({
     scene.fog = new THREE.FogExp2(BG, 0.05);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-    camera.position.set(0, 0, 2.4);
+    camera.position.set(0, 0.2, 4.2);
 
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
@@ -2362,9 +1679,9 @@ export default function ResearchAtlasTiles({
 
     const baseMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.022 },
+        uSize: { value: 0.058 },
         uDim: { value: 1.0 },
-        uMaxPx: { value: 10.0 * Math.min(window.devicePixelRatio, 2) },
+        uMaxPx: { value: 13.0 * Math.min(window.devicePixelRatio, 2) },
       },
       vertexShader: `
         attribute vec3 color; uniform float uSize; uniform float uMaxPx; varying vec3 vColor;
@@ -2380,28 +1697,33 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float edge = smoothstep(0.5, 0.12, d);
-          gl_FragColor = vec4(vColor, 0.92 * uDim * edge);
+          // Soft disc with a brighter core so sparse outer dots stay readable.
+          float edge = smoothstep(0.5, 0.22, d);
+          float core = smoothstep(0.32, 0.0, d);
+          float alpha = (0.72 + 0.28 * core) * uDim * edge;
+          gl_FragColor = vec4(vColor, alpha);
         }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
 
     const group = new THREE.Group();
     scene.add(group);
-    const tileManager = new TileManager(tree, group, baseMaterial, POINT_BUDGET, MAX_IN_FLIGHT, () => {
-      if (engineRef.current) engineRef.current.dirty = true;
-    });
+    const tileManager = new TileManager(
+      tree, group, baseMaterial, POINT_BUDGET, MAX_IN_FLIGHT,
+      () => { if (engineRef.current) engineRef.current.dirty = true; },
+      themeSphereLayout,
+    );
 
     const overlayGeom = new THREE.BufferGeometry();
     overlayGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
     overlayGeom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
     const overlayMat = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.07 },
+        uSize: { value: 0.09 },
         uAlpha: { value: 0.95 },
         // Cap the on-screen sprite size (device px) so zooming into a cluster
         // keeps crisp dots instead of ballooning into blurry discs.
-        uMaxPx: { value: 10.0 * Math.min(window.devicePixelRatio, 2) },
+        uMaxPx: { value: 14.0 * Math.min(window.devicePixelRatio, 2) },
       },
       vertexShader: `
         attribute vec3 color;
@@ -2421,8 +1743,9 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float edge = smoothstep(0.5, 0.3, d);
-          gl_FragColor = vec4(vColor, uAlpha * edge);
+          float edge = smoothstep(0.5, 0.26, d);
+          float core = smoothstep(0.28, 0.0, d);
+          gl_FragColor = vec4(vColor, uAlpha * edge * (0.85 + 0.15 * core));
         }`,
       transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
     });
@@ -2452,10 +1775,17 @@ export default function ResearchAtlasTiles({
     const labelExtras: Array<THREE.Object3D> = [];
     const labelByTheme = new Map<string, ThemeLabelEntry>();
     dict.themes.forEach((themeName, themeId) => {
+      const sphere = themeSphereLayout.centers[themeId];
       const anchor = dict.themeAnchors.find((a) => a.theme === themeName);
-      if (!anchor) return;
+      if (!sphere && !anchor) return;
       const color = themeColorHex(themeId);
-      const pos = themeLabelWorldPos(anchor.x, anchor.y, anchor.z, themeId);
+      const pos = sphere
+        ? {
+            clusterX: sphere.cx, clusterY: sphere.cy, clusterZ: sphere.cz,
+            x: sphere.lx, y: sphere.ly, z: sphere.lz,
+          }
+        : themeLabelWorldPos(anchor!.x, anchor!.y, anchor!.z, themeId);
+      const fullCount = sphere?.count ?? anchor?.count ?? 0;
 
       const root = document.createElement("div");
       root.style.cssText = [
@@ -2517,7 +1847,7 @@ export default function ResearchAtlasTiles({
         "line-height:1.2",
         "text-shadow:0 0 6px rgba(0,0,0,0.95),0 1px 2px rgba(0,0,0,0.85)",
       ].join(";");
-      countEl.textContent = formatThemeCountLabel(anchor.count);
+      countEl.textContent = formatThemeCountLabel(fullCount);
 
       root.appendChild(titleEl);
       root.appendChild(countEl);
@@ -2564,7 +1894,7 @@ export default function ResearchAtlasTiles({
         obj,
         line,
         tip,
-        fullCount: anchor.count,
+        fullCount,
         themeName,
       });
     });
@@ -2966,7 +2296,7 @@ export default function ResearchAtlasTiles({
       frameDrillOverview();
       return;
     }
-    e.camera.position.set(0, 0, 2.4);
+    e.camera.position.set(0, 0.2, 4.2);
     e.controls.target.set(0, 0, 0);
     e.controls.update();
     e.dirty = true;
@@ -3074,12 +2404,6 @@ export default function ResearchAtlasTiles({
     setActiveLevel(null);
     setClusterTheme(null);
     setClusterBreakdown(null);
-    setSuggestOpen(false);
-    setQuery("");
-    primaryPickRef.current = null;
-    refinePickRef.current = null;
-    setRefineQuery("");
-    setRefineSearchQuery("");
     focusedDomainRef.current = null;
     setFocusedDomain(null);
     setDrillTheme(theme);
@@ -3095,12 +2419,6 @@ export default function ResearchAtlasTiles({
     if (!e || !layout || !drillThemeRef.current) return;
 
     const next = focusedDomainRef.current === domain ? null : domain;
-    // Cap at 2 filters: theme + one narrowing. If a narrowing (refine) is already
-    // active, block adding a domain focus as a 3rd filter. Exiting focus is allowed.
-    if (next && (refineSearchQuery.trim() || deepRefineSearchQuery.trim())) {
-      toast.info("You can apply up to 3 filters. Clear a narrowing to explore a domain.");
-      return;
-    }
     focusedDomainRef.current = next;
     setFocusedDomain(next);
     setSelected(null);
@@ -3123,33 +2441,20 @@ export default function ResearchAtlasTiles({
       // Expanded back to the whole theme — frame the full ring (zoomed out).
       frameDrillOverview();
     }
-  }, [rebuildOverlay, syncDrillLabels, streamNow, frameDrillOverview, refineSearchQuery, deepRefineSearchQuery]);
+  }, [rebuildOverlay, syncDrillLabels, streamNow, frameDrillOverview]);
 
   // Open the right sidebar with a domain's departments + papers — WITHOUT
   // isolating/zooming the domain on the canvas (that's what focusDomain does).
-  // Use domainCountPointsRef (current narrowed set) so the header total matches
-  // the left sidebar — not drillPointsRef (full theme before refine).
   const openDomainCluster = useCallback((domain: string) => {
     setSelected(null);
     setClusterDomain(domain);
     setClusterTheme(drillThemeRef.current);
     const pts = domainCountPointsRef.current.length
       ? domainCountPointsRef.current
-      : midPointsRef.current.length
-        ? midPointsRef.current
-        : drillPointsRef.current;
+      : drillPointsRef.current;
     setClusterBreakdown(buildDomainBreakdownFromPoints(domain, searchQuery.trim(), pts));
     setClusterLoading(false);
   }, [searchQuery]);
-
-  // Apply a domain suggestion that was picked before the drill layout was ready.
-  useEffect(() => {
-    const pending = pendingDomainFocusRef.current;
-    if (!pending || !drillTheme || !drillLayoutRef.current?.centers.length) return;
-    pendingDomainFocusRef.current = null;
-    focusDomain(pending);
-    openDomainCluster(pending);
-  }, [drillTheme, matchCount, drillDomainCounts, focusDomain, openDomainCluster]);
 
   onThemeLabelClickRef.current = (theme) => {
     // Theme drilling is allowed in view mode too — only paper/domain
@@ -3160,21 +2465,6 @@ export default function ResearchAtlasTiles({
   onDomainLabelClickRef.current = (theme, domain) => {
     if (viewOnlyRef.current) return;
     if (drillThemeRef.current === theme && domain) focusDomain(domain);
-  };
-
-  pickDomainSuggestRef.current = (domain) => {
-    if (viewOnlyRef.current || !domain) return;
-    setSuggestOpen(false);
-    setQuery("");
-    if (drillThemeRef.current) {
-      focusDomain(domain);
-      openDomainCluster(domain);
-      return;
-    }
-    // Theme named in search but not drilled yet — drill, then focus when layout is ready.
-    pendingDomainFocusRef.current = domain;
-    const theme = searchQuery.trim();
-    if (theme) drillIntoTheme(theme);
   };
 
   selectPaperRef.current = (paper) => {
@@ -3206,24 +2496,16 @@ export default function ResearchAtlasTiles({
     setSelectedDepartment("");
     setSelectedFacultyId("");
     setSelectedYears(0);
-    setQuery(""); setSearchQuery("");
-    setRefineQuery(""); setRefineSearchQuery("");
-    setDeepRefineQuery(""); setDeepRefineSearchQuery("");
-    setRefineEntity(null);
-    setDeepRefineEntity(null);
-    deepRefinePickRef.current = null;
-    refinePickRef.current = null;
-    midPointsRef.current = [];
-    midIndicesRef.current = new Set();
+    setSearchQuery("");
     setActiveLevel(null);
-    setSelected(null); setHovered(null); setSuggestOpen(false);
+    setSelected(null); setHovered(null);
     setFilterThemeCounts([]);
     setDrillDomainCounts([]);
     setDrillTheme(null);
     focusedDomainRef.current = null;
     setFocusedDomain(null);
-    pendingDomainFocusRef.current = null;
     drillLayoutRef.current = null;
+    themeFilterLayoutRef.current = null;
     drillPointsRef.current = [];
     domainCountPointsRef.current = [];
     closeThemeCluster();
@@ -3232,22 +2514,12 @@ export default function ResearchAtlasTiles({
   /** Remove only the primary search / drilled theme, keeping the structured
    *  dropdown filters (department / faculty / years) applied. */
   const exitPrimarySearch = () => {
-    setQuery(""); setSearchQuery("");
-    setRefineQuery(""); setRefineSearchQuery("");
-    setDeepRefineQuery(""); setDeepRefineSearchQuery("");
-    setRefineEntity(null);
-    setDeepRefineEntity(null);
-    refinePickRef.current = null;
-    deepRefinePickRef.current = null;
-    primaryPickRef.current = null;
-    midPointsRef.current = [];
-    midIndicesRef.current = new Set();
+    setSearchQuery("");
     setActiveLevel(null);
-    setSelected(null); setHovered(null); setSuggestOpen(false);
+    setSelected(null); setHovered(null);
     setDrillTheme(null);
     focusedDomainRef.current = null;
     setFocusedDomain(null);
-    pendingDomainFocusRef.current = null;
     drillLayoutRef.current = null;
     drillPointsRef.current = [];
     domainCountPointsRef.current = [];
@@ -3256,7 +2528,7 @@ export default function ResearchAtlasTiles({
     // Back to the whole-cloud framing (the drill camera sits much further out).
     const e = engineRef.current;
     if (e) {
-      e.camera.position.set(0, 0, 2.4);
+      e.camera.position.set(0, 0.2, 4.2);
       e.controls.target.set(0, 0, 0);
       e.controls.update();
       e.dirty = true;
@@ -3271,32 +2543,9 @@ export default function ResearchAtlasTiles({
     setSearchQuery(drillTheme ?? "");
   };
 
-  const clearDeepRefine = () => {
-    deepRefinePickRef.current = null;
-    setDeepRefineQuery("");
-    setDeepRefineSearchQuery("");
-    setDeepRefineEntity(null);
-    setQuery("");
-  };
-
-  const clearRefine = () => {
-    refinePickRef.current = null;
-    deepRefinePickRef.current = null;
-    setRefineQuery("");
-    setRefineSearchQuery("");
-    setRefineEntity(null);
-    setDeepRefineQuery("");
-    setDeepRefineSearchQuery("");
-    setDeepRefineEntity(null);
-    midPointsRef.current = [];
-    midIndicesRef.current = new Set();
-    setQuery("");
-  };
-
   const enterViewMode = () => {
     // Keep the active filters/search — view mode is a clean, click-free way to
     // present the current selection, and the filter bar stays usable there.
-    setSuggestOpen(false);
     setSelected(null);
     setHovered(null);
     closeThemeCluster();
@@ -3307,7 +2556,14 @@ export default function ResearchAtlasTiles({
     setAtlasMode("interactive");
   };
 
-  const showTooltip = hovered && !selected && !clusterTheme && !isViewMode;
+  const enterCompareMode = () => {
+    setSelected(null);
+    setHovered(null);
+    closeThemeCluster();
+    setAtlasMode("compare");
+  };
+
+  const showTooltip = hovered && !selected && !clusterTheme && isExploreMode;
 
   const clusterThemeColor = useMemo(() => {
     if (!clusterTheme || !dictRef.current) return "#22d3ee";
@@ -3332,9 +2588,21 @@ export default function ResearchAtlasTiles({
   }, []);
 
   return (
-    <div className={cn("relative flex flex-col flex-1 min-h-0 bg-black text-white", isViewMode && "ring-1 ring-white/10")}>
-      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-        {!isViewMode && (
+    <div className={cn(
+      "relative flex flex-col flex-1 min-h-0 bg-black text-white",
+      (isViewMode || isCompareMode) && "ring-1 ring-white/10",
+    )}>
+      {isCompareMode && (
+        <DepartmentCompareView
+          departmentOptions={departmentOptions}
+          onExit={enterInteractiveMode}
+        />
+      )}
+      <div className={cn(
+        "absolute top-4 right-4 z-30 flex flex-wrap items-center justify-end gap-2",
+        isCompareMode && "hidden",
+      )}>
+        {isExploreMode && (
           <>
             <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1 / 1.3)}
               className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800" aria-label="Zoom in">
@@ -3353,7 +2621,7 @@ export default function ResearchAtlasTiles({
         <div
           className={cn(
             "inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg",
-            isViewMode && "ring-1 ring-white/10",
+            (isViewMode || isCompareMode) && "ring-1 ring-white/10",
           )}
           role="group"
           aria-label="Atlas display mode"
@@ -3377,21 +2645,38 @@ export default function ResearchAtlasTiles({
             onClick={enterInteractiveMode}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-              !isViewMode
+              isExploreMode
                 ? "bg-white text-black shadow-sm"
                 : "text-slate-300 hover:text-white hover:bg-slate-800/80",
             )}
-            aria-pressed={!isViewMode}
+            aria-pressed={isExploreMode}
           >
             <MousePointer2 className="h-3.5 w-3.5" />
             Explore
           </button>
+          <button
+            type="button"
+            onClick={enterCompareMode}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+              isCompareMode
+                ? "bg-white text-black shadow-sm"
+                : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+            )}
+            aria-pressed={isCompareMode}
+          >
+            <Columns2 className="h-3.5 w-3.5" />
+            Compare
+          </button>
         </div>
       </div>
 
-      <header className="absolute top-0 inset-x-0 z-20 pointer-events-none">
-        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-52 sm:pr-64">
-          <div ref={searchBoxRef} className="flex-1 max-w-3xl mx-auto relative pointer-events-none">
+      <header className={cn(
+        "absolute top-0 inset-x-0 z-20 pointer-events-none",
+        isCompareMode && "hidden",
+      )}>
+        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-44 sm:pr-72 lg:pr-80">
+          <div className="flex-1 max-w-3xl mx-auto relative pointer-events-none">
             <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-700/70 bg-slate-900/90 p-2 shadow-lg backdrop-blur-md pointer-events-auto sm:grid-cols-3">
               <FilterCombobox
                 icon={<Building2 className="h-4 w-4 text-emerald-400" />}
@@ -3461,135 +2746,14 @@ export default function ResearchAtlasTiles({
               </label>
             </div>
 
-            {suggestOpen && !loading && searchBoxRef.current?.dataset.searchEnabled === "true" && (
-              <div className="absolute left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-700/80 bg-slate-950/95 shadow-2xl backdrop-blur-md z-50 pointer-events-auto">
-                <p className="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
-                  {hasSearched
-                    ? refineSearchQuery.trim() && refineEntity === "department"
-                      ? `Faculty in “${refineSearchQuery.trim()}”`
-                      : primaryEntity === "department"
-                        ? `Faculty in “${searchQuery.trim()}”`
-                        : drillTheme
-                          ? `Keywords, domains & faculty inside “${themeDisplayName(drillTheme)}”`
-                          : `Departments & faculty inside “${searchQuery.trim()}”`
-                    : query.trim()
-                      ? `Keywords, papers & more for “${query.trim()}”`
-                      : "Top themes, topics, faculty & departments"}
-                </p>
-                {hasSearched ? (
-                  !dropdownItems.length ? (
-                    <p className="px-3 py-3 text-sm text-slate-500">
-                      {refineSearchQuery.trim() && refineEntity === "department"
-                        ? (query.trim()
-                          ? "No matching faculty in this department"
-                          : "Type a professor name, or pick from the list…")
-                        : primaryEntity === "department"
-                          ? (query.trim()
-                            ? "No matching faculty in this department"
-                            : "No faculty with papers in these results")
-                          : query.trim()
-                            ? (drillTheme
-                              ? "No matching keywords, domains, or faculty in this theme"
-                              : "No matching faculty or departments in these results")
-                            : (drillTheme
-                              ? "Type a keyword, domain, or faculty name…"
-                              : "Type a faculty or department name…")}
-                    </p>
-                  ) : (
-                    dropdownItems.map((item, idx) => {
-                      const badge = SUGGEST_BADGE[item.group];
-                      return (
-                        <button
-                          key={`refine-${item.group}-${item.label}`}
-                          type="button"
-                          onClick={() => pickSuggestion(item)}
-                          onMouseEnter={() => setSuggestActive(idx)}
-                          className={cn(
-                            "flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm border-b border-slate-800/60 last:border-0",
-                            idx === suggestActive ? "bg-slate-800/80" : "hover:bg-slate-800/80",
-                          )}
-                        >
-                          <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", badge.className)}>
-                            {badge.text}
-                          </span>
-                          {item.group === "keyword" && <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
-                          {item.group === "paper" && <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
-                          {item.group === "domain" && <Tag className="h-3.5 w-3.5 shrink-0 text-teal-400" />}
-                          {item.group === "faculty" && <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
-                          {item.group === "department" && <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
-                          <span className="flex-1 min-w-0">
-                            <span className="block truncate text-slate-200">{item.label}</span>
-                            {item.sub && (
-                              <span className="block truncate text-[11px] text-slate-500">{item.sub}</span>
-                            )}
-                          </span>
-                          {item.group !== "paper" && (
-                            <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )
-                ) : !suggestions ? (
-                  <p className="px-3 py-3 text-sm text-slate-500 flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading suggestions…
-                  </p>
-                ) : !dropdownItems.length ? (
-                  <p className="px-3 py-3 text-sm text-slate-500">No matching papers, themes, faculty, or departments</p>
-                ) : (
-                  dropdownItems.map((item, idx) => {
-                    const badge = SUGGEST_BADGE[item.group];
-                    return (
-                      <button
-                        key={`${item.group}-${item.label}`}
-                        type="button"
-                        onClick={() => pickSuggestion(item)}
-                        onMouseEnter={() => setSuggestActive(idx)}
-                        className={cn(
-                          "flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm border-b border-slate-800/60 last:border-0",
-                          idx === suggestActive ? "bg-slate-800/80" : "hover:bg-slate-800/80",
-                        )}
-                      >
-                        <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", badge.className)}>
-                          {badge.text}
-                        </span>
-                        {item.group === "keyword" && <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
-                        {item.group === "paper" && <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />}
-                        {item.group === "faculty" && <User className="h-3.5 w-3.5 shrink-0 text-violet-400" />}
-                        {item.group === "department" && <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
-                        <span className="flex-1 min-w-0">
-                          <span className="block truncate text-slate-200">{item.label}</span>
-                          {item.sub && (
-                            <span className="block truncate text-[11px] text-slate-500">{item.sub}</span>
-                          )}
-                        </span>
-                        {item.group !== "paper" && (
-                          <span className="shrink-0 text-xs text-slate-500">{formatCount(item.count)}</span>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
             {Boolean(searchQuery.trim()) && (
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 pointer-events-auto">
                 <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {refineSearchQuery.trim()
-                    ? "Narrowing:"
-                    : drillTheme
-                      ? "Exploring theme:"
-                      : "Searching:"}
+                  {drillTheme ? "Exploring theme:" : "Searching:"}
                 </span>
                 <span
                   title={searchQuery.trim()}
-                  className={cn(
-                    "inline-flex max-w-[240px] shrink-0 items-center gap-1 rounded-md px-3 py-1 text-xs font-medium shadow-sm",
-                    refineSearchQuery.trim()
-                      ? "bg-slate-700 text-slate-100"
-                      : "bg-blue-600 text-white",
-                  )}
+                  className="inline-flex max-w-[240px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
                 >
                   <span className="truncate">{searchQuery.trim()}</span>
                   <button
@@ -3601,49 +2765,6 @@ export default function ResearchAtlasTiles({
                     <X className="h-3 w-3" />
                   </button>
                 </span>
-                {refineSearchQuery.trim() && (
-                  <>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                    <span
-                      title={refineSearchQuery.trim()}
-                      className={cn(
-                        "inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md px-3 py-1 text-xs font-medium shadow-sm",
-                        deepRefineSearchQuery.trim()
-                          ? "bg-slate-700 text-slate-100"
-                          : "bg-blue-600 text-white",
-                      )}
-                    >
-                      <span className="truncate">{refineSearchQuery.trim()}</span>
-                      <button
-                        type="button"
-                        onClick={clearRefine}
-                        className="rounded-full p-0.5 hover:bg-white/20"
-                        aria-label={`Remove refinement ${refineSearchQuery.trim()}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  </>
-                )}
-                {deepRefineSearchQuery.trim() && (
-                  <>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                    <span
-                      title={deepRefineSearchQuery.trim()}
-                      className="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
-                    >
-                      <span className="truncate">{deepRefineSearchQuery.trim()}</span>
-                      <button
-                        type="button"
-                        onClick={clearDeepRefine}
-                        className="rounded-full p-0.5 hover:bg-white/20"
-                        aria-label={`Remove faculty filter ${deepRefineSearchQuery.trim()}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  </>
-                )}
                 {drillTheme && focusedDomain && (
                   <>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
@@ -3759,7 +2880,7 @@ export default function ResearchAtlasTiles({
         </div>
       </header>
 
-      {!isViewMode && (searchQuery.trim() || structuredFilterActive) && (drillTheme
+      {isExploreMode && (searchQuery.trim() || structuredFilterActive) && (drillTheme
         ? drillDomainCounts.length > 0
         : filterThemeCounts.length > 0) && (
         <aside
@@ -3869,7 +2990,7 @@ export default function ResearchAtlasTiles({
         </div>
       )}
 
-      {clusterTheme && !isViewMode && (
+      {clusterTheme && isExploreMode && (
         <ThemeClusterPanel
           theme={clusterTheme}
           domain={clusterDomain}
@@ -3882,7 +3003,7 @@ export default function ResearchAtlasTiles({
         />
       )}
 
-      {selected && !clusterTheme && !isViewMode && (
+      {selected && !clusterTheme && isExploreMode && (
         <PaperPanel paper={selected} detail={detail} detailLoading={detailLoading}
           activeLevel={activeLevel} onLevelChange={handleLevelChange}
           onClose={() => { setSelected(null); setActiveLevel(null); }} />

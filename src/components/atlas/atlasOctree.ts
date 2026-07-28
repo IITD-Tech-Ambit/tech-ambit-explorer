@@ -17,6 +17,10 @@ import {
   childKeys,
   fetchAtlasTile,
 } from "./atlasTiles";
+import {
+  remapTilePositionsToSpheres,
+  type ThemeSphereLayout,
+} from "./atlasThemeSphereLayout";
 
 // Must match the old renderer's THEME_CLUSTER_COLORS (atlasClusters.ts) and the
 // sorted theme id assignment in build_atlas_tiles.py, so colors are identical.
@@ -92,6 +96,8 @@ export class TileManager {
     private pointBudget: number,
     private maxInFlight: number,
     private onChange: () => void,
+    /** Client sphere layout — remaps baked XYZ into round theme nebulas. */
+    private themeSphereLayout: ThemeSphereLayout | null = null,
   ) {}
 
   /** Points objects currently in the scene (for raycasting). */
@@ -152,6 +158,14 @@ export class TileManager {
   private mount(key: string, tile: DecodedTile): void {
     if (this.mounted.has(key)) return;
     const n = tile.pointCount;
+    if (this.themeSphereLayout) {
+      remapTilePositionsToSpheres(
+        tile.positions,
+        tile.themeIds,
+        tile.indices,
+        this.themeSphereLayout,
+      );
+    }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(tile.positions, 3));
 
