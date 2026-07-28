@@ -1400,9 +1400,9 @@ export default function ResearchAtlasTiles({
     // Same Additive theme look as the base atlas — no brightness boost.
     e.overlayMat.blending = THREE.AdditiveBlending;
     e.overlayMat.depthTest = false;
-    e.overlayMat.uniforms.uSize.value = layout ? 0.1 : 0.07;
-    e.overlayMat.uniforms.uAlpha.value = layout ? 0.32 : 0.95;
-    e.overlayMat.uniforms.uMaxPx.value = 10.0 * Math.min(window.devicePixelRatio, 2);
+    e.overlayMat.uniforms.uSize.value = layout ? 0.12 : 0.09;
+    e.overlayMat.uniforms.uAlpha.value = layout ? 0.55 : 0.95;
+    e.overlayMat.uniforms.uMaxPx.value = 14.0 * Math.min(window.devicePixelRatio, 2);
     e.overlayMat.needsUpdate = true;
     e.overlay.visible = n > 0;
     // Hide the full atlas cloud while filtering so only matched papers show.
@@ -1679,9 +1679,9 @@ export default function ResearchAtlasTiles({
 
     const baseMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.032 },
+        uSize: { value: 0.058 },
         uDim: { value: 1.0 },
-        uMaxPx: { value: 7.5 * Math.min(window.devicePixelRatio, 2) },
+        uMaxPx: { value: 13.0 * Math.min(window.devicePixelRatio, 2) },
       },
       vertexShader: `
         attribute vec3 color; uniform float uSize; uniform float uMaxPx; varying vec3 vColor;
@@ -1697,9 +1697,11 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          // Softer falloff — KG clouds glow without white-hot cores.
-          float edge = smoothstep(0.5, 0.18, d);
-          gl_FragColor = vec4(vColor, 0.38 * uDim * edge);
+          // Soft disc with a brighter core so sparse outer dots stay readable.
+          float edge = smoothstep(0.5, 0.22, d);
+          float core = smoothstep(0.32, 0.0, d);
+          float alpha = (0.72 + 0.28 * core) * uDim * edge;
+          gl_FragColor = vec4(vColor, alpha);
         }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
@@ -1717,11 +1719,11 @@ export default function ResearchAtlasTiles({
     overlayGeom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
     const overlayMat = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.07 },
+        uSize: { value: 0.09 },
         uAlpha: { value: 0.95 },
         // Cap the on-screen sprite size (device px) so zooming into a cluster
         // keeps crisp dots instead of ballooning into blurry discs.
-        uMaxPx: { value: 10.0 * Math.min(window.devicePixelRatio, 2) },
+        uMaxPx: { value: 14.0 * Math.min(window.devicePixelRatio, 2) },
       },
       vertexShader: `
         attribute vec3 color;
@@ -1741,8 +1743,9 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float edge = smoothstep(0.5, 0.3, d);
-          gl_FragColor = vec4(vColor, uAlpha * edge);
+          float edge = smoothstep(0.5, 0.26, d);
+          float core = smoothstep(0.28, 0.0, d);
+          gl_FragColor = vec4(vColor, uAlpha * edge * (0.85 + 0.15 * core));
         }`,
       transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
     });

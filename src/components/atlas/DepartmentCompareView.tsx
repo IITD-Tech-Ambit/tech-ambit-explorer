@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { Building2, Calendar, Columns2, Loader2, X } from "lucide-react";
+import { Building2, Calendar, Columns2, Loader2, ZoomIn, ZoomOut, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchAtlasDict, fetchAtlasPointCoords, type AtlasPointCoord } from "./atlasTiles";
@@ -27,10 +27,31 @@ function intersectIndexSets(sets: number[][]): number[] {
 }
 
 const BG = "#000000";
+/** 100% = default framing distance. Users can zoom freely within the range. */
+const DEFAULT_ZOOM_PCT = 100;
+const MIN_ZOOM_PCT = 25;
+const MAX_ZOOM_PCT = 500;
+const ZOOM_STEP_PCT = 25;
+const BASE_CAMERA_DIST = 4.0;
+const MIN_CAMERA_DIST = BASE_CAMERA_DIST / (MAX_ZOOM_PCT / 100);
+const MAX_CAMERA_DIST = BASE_CAMERA_DIST / (MIN_ZOOM_PCT / 100);
 
 function formatCount(n: number): string {
   return n.toLocaleString();
 }
+
+function clampZoom(pct: number): number {
+  return Math.max(MIN_ZOOM_PCT, Math.min(MAX_ZOOM_PCT, Math.round(pct)));
+}
+
+function zoomPercentFromDistance(dist: number): number {
+  return clampZoom((BASE_CAMERA_DIST / Math.max(dist, MIN_CAMERA_DIST)) * 100);
+}
+
+type CloudHandle = {
+  dispose: () => void;
+  setZoomPercent: (pct: number) => void;
+};
 
 function DeptPicker({
   label,
@@ -143,23 +164,27 @@ function DeptCloudPane({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cloudRef = useRef<CloudHandle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paperCount, setPaperCount] = useState(0);
+  const [zoomPercent, setZoomPercent] = useState(DEFAULT_ZOOM_PCT);
 
   useEffect(() => {
     let cancelled = false;
-    let cleanupEngine: (() => void) | null = null;
+    cloudRef.current = null;
 
     if (!department) {
       setPaperCount(0);
       setError(null);
       setLoading(false);
+      setZoomPercent(DEFAULT_ZOOM_PCT);
       return;
     }
 
     setLoading(true);
     setError(null);
+    setZoomPercent(DEFAULT_ZOOM_PCT);
 
     (async () => {
       try {
@@ -205,18 +230,22 @@ function DeptCloudPane({
         if (cancelled) return;
         setPaperCount(points.length);
 
-        // Wait a frame so flex layout has real pane size before WebGL mount.
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (cancelled) return;
 
-        cleanupEngine = mountCloud(
+        const handle = mountCloud(
           containerRef.current,
           canvasRef.current,
           laid.positions,
           colors,
           laid.centers,
           themes,
+          DEFAULT_ZOOM_PCT,
+          (pct) => {
+            if (!cancelled) setZoomPercent(pct);
+          },
         );
+        cloudRef.current = handle;
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not load department graph");
@@ -229,9 +258,16 @@ function DeptCloudPane({
 
     return () => {
       cancelled = true;
-      cleanupEngine?.();
+      cloudRef.current?.dispose();
+      cloudRef.current = null;
     };
   }, [department, themes, selectedYears]);
+
+  const applyZoom = (pct: number) => {
+    const next = clampZoom(pct);
+    setZoomPercent(next);
+    cloudRef.current?.setZoomPercent(next);
+  };
 
   return (
     <div className="flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-xl border border-slate-700/70 bg-black md:min-h-0">
@@ -239,11 +275,46 @@ function DeptCloudPane({
         <p className={cn("min-w-0 truncate text-xs font-medium", accentLabel)}>
           {department || "Select a department"}
         </p>
-        {department && !loading && !error && (
-          <span className="shrink-0 rounded-full border border-slate-600/80 bg-slate-900/80 px-2 py-0.5 text-[11px] text-slate-200">
-            {formatCount(paperCount)} papers
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {department && !loading && !error && (
+            <span className="rounded-full border border-slate-600/80 bg-slate-900/80 px-2 py-0.5 text-[11px] text-slate-200">
+              {formatCount(paperCount)} papers
+            </span>
+          )}
+          {department && !loading && !error && paperCount > 0 && (
+            <div
+              className="inline-flex items-center gap-0.5 rounded-full border border-slate-600 bg-slate-950/80 p-0.5"
+              role="group"
+              aria-label={`Zoom for ${department}`}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => applyZoom(zoomPercent - ZOOM_STEP_PCT)}
+                disabled={zoomPercent <= MIN_ZOOM_PCT}
+                className="h-7 w-7 rounded-full border-0 bg-transparent text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                aria-label={`Zoom out ${department}`}
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+              <span className="min-w-[2.75rem] text-center text-[11px] font-semibold tabular-nums text-slate-100">
+                {zoomPercent}%
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => applyZoom(zoomPercent + ZOOM_STEP_PCT)}
+                disabled={zoomPercent >= MAX_ZOOM_PCT}
+                className="h-7 w-7 rounded-full border-0 bg-transparent text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                aria-label={`Zoom in ${department}`}
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -282,8 +353,12 @@ function mountCloud(
   colors: Float32Array,
   centers: ThemeSphereCenter[],
   dictThemes: string[],
-): () => void {
-  if (!container || !canvas) return () => {};
+  initialZoomPercent: number,
+  onZoomChange?: (pct: number) => void,
+): CloudHandle {
+  if (!container || !canvas) {
+    return { dispose: () => {}, setZoomPercent: () => {} };
+  }
 
   const width = Math.max(container.clientWidth, 1);
   const height = Math.max(container.clientHeight, 1);
@@ -297,13 +372,50 @@ function mountCloud(
   scene.fog = new THREE.FogExp2(BG, 0.04);
 
   const camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 100);
-  camera.position.set(0, 0.2, 4.0);
+  camera.position.set(0, 0.2, BASE_CAMERA_DIST);
 
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
-  controls.minDistance = 0.4;
-  controls.maxDistance = 18;
+  controls.minDistance = MIN_CAMERA_DIST;
+  controls.maxDistance = MAX_CAMERA_DIST;
+  controls.enableZoom = true;
+  controls.zoomSpeed = 1.0;
+
+  let applyingProgrammaticZoom = false;
+  let lastReportedZoom = clampZoom(initialZoomPercent);
+
+  const readZoomPercent = () =>
+    zoomPercentFromDistance(camera.position.distanceTo(controls.target));
+
+  const applyZoomPercent = (pct: number) => {
+    const next = clampZoom(pct);
+    const dist = THREE.MathUtils.clamp(
+      BASE_CAMERA_DIST / (next / 100),
+      MIN_CAMERA_DIST,
+      MAX_CAMERA_DIST,
+    );
+    const target = controls.target.clone();
+    const dir = camera.position.clone().sub(target);
+    if (dir.lengthSq() < 1e-8) dir.set(0, 0.05, 1);
+    dir.normalize();
+    applyingProgrammaticZoom = true;
+    camera.position.copy(target).addScaledVector(dir, dist);
+    controls.update();
+    applyingProgrammaticZoom = false;
+    lastReportedZoom = next;
+    onZoomChange?.(next);
+  };
+  // Start at the default framing (100%), not the zoom-out floor.
+  applyZoomPercent(initialZoomPercent || DEFAULT_ZOOM_PCT);
+
+  controls.addEventListener("change", () => {
+    if (applyingProgrammaticZoom) return;
+    const pct = readZoomPercent();
+    if (pct === lastReportedZoom) return;
+    lastReportedZoom = pct;
+    onZoomChange?.(pct);
+  });
 
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -311,9 +423,9 @@ function mountCloud(
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      uSize: { value: 0.09 },
-      uAlpha: { value: 0.88 },
-      uMaxPx: { value: 11 * Math.min(window.devicePixelRatio, 2) },
+      uSize: { value: 0.11 },
+      uAlpha: { value: 0.92 },
+      uMaxPx: { value: 14 * Math.min(window.devicePixelRatio, 2) },
     },
     vertexShader: `
       attribute vec3 color;
@@ -333,8 +445,9 @@ function mountCloud(
         vec2 c = gl_PointCoord - vec2(0.5);
         float d = length(c);
         if (d > 0.5) discard;
-        float edge = smoothstep(0.5, 0.28, d);
-        gl_FragColor = vec4(vColor, uAlpha * edge);
+        float edge = smoothstep(0.5, 0.24, d);
+        float core = smoothstep(0.28, 0.0, d);
+        gl_FragColor = vec4(vColor, uAlpha * edge * (0.85 + 0.15 * core));
       }`,
     transparent: true,
     depthWrite: false,
@@ -406,22 +519,24 @@ function mountCloud(
     ? new ResizeObserver(() => onResize())
     : null;
   ro?.observe(container);
-  // Second pass after flex settles.
   requestAnimationFrame(onResize);
 
-  return () => {
-    disposed = true;
-    cancelAnimationFrame(frame);
-    window.removeEventListener("resize", onResize);
-    ro?.disconnect();
-    for (const obj of labelObjs) scene.remove(obj);
-    if (labelRenderer.domElement.parentNode === container) {
-      container.removeChild(labelRenderer.domElement);
-    }
-    geom.dispose();
-    mat.dispose();
-    controls.dispose();
-    renderer.dispose();
+  return {
+    setZoomPercent: applyZoomPercent,
+    dispose: () => {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+      ro?.disconnect();
+      for (const obj of labelObjs) scene.remove(obj);
+      if (labelRenderer.domElement.parentNode === container) {
+        container.removeChild(labelRenderer.domElement);
+      }
+      geom.dispose();
+      mat.dispose();
+      controls.dispose();
+      renderer.dispose();
+    },
   };
 }
 

@@ -77,10 +77,10 @@ const App = () => {
         <button
           onClick={() => setSuggestionOpen(true)}
           aria-label="Open suggestions and feedback"
-          title="Suggestions"
-          className="fixed bottom-6 right-6 z-[150] flex items-center justify-center w-12 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:bg-primary/90 active:scale-95 transition-all duration-200"
+          className="group/fab fixed bottom-6 right-6 z-[150] flex items-center justify-center w-12 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:bg-primary/90 active:scale-95 transition-all duration-200"
           style={{ boxShadow: "0 8px 32px -8px hsl(222 78% 48% / 0.45)" }}
         >
+          <span className="fab-hover-label">Suggestion</span>
           <Lightbulb className="w-4 h-4 flex-shrink-0" />
         </button>
 

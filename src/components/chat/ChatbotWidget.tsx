@@ -677,9 +677,8 @@ const ChatbotWidget = () => {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close research assistant" : "Open research assistant"}
-        title={open ? "Close" : "Research Assistant"}
         className={`
-          fixed z-[150] flex items-center justify-center text-white
+          group/fab fixed z-[150] flex items-center justify-center text-white
           active:scale-90 touch-manipulation rounded-2xl
           w-14 h-14 right-4 transition-all duration-200
           bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))]
@@ -694,6 +693,7 @@ const ChatbotWidget = () => {
             : "0 8px 32px -6px hsl(var(--primary)/0.55), 0 2px 8px -2px rgba(0,0,0,0.2)",
         }}
       >
+        <span className="fab-hover-label">{open ? "Close chat" : "Chatbot"}</span>
         {!open && messages.length > 0 && (
           <span
             className="absolute inset-0 rounded-2xl animate-ping opacity-25 pointer-events-none"
