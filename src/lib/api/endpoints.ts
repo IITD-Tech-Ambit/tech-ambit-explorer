@@ -28,6 +28,7 @@ export const ENDPOINTS = {
 
     ip: {
         search: '/ip/search',
+        inventorScope: '/ip/search/inventor-scope',
         health: '/ip/search/health',
         document: (id: string) => `/ip/document/${id}`,
         suggest: '/ip/suggest',
