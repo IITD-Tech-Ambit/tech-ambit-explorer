@@ -88,7 +88,7 @@ const DepartmentGroupAccordionItem = ({
             value={deptGroup.department.name}
             className="border border-border rounded-xl overflow-hidden bg-card/50 backdrop-blur-sm"
         >
-            <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 transition-colors">
+            <AccordionTrigger className="px-4 py-3 sm:px-6 sm:py-4 hover:no-underline hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Icon className="w-5 h-5 text-primary" />
@@ -139,7 +139,7 @@ const DepartmentGroupAccordionItem = ({
                     </div>
                 </div>
             </AccordionTrigger>
-            <AccordionContent className="px-6 pb-6">
+            <AccordionContent className="px-3 pb-4 sm:px-6 sm:pb-6">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-10">
                         <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -149,7 +149,7 @@ const DepartmentGroupAccordionItem = ({
                         Failed to load faculty members. Please try again.
                     </p>
                 ) : data?.faculties && data.faculties.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pt-2">
                         {data.faculties.map((faculty) => (
                             <FacultyCard
                                 key={faculty._id}
