@@ -55,8 +55,8 @@ const Navigation = () => {
         isScrolled && "bg-background/95 shadow-card border-border",
       )}
     >
-      <div className="flex items-center h-20 w-full pl-2 sm:pl-3 pr-4 sm:pr-6">
-        <div className="flex flex-1 items-center justify-between min-w-0 gap-3">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-20 min-w-0 gap-3">
           <Link to="/" className="flex items-center space-x-3 group min-w-0" aria-label="Research Ambit home">
             <img
               src={instituteSeal}
