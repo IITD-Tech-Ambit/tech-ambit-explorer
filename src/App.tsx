@@ -46,16 +46,35 @@ const queryClient = new QueryClient({
   },
 });
 
+const PRELOADER_SEEN_KEY = "ra_preloader_seen";
+
+function hasSeenPreloader() {
+  try {
+    return localStorage.getItem(PRELOADER_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 const App = () => {
   const [suggestionOpen, setSuggestionOpen] = useState(false);
-  const [preloaderDone, setPreloaderDone] = useState(false);
+  const [preloaderDone, setPreloaderDone] = useState(hasSeenPreloader);
+
+  const handlePreloaderComplete = () => {
+    try {
+      localStorage.setItem(PRELOADER_SEEN_KEY, "1");
+    } catch {
+      // ignore write failures (e.g. private-browsing storage restrictions)
+    }
+    setPreloaderDone(true);
+  };
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
       <TooltipProvider>
-        {!preloaderDone && <SitePreloader onComplete={() => setPreloaderDone(true)} />}
+        {!preloaderDone && <SitePreloader onComplete={handlePreloaderComplete} />}
         <Toaster />
         <Sonner />
         <BrowserRouter>
