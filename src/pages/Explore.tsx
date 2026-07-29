@@ -245,7 +245,7 @@ const Explore = () => {
 
                     <div className="flex gap-2 pt-1">
                       <Button onClick={() => { applyFilters(); setShowFilters(false); }} size="sm">Apply</Button>
-                      <Button variant="outline" onClick={clearFilters} size="sm">Clear</Button>
+                      <Button variant="outline" onClick={() => { clearFilters(); setShowFilters(false); }} size="sm">Clear</Button>
                     </div>
                   </div>
                 )}

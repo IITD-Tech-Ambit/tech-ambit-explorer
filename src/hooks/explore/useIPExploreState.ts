@@ -102,7 +102,18 @@ export function useIPExploreState() {
   }, [searchParams]);
 
   const writeUrl = useCallback(
-    (chain: string[], opts?: { page?: number; mode?: IPMode }) => {
+    (
+      chain: string[],
+      opts?: {
+        page?: number;
+        mode?: IPMode;
+        yearFrom?: string;
+        yearTo?: string;
+        typeOfIp?: string;
+        department?: string;
+        country?: string;
+      }
+    ) => {
       const params = new URLSearchParams();
       const base = chain[0];
       if (base) params.set("q", base);
@@ -112,11 +123,16 @@ export function useIPExploreState() {
       const m = opts?.mode ?? mode;
       params.set("mode", m);
       if (sort !== "relevance") params.set("sort", sort);
-      if (yearFrom) params.set("year_from", yearFrom);
-      if (yearTo) params.set("year_to", yearTo);
-      if (typeOfIp) params.set("type_of_ip", typeOfIp);
-      if (department) params.set("department", department);
-      if (country) params.set("country", country);
+      const yf = opts?.yearFrom ?? yearFrom;
+      const yt = opts?.yearTo ?? yearTo;
+      const toi = opts?.typeOfIp ?? typeOfIp;
+      const dept = opts?.department ?? department;
+      const ctry = opts?.country ?? country;
+      if (yf) params.set("year_from", yf);
+      if (yt) params.set("year_to", yt);
+      if (toi) params.set("type_of_ip", toi);
+      if (dept) params.set("department", dept);
+      if (ctry) params.set("country", ctry);
       skipUrlEffect.current = true;
       setSearchParams(params);
     },
@@ -367,7 +383,18 @@ export function useIPExploreState() {
     setDepartment("");
     setCountry("");
     setCurrentPage(1);
-  }, []);
+    if (hasSearched) {
+      writeUrl(refinementChain, {
+        page: 1,
+        yearFrom: "",
+        yearTo: "",
+        typeOfIp: "",
+        department: "",
+        country: "",
+      });
+    }
+    setShowFilters(false);
+  }, [hasSearched, refinementChain, writeUrl]);
 
   const goToChainLevel = useCallback(
     (index: number) => {
