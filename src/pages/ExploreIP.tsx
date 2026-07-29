@@ -43,7 +43,10 @@ const ExploreIP = () => {
     applyFilters, clearFilters, activeFilterCount, goToChainLevel, removeRefinementTerm, clearAll,
   } = useIPExploreState();
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(min-width: 1280px)").matches;
+  });
 
   const openFacultyProfile = (kerberos: string) => {
     window.open(`/faculty/${kerberos}`, "_blank", "noopener");
