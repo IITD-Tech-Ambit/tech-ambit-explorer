@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronLeft, ChevronRight, Loader2, UserCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Header ──────────────────────────────────────────────────────────────────
 
@@ -184,11 +185,71 @@ export function PeopleListContainer({ children }: { children: React.ReactNode })
   );
 }
 
-export function PeopleLoadingState({ label = "Loading all faculty..." }: { label?: string }) {
+const SKELETON_STAGGER_MS = 40;
+
+/** Mirrors PeopleFacultyRow's exact bullet + name + count-pill + profile-icon layout. */
+function PeopleFacultyRowSkeleton({ delayMs, nameWidth }: { delayMs: number; nameWidth: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12">
-      <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-      <p className="text-sm text-muted-foreground">{label}</p>
+    <li
+      className="flex items-stretch gap-1 animate-fade-in"
+      style={{ animationDelay: `${delayMs}ms`, animationFillMode: "backwards" }}
+    >
+      <div className="text-sm text-left flex flex-1 min-w-0 items-start justify-between rounded-md px-1 -mx-1">
+        <div className="flex items-start min-w-0 gap-2">
+          <span className="shrink-0 mt-[2px] text-muted-foreground/40">•</span>
+          <Skeleton className={cn("h-3.5", nameWidth)} />
+        </div>
+        <Skeleton className="h-4 w-6 ml-2 shrink-0 rounded-full" />
+      </div>
+      <span className="shrink-0 rounded-lg p-1.5 text-muted-foreground/25">
+        <UserCircle className="h-4 w-4" />
+      </span>
+    </li>
+  );
+}
+
+/** Mirrors PeopleDepartmentBlock's heading + count layout. */
+function PeopleDepartmentBlockSkeleton({
+  delayMs,
+  headingWidth,
+  rowWidths,
+}: {
+  delayMs: number;
+  headingWidth: string;
+  rowWidths: string[];
+}) {
+  return (
+    <div className="mb-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Skeleton className={cn("h-3.5", headingWidth)} />
+      </div>
+      <ul className="space-y-2 pl-4">
+        {rowWidths.map((nameWidth, i) => (
+          <PeopleFacultyRowSkeleton key={i} delayMs={delayMs + (i + 1) * SKELETON_STAGGER_MS} nameWidth={nameWidth} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const SKELETON_GROUPS: { headingWidth: string; rowWidths: string[] }[] = [
+  { headingWidth: "w-28", rowWidths: ["w-24", "w-32", "w-20", "w-28"] },
+  { headingWidth: "w-20", rowWidths: ["w-28", "w-24", "w-16"] },
+  { headingWidth: "w-32", rowWidths: ["w-24", "w-28"] },
+];
+
+/** Placeholder rows that resolve into real rows once data lands, built from the shared Skeleton primitive. */
+export function PeopleLoadingState() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading people">
+      {SKELETON_GROUPS.map((group, groupIdx) => (
+        <PeopleDepartmentBlockSkeleton
+          key={groupIdx}
+          delayMs={groupIdx * SKELETON_STAGGER_MS * 5}
+          headingWidth={group.headingWidth}
+          rowWidths={group.rowWidths}
+        />
+      ))}
     </div>
   );
 }
