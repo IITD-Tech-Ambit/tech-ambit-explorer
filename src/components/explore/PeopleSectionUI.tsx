@@ -184,11 +184,50 @@ export function PeopleListContainer({ children }: { children: React.ReactNode })
   );
 }
 
-export function PeopleLoadingState({ label = "Loading all faculty..." }: { label?: string }) {
+function PeopleFacultyRowSkeleton({ delayMs, widthPct }: { delayMs: number; widthPct: number }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12">
-      <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-      <p className="text-sm text-muted-foreground">{label}</p>
+    <li className="flex items-center gap-2">
+      <span
+        className="skeleton-flicker-text h-2 w-2 rounded-full shrink-0"
+        style={{ animationDelay: `${delayMs}ms` }}
+      />
+      <span
+        className="skeleton-flicker-text h-3.5"
+        style={{ animationDelay: `${delayMs}ms`, width: `${widthPct}%` }}
+      />
+      <span
+        className="skeleton-flicker-text h-5 w-8 rounded-full shrink-0 ml-auto"
+        style={{ animationDelay: `${delayMs}ms` }}
+      />
+    </li>
+  );
+}
+
+const SKELETON_GROUPS = [4, 3, 2];
+const SKELETON_ROW_WIDTHS = [72, 55, 64, 48, 60, 68, 52, 58, 63];
+const SKELETON_STAGGER_MS = 90;
+
+/** Blurred, flickering name placeholders that resolve into real rows once data lands. */
+export function PeopleLoadingState() {
+  let rowIndex = 0;
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading people">
+      {SKELETON_GROUPS.map((rowCount, groupIdx) => (
+        <div key={groupIdx}>
+          <div
+            className="skeleton-flicker-text h-3.5 w-28 mb-3"
+            style={{ animationDelay: `${groupIdx * SKELETON_STAGGER_MS}ms` }}
+          />
+          <ul className="space-y-3 pl-4">
+            {Array.from({ length: rowCount }).map((_, i) => {
+              const delayMs = rowIndex * SKELETON_STAGGER_MS;
+              const widthPct = SKELETON_ROW_WIDTHS[rowIndex % SKELETON_ROW_WIDTHS.length];
+              rowIndex++;
+              return <PeopleFacultyRowSkeleton key={i} delayMs={delayMs} widthPct={widthPct} />;
+            })}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

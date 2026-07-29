@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import ExploreSearchLoader from "@/components/ExploreSearchLoader";
+import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { IPPaperList } from "@/components/exploreIP/IPPaperList";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
@@ -34,7 +34,7 @@ const ExploreIP = () => {
     typeOfIp, setTypeOfIp, department, setDepartment,
     country, setCountry,
     selectedInventor, selectInventor, selectedDocument, setSelectedDocument,
-    hasSearched, isLoading, results, pagination, relatedFaculty, facets, allFacultyData,
+    hasSearched, isLoading, results, pagination, relatedFaculty, facets, allFacultyData, isAllFacultyLoading,
     showSuggestions, setShowSuggestions, suggestionsRef, searchBoxRef,
     suggestData, isSuggestFetching, selectInventorSuggestion, selectDocumentSuggestion,
     performSearch, startFreshSearch, startDepartmentBrowse, isBrowse, handleSearchKeyDown, goToPage, changeMode,
@@ -275,7 +275,7 @@ const ExploreIP = () => {
       {showFilters && <div className="fixed inset-0 z-40" onClick={() => setShowFilters(false)} />}
 
       <section className="container mx-auto px-4 pt-4 pb-16 flex-1">
-        {isLoading && <ExploreSearchLoader query={hasSearched ? activeQuery : undefined} />}
+        {isLoading && <ResultListSkeleton />}
 
         {!hasSearched && !isLoading && (
           <div className="flex flex-col items-center justify-center text-center pt-10 pb-10 sm:pt-14 sm:pb-14">
@@ -354,6 +354,7 @@ const ExploreIP = () => {
               <IPInventorsSidebar
                 relatedFaculty={relatedFaculty}
                 allFacultyData={allFacultyData}
+                isAllFacultyLoading={isAllFacultyLoading}
                 selectedInventor={selectedInventor}
                 onSelectInventor={selectInventor}
                 onViewProfile={openFacultyProfile}

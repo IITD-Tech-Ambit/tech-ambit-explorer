@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import instituteSeal from "@/assets/logo2-transparent.png";
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,7 +9,6 @@ import { cn } from "@/lib/utils";
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [logoError, setLogoError] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const location = useLocation();
@@ -58,41 +56,16 @@ const Navigation = () => {
       )}
     >
       <div className="flex items-center h-20 w-full pl-2 sm:pl-3 pr-4 sm:pr-6">
-        <a
-          href="https://home.iitd.ac.in/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group/seal shrink-0 mr-3 sm:mr-4"
-          aria-label="IIT Delhi official website"
-          title="IIT Delhi"
-        >
-          <img
-            src={instituteSeal}
-            alt="IIT Delhi"
-            className="nav-seal-img"
-          />
-        </a>
-
         <div className="flex flex-1 items-center justify-between min-w-0 gap-3">
-          <Link to="/" className="flex items-center space-x-3 group min-w-0">
-            {!logoError ? (
-              <img
-                src={siteLogo}
-                alt="Research Ambit"
-                className="logo-img"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <div className="logo-fallback" aria-hidden>
-                RA
-              </div>
-            )}
-            <div className="flex flex-col">
-              <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Research Ambit
-              </span>
-              <span className="text-xs text-muted-foreground">IIT Delhi</span>
-            </div>
+          <Link to="/" className="flex items-center space-x-3 group min-w-0" aria-label="Research Ambit home">
+            <img
+              src={instituteSeal}
+              alt="IIT Delhi"
+              className="nav-seal-img"
+            />
+            <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              IIT Delhi
+            </span>
           </Link>
 
           <div className="hidden md:flex items-center space-x-1 shrink-0">
