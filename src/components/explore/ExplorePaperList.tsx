@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Users, Building, ChevronDown } from "lucide-react";
 import type { SearchDocument } from "@/lib/api";
-import { formatAbstract, highlightTerms } from "@/lib/utils";
+import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
 import { ExploreCardAuthorsLine } from "@/components/explore/exploreAuthors";
 
 type SelectedAuthor = { name: string; author_id: string } | null;
@@ -11,7 +11,6 @@ type PaperCardProps = {
   item: SearchDocument;
   index: number;
   selectedAuthor: SelectedAuthor;
-  highlightTokens: string[];
   showFieldBadge?: boolean;
   onSelect: (doc: SearchDocument) => void;
   onAuthorClick: (scopusAuthorId: string, name: string) => void;
@@ -21,7 +20,6 @@ function ExplorePaperCard({
   item,
   index,
   selectedAuthor,
-  highlightTokens,
   showFieldBadge = true,
   onSelect,
   onAuthorClick,
@@ -42,7 +40,7 @@ function ExplorePaperCard({
           )}
         </div>
         <CardTitle className="text-base sm:text-xl mb-2 leading-snug">
-          {highlightTerms(item.title, highlightTokens)}
+          {renderHighlightedText(item.highlight?.title ?? item.title)}
         </CardTitle>
         <ExploreCardAuthorsLine
           authors={item.authors}
@@ -51,9 +49,9 @@ function ExplorePaperCard({
         />
       </CardHeader>
       <CardContent>
-        {item.abstract && (
+        {(item.highlight?.abstract ?? item.abstract) && (
           <p className="text-muted-foreground mb-4 line-clamp-3">
-            {highlightTerms(formatAbstract(item.abstract), highlightTokens)}
+            {renderHighlightedAbstract(item.highlight?.abstract ?? item.abstract)}
           </p>
         )}
 
@@ -88,7 +86,6 @@ type ExplorePaperListProps = {
   results: SearchDocument[];
   groupByDepartment: boolean;
   selectedAuthor: SelectedAuthor;
-  highlightTokens: string[];
   isDeptExpanded: (dept: string) => boolean;
   toggleDepartment: (dept: string) => void;
   onSelectDocument: (doc: SearchDocument) => void;
@@ -99,7 +96,6 @@ export function ExplorePaperList({
   results,
   groupByDepartment,
   selectedAuthor,
-  highlightTokens,
   isDeptExpanded,
   toggleDepartment,
   onSelectDocument,
@@ -116,7 +112,6 @@ export function ExplorePaperList({
             item={item}
             index={index}
             selectedAuthor={selectedAuthor}
-            highlightTokens={highlightTokens}
             onSelect={onSelectDocument}
             onAuthorClick={onAuthorClick}
           />
@@ -183,7 +178,6 @@ export function ExplorePaperList({
                   item={item}
                   index={index}
                   selectedAuthor={selectedAuthor}
-                  highlightTokens={highlightTokens}
                   showFieldBadge={false}
                   onSelect={onSelectDocument}
                   onAuthorClick={onAuthorClick}

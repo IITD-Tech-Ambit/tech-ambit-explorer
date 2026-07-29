@@ -31,6 +31,7 @@ export const ENDPOINTS = {
         health: '/ip/search/health',
         document: (id: string) => `/ip/document/${id}`,
         suggest: '/ip/suggest',
+        facultyForQuery: '/ip/faculty-for-query',
     },
 } as const;
 

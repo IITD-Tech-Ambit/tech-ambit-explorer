@@ -90,6 +90,7 @@ export interface SearchDocument {
     _id: string;
     title: string;
     abstract?: string;
+    highlight?: { title?: string; abstract?: string };
     authors: SearchAuthor[];
     publication_year: number;
     document_type: string;
@@ -399,6 +400,7 @@ export interface IPDocument {
     application_number: string;
     title: string;
     abstract?: string;
+    highlight?: { title?: string; abstract?: string };
     type_of_ip: string;
     field_of_invention?: string;
     classification?: string[];
@@ -411,6 +413,8 @@ export interface IPDocument {
         code?: string;
     } | null;
     application_status?: string | null;
+    patent_number?: string | null;
+    grant_date?: string | null;
     publication_year?: number;
     filing_date?: string;
     publication_date?: string;
@@ -430,6 +434,7 @@ export interface IPSearchFacets {
     field_of_invention?: IPFacetValue[];
     country?: IPFacetValue[];
     classification?: IPFacetValue[];
+    department?: IPFacetValue[];
 }
 
 export interface IPRelatedFaculty {
@@ -442,7 +447,32 @@ export interface IPRelatedFaculty {
         _id: string;
         name: string;
     } | null;
+    profile_image_url?: string | null;
     ipCount: number;
+}
+
+export interface IPAllFacultyForQueryFaculty {
+    _id: string;
+    name: string;
+    expert_id?: string;
+    kerberos: string;
+    profile_image_url?: string | null;
+    ipCount: number;
+}
+
+export interface IPAllFacultyForQueryResponse {
+    departments: Array<{
+        name: string;
+        faculty: IPAllFacultyForQueryFaculty[];
+        total_ip_count: number;
+    }>;
+    total_faculty: number;
+    total_matching_ip: number;
+    cacheHit?: boolean;
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
 }
 
 export interface IPSearchPagination {
@@ -517,6 +547,8 @@ export interface SuggestIPInventor {
     name: string;
     is_faculty: boolean;
     kerberos: string;
+    department?: string;
+    image_url?: string | null;
     score: number;
 }
 
@@ -529,6 +561,11 @@ export interface SuggestIPDocument {
     score: number;
 }
 
+export interface SuggestIPDepartment {
+    name: string;
+    count: number;
+}
+
 export type IPSuggestIntent = 'inventor' | 'document' | 'mixed';
 
 export interface IPSuggestResponse {
@@ -537,6 +574,7 @@ export interface IPSuggestResponse {
     groups: {
         inventors: SuggestIPInventor[];
         documents: SuggestIPDocument[];
+        departments: SuggestIPDepartment[];
     };
     meta?: {
         took_ms: number;

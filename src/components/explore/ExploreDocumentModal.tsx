@@ -2,14 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X } from "lucide-react";
 import type { SearchDocument } from "@/lib/api";
-import { formatAbstract, highlightTerms } from "@/lib/utils";
+import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
 import { getPaperExternalUrl } from "@/lib/paperLink";
 import { getExploreModalAuthorRows } from "@/components/explore/exploreAuthorUtils";
 
 type Props = {
   document: SearchDocument;
   selectedAuthor: { name: string; author_id: string } | null;
-  highlightTokens: string[];
   onClose: () => void;
   onAuthorClick: (scopusAuthorId: string, name: string) => void;
   /** Extra classes for the full-screen overlay (e.g. higher z-index when stacked). */
@@ -19,7 +18,6 @@ type Props = {
 export function ExploreDocumentModal({
   document: selectedDocument,
   selectedAuthor,
-  highlightTokens,
   onClose,
   onAuthorClick,
   overlayClassName,
@@ -56,7 +54,7 @@ export function ExploreDocumentModal({
               )}
             </div>
             <h2 className="text-lg sm:text-2xl font-bold text-foreground leading-tight">
-              {highlightTerms(selectedDocument.title, highlightTokens)}
+              {renderHighlightedText(selectedDocument.highlight?.title ?? selectedDocument.title)}
             </h2>
           </div>
           <Button
@@ -109,7 +107,7 @@ export function ExploreDocumentModal({
             <div className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Abstract</h3>
               <div className="p-5 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-foreground/80 text-sm shadow-inner">
-                {highlightTerms(formatAbstract(selectedDocument.abstract), highlightTokens)}
+                {renderHighlightedAbstract(selectedDocument.highlight?.abstract ?? selectedDocument.abstract)}
               </div>
             </div>
           )}

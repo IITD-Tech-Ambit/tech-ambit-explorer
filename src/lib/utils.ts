@@ -35,52 +35,76 @@ export function formatAbstract(text: string): React.ReactNode {
   return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : parts;
 }
 
-/**
- * Wrap matches of any `terms` inside `node` with a styled `<mark>` element.
- * Works on plain strings and on the ReactNode arrays returned by `formatAbstract`
- * (walks child strings, leaves `<sub>` / `<sup>` React elements untouched).
- */
-export function highlightTerms(node: React.ReactNode, terms: string[]): React.ReactNode {
-  const normalized = Array.from(
-    new Set(
-      terms
-        .map((t) => (typeof t === "string" ? t.trim() : ""))
-        .filter((t) => t.length >= 2)
-    )
-  );
-  if (normalized.length === 0) return node;
+// Matches src/utils/highlight.js on the backend: OpenSearch wraps matched spans in these
+// Private Use Area markers instead of raw HTML, so the frontend never has to trust/sanitize
+// injected markup.
+const HL_OPEN = "";
+const HL_CLOSE = "";
+const HL_MARK_RE = new RegExp(`${HL_OPEN}([\\s\\S]*?)${HL_CLOSE}`, "g");
 
-  const escaped = normalized.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const splitter = new RegExp(`(${escaped.join("|")})`, "gi");
-  const termSet = new Set(normalized.map((t) => t.toLowerCase()));
+type MarkSpan = { start: number; end: number; content: string };
 
-  const renderString = (text: string, keyPrefix: string): React.ReactNode => {
-    if (!text) return text;
-    const pieces = text.split(splitter);
-    return pieces.map((part, i) => {
-      if (part && termSet.has(part.toLowerCase())) {
-        return React.createElement(
-          "span",
-          {
-            key: `${keyPrefix}-m-${i}`,
-            className: "font-semibold rounded-sm bg-primary/10 bg-yellow-200 text-primary px-1 py-0.5",
-          },
-          part
-        );
-      }
-      return React.createElement(React.Fragment, { key: `${keyPrefix}-t-${i}` }, part);
-    });
-  };
-
-  const walk = (n: React.ReactNode, keyPrefix: string): React.ReactNode => {
-    if (n == null || typeof n === "boolean") return n;
-    if (typeof n === "string") return renderString(n, keyPrefix);
-    if (typeof n === "number") return n;
-    if (Array.isArray(n)) {
-      return n.map((child, i) => walk(child, `${keyPrefix}-${i}`));
+// OpenSearch tags each matched word independently, so adjacent highlighted words in the
+// same phrase (e.g. "battery" then "storage") arrive as two separate marker pairs with a
+// plain space between them. Rendering each as its own <mark> then stacks two boxes side by
+// side, each with its own padding, which reads as a visible gap/seam. Merging spans that are
+// separated only by whitespace renders them as one continuous highlight instead.
+function mergeAdjacentSpans(text: string, spans: MarkSpan[]): MarkSpan[] {
+  const merged: MarkSpan[] = [];
+  for (const span of spans) {
+    const prev = merged[merged.length - 1];
+    if (prev && /^\s*$/.test(text.slice(prev.end, span.start))) {
+      prev.content += text.slice(prev.end, span.start) + span.content;
+      prev.end = span.end;
+    } else {
+      merged.push({ ...span });
     }
-    return n;
-  };
+  }
+  return merged;
+}
 
-  return walk(node, "h");
+function renderMarkedString(text: string, keyPrefix: string): React.ReactNode {
+  if (!text.includes(HL_OPEN)) return text;
+
+  const rawSpans: MarkSpan[] = [];
+  const re = new RegExp(HL_MARK_RE);
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    rawSpans.push({ start: match.index, end: match.index + match[0].length, content: match[1] });
+  }
+  const spans = mergeAdjacentSpans(text, rawSpans);
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  spans.forEach((span, i) => {
+    if (span.start > lastIndex) parts.push(text.slice(lastIndex, span.start));
+    parts.push(
+      React.createElement(
+        "mark",
+        { key: `${keyPrefix}-m-${i}`, className: "font-semibold rounded-sm bg-primary/10 text-primary px-1 py-0.5" },
+        span.content
+      )
+    );
+    lastIndex = span.end;
+  });
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function walkMarked(n: React.ReactNode, keyPrefix: string): React.ReactNode {
+  if (n == null || typeof n === "boolean") return n;
+  if (typeof n === "string") return renderMarkedString(n, keyPrefix);
+  if (typeof n === "number") return n;
+  if (Array.isArray(n)) return n.map((child, i) => walkMarked(child, `${keyPrefix}-${i}`));
+  return n;
+}
+
+/** Renders backend-highlighted title text (OpenSearch-marked spans, or plain text if absent). */
+export function renderHighlightedText(text?: string): React.ReactNode {
+  return text ? renderMarkedString(text, "ht") : text;
+}
+
+/** Renders a backend-highlighted abstract snippet, composed with `formatAbstract`'s <inf>/<sup> handling. */
+export function renderHighlightedAbstract(text?: string): React.ReactNode {
+  return text ? walkMarked(formatAbstract(text), "ha") : text;
 }

@@ -20,6 +20,7 @@ import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
 import ChatbotWidget from "./components/chat/ChatbotWidget";
+import SitePreloader from "./components/SitePreloader";
 import { ThemeProvider } from "./components/theme-provider";
 import { AuthProvider } from "./contexts/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
@@ -47,12 +48,14 @@ const queryClient = new QueryClient({
 
 const App = () => {
   const [suggestionOpen, setSuggestionOpen] = useState(false);
+  const [preloaderDone, setPreloaderDone] = useState(false);
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
       <TooltipProvider>
+        {!preloaderDone && <SitePreloader onComplete={() => setPreloaderDone(true)} />}
         <Toaster />
         <Sonner />
         <BrowserRouter>

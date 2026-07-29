@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import siteLogo from "@/assets/IITD-LOGO-preview.png";
+import instituteSeal from "@/assets/logo2-transparent.png";
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,9 +57,24 @@ const Navigation = () => {
         isScrolled && "bg-background/95 shadow-card border-border",
       )}
     >
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-20">
-          <Link to="/" className="flex items-center space-x-3 group">
+      <div className="flex items-center h-20 w-full pl-2 sm:pl-3 pr-4 sm:pr-6">
+        <a
+          href="https://home.iitd.ac.in/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group/seal shrink-0 mr-3 sm:mr-4"
+          aria-label="IIT Delhi official website"
+          title="IIT Delhi"
+        >
+          <img
+            src={instituteSeal}
+            alt="IIT Delhi"
+            className="nav-seal-img"
+          />
+        </a>
+
+        <div className="flex flex-1 items-center justify-between min-w-0 gap-3">
+          <Link to="/" className="flex items-center space-x-3 group min-w-0">
             {!logoError ? (
               <img
                 src={siteLogo}
@@ -79,7 +95,7 @@ const Navigation = () => {
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center space-x-1 shrink-0">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -108,7 +124,7 @@ const Navigation = () => {
             </Button>
           </div>
 
-          <div className="md:hidden flex items-center space-x-2">
+          <div className="md:hidden flex items-center space-x-2 shrink-0">
             <Button
               variant="ghost"
               size="icon"
@@ -127,27 +143,27 @@ const Navigation = () => {
             </Button>
           </div>
         </div>
-
-        {isOpen && (
-          <div className="md:hidden py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-b-lg border-t border-border">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setIsOpen(false)}
-                className={cn(
-                  "block px-4 py-3 rounded-lg font-medium transition-all duration-200",
-                  isActive(item.path)
-                    ? "text-primary bg-primary/10 border-l-2 border-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
-                )}
-              >
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
+
+      {isOpen && (
+        <div className="md:hidden mx-2 mb-2 py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-lg border border-border">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setIsOpen(false)}
+              className={cn(
+                "block px-4 py-3 rounded-lg font-medium transition-all duration-200",
+                isActive(item.path)
+                  ? "text-primary bg-primary/10 border-l-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+              )}
+            >
+              {item.name}
+            </Link>
+          ))}
+        </div>
+      )}
     </nav>
   );
 };

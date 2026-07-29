@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useIPSearch } from "@/lib/api/hooks/useIPSearch";
+import { useIPSearch, useAllIPFacultyForQuery } from "@/lib/api/hooks/useIPSearch";
 import { useIPSuggest } from "@/lib/api/hooks/useIPSuggest";
 import type { IPSearchRequest, IPSearchFilters, IPDocument, SuggestIPInventor, SuggestIPDocument } from "@/lib/api/types";
 import type { IPSearchSuggestionsHandle } from "@/components/exploreIP/IPSearchSuggestions";
@@ -41,11 +41,15 @@ export function useIPExploreState() {
   const [yearFrom, setYearFrom] = useState(() => searchParams.get("year_from") || "");
   const [yearTo, setYearTo] = useState(() => searchParams.get("year_to") || "");
   const [typeOfIp, setTypeOfIp] = useState(() => searchParams.get("type_of_ip") || "");
-  const [fieldOfInvention, setFieldOfInvention] = useState(() => searchParams.get("field_of_invention") || "");
+  const [department, setDepartment] = useState(() => searchParams.get("department") || "");
   const [country, setCountry] = useState(() => searchParams.get("country") || "");
 
   const [selectedInventor, setSelectedInventor] = useState<SelectedInventor | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<IPDocument | null>(null);
+  // True when the chain's newest term is a facet label (e.g. "browse by department" chip),
+  // not real query text — the request sends an empty query so the backend runs a filter-only
+  // browse (no text-relevance gate) instead of matching the label against title/abstract.
+  const [isBrowse, setIsBrowse] = useState(false);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<IPSearchSuggestionsHandle>(null);
@@ -54,20 +58,6 @@ export function useIPExploreState() {
   const activeQuery = refinementChain[refinementChain.length - 1] ?? "";
   const priorChain = refinementChain.slice(0, -1);
   const hasSearched = refinementChain.length > 0;
-
-  // Highlight every word across the whole chain (not just the newest term).
-  const highlightTokens = useMemo(() => {
-    const src = refinementChain.join(" ").trim();
-    if (!src) return [] as string[];
-    return Array.from(
-      new Set(
-        src
-          .toLowerCase()
-          .split(/\s+/)
-          .filter((t) => t.length >= 2)
-      )
-    );
-  }, [refinementChain]);
 
   const skipUrlEffect = useRef(false);
   const isFirstRender = useRef(true);
@@ -93,9 +83,10 @@ export function useIPExploreState() {
     setYearFrom(searchParams.get("year_from") || "");
     setYearTo(searchParams.get("year_to") || "");
     setTypeOfIp(searchParams.get("type_of_ip") || "");
-    setFieldOfInvention(searchParams.get("field_of_invention") || "");
+    setDepartment(searchParams.get("department") || "");
     setCountry(searchParams.get("country") || "");
     setSelectedInventor(null);
+    setIsBrowse(false);
     setShowSuggestions(false);
   }, [searchParams]);
 
@@ -113,12 +104,12 @@ export function useIPExploreState() {
       if (yearFrom) params.set("year_from", yearFrom);
       if (yearTo) params.set("year_to", yearTo);
       if (typeOfIp) params.set("type_of_ip", typeOfIp);
-      if (fieldOfInvention) params.set("field_of_invention", fieldOfInvention);
+      if (department) params.set("department", department);
       if (country) params.set("country", country);
       skipUrlEffect.current = true;
       setSearchParams(params);
     },
-    [currentPage, mode, sort, yearFrom, yearTo, typeOfIp, fieldOfInvention, country, setSearchParams]
+    [currentPage, mode, sort, yearFrom, yearTo, typeOfIp, department, country, setSearchParams]
   );
 
   const filters = useMemo<IPSearchFilters>(() => {
@@ -126,17 +117,19 @@ export function useIPExploreState() {
     if (yearFrom) f.year_from = parseInt(yearFrom, 10);
     if (yearTo) f.year_to = parseInt(yearTo, 10);
     if (typeOfIp) f.type_of_ip = typeOfIp;
-    if (fieldOfInvention) f.field_of_invention = fieldOfInvention;
+    if (department) f.department = department;
     if (country) f.country = country;
     if (selectedInventor?.kerberos) f.kerberos = selectedInventor.kerberos;
     return f;
-  }, [yearFrom, yearTo, typeOfIp, fieldOfInvention, country, selectedInventor]);
+  }, [yearFrom, yearTo, typeOfIp, department, country, selectedInventor]);
 
-  // Newest term is `query`; prior terms are `refine_chain`.
+  // Newest term is `query`; prior terms are `refine_chain`. In browse mode the newest term is
+  // only a facet label for the breadcrumb UI — the backend gets an empty query so it runs a
+  // filter-only browse instead of matching the label as text.
   const searchRequest = useMemo<IPSearchRequest | null>(() => {
-    if (!activeQuery.trim()) return null;
+    if (!isBrowse && !activeQuery.trim()) return null;
     return {
-      query: activeQuery,
+      query: isBrowse ? "" : activeQuery,
       page: currentPage,
       per_page: perPage,
       sort,
@@ -144,7 +137,7 @@ export function useIPExploreState() {
       filters,
       ...(priorChain.length > 0 ? { refine_chain: priorChain } : {}),
     };
-  }, [activeQuery, priorChain, currentPage, perPage, sort, mode, filters]);
+  }, [isBrowse, activeQuery, priorChain, currentPage, perPage, sort, mode, filters]);
 
   const { data: searchData, isLoading, isFetching, error } = useIPSearch(searchRequest);
 
@@ -152,18 +145,31 @@ export function useIPExploreState() {
     enabled: showSuggestions,
   });
 
+  const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllIPFacultyForQuery(
+    isBrowse ? "" : activeQuery,
+    mode,
+    {
+      enabled: hasSearched && (isBrowse || !!activeQuery.trim()),
+      refine_chain: priorChain.length > 0 ? priorChain : undefined,
+      filters,
+    }
+  );
+
   const results = searchData?.results ?? [];
   const pagination = searchData?.pagination ?? null;
   const relatedFaculty = searchData?.related_faculty ?? [];
   const facets = searchData?.facets ?? {};
 
   // First submission sets base topic; subsequent submissions append a narrowing step.
+  // A prior browse-by-department chain (isBrowse) has a facet label as its only term, not real
+  // query text — appending onto it via refine_chain would wrongly text-match that label, so a
+  // new real query starts a fresh chain instead (the department filter itself stays pinned).
   const performSearch = useCallback(
     (page: number = 1) => {
       const q = searchQuery.trim();
       if (!q) return;
 
-      if (refinementChain.length > 0) {
+      if (refinementChain.length > 0 && !isBrowse) {
         const next = [...refinementChain, q];
         setRefinementChain(next);
         setSearchQuery("");
@@ -177,24 +183,47 @@ export function useIPExploreState() {
       setRefinementChain(next);
       setCurrentPage(page);
       setSelectedInventor(null);
+      setIsBrowse(false);
       writeUrl(next, { page });
       setSearchQuery("");
     },
-    [searchQuery, refinementChain, writeUrl]
+    [searchQuery, refinementChain, isBrowse, writeUrl]
   );
 
-  /** Fresh single-step search from a term (empty-state chips); optionally pins field_of_invention. */
+  /** Fresh single-step search from a term (empty-state chips); optionally pins department. */
   const startFreshSearch = useCallback(
-    (term: string, opts?: { fieldOfInvention?: string }) => {
+    (term: string, opts?: { department?: string }) => {
       const trimmed = term.trim();
       if (!trimmed) return;
       setSearchQuery("");
       setRefinementChain([trimmed]);
       setCurrentPage(1);
       setSelectedInventor(null);
-      if (opts?.fieldOfInvention !== undefined) {
-        setFieldOfInvention(opts.fieldOfInvention);
+      setIsBrowse(false);
+      if (opts?.department !== undefined) {
+        setDepartment(opts.department);
       }
+      writeUrl([trimmed], { page: 1 });
+    },
+    [writeUrl]
+  );
+
+  /**
+   * "Browse by department" chip: the department name is only a breadcrumb label, not real
+   * query text — the actual request sends an empty query (see `searchRequest`) so every patent
+   * in the department is returned, not just the ones whose title/abstract happen to repeat the
+   * department's own name.
+   */
+  const startDepartmentBrowse = useCallback(
+    (deptName: string) => {
+      const trimmed = deptName.trim();
+      if (!trimmed) return;
+      setSearchQuery("");
+      setRefinementChain([trimmed]);
+      setCurrentPage(1);
+      setSelectedInventor(null);
+      setDepartment(trimmed);
+      setIsBrowse(true);
       writeUrl([trimmed], { page: 1 });
     },
     [writeUrl]
@@ -224,16 +253,25 @@ export function useIPExploreState() {
     setCurrentPage(1);
   }, []);
 
-  /** Mid-search faculty inventors scope via kerberos; otherwise start a fresh name search. */
+  /**
+   * Faculty inventors are always scoped by exact kerberos filter (never free-text name), so a
+   * clicked suggestion can't fuzzy-match unrelated patents. The kerberos filter needs an active
+   * query to attach to (searchRequest requires non-empty activeQuery), so a fresh search seeds
+   * the inventor's name as the base query and selectInventor immediately narrows it to their
+   * exact filings via filters.kerberos.
+   */
   const selectInventorSuggestion = useCallback(
     (inventor: SuggestIPInventor) => {
       setShowSuggestions(false);
       setSearchQuery("");
-      if (hasSearched && inventor.kerberos) {
-        selectInventor({ name: inventor.name, kerberos: inventor.kerberos });
+      if (!inventor.kerberos) {
+        startFreshSearch(inventor.name);
         return;
       }
-      startFreshSearch(inventor.name);
+      if (!hasSearched) {
+        startFreshSearch(inventor.name);
+      }
+      selectInventor({ name: inventor.name, kerberos: inventor.kerberos });
     },
     [hasSearched, startFreshSearch, selectInventor]
   );
@@ -282,7 +320,7 @@ export function useIPExploreState() {
     setYearFrom("");
     setYearTo("");
     setTypeOfIp("");
-    setFieldOfInvention("");
+    setDepartment("");
     setCountry("");
     setCurrentPage(1);
   }, []);
@@ -307,8 +345,9 @@ export function useIPExploreState() {
     setYearFrom("");
     setYearTo("");
     setTypeOfIp("");
-    setFieldOfInvention("");
+    setDepartment("");
     setCountry("");
+    setIsBrowse(false);
     skipUrlEffect.current = true;
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
@@ -334,7 +373,7 @@ export function useIPExploreState() {
     (yearFrom ? 1 : 0) +
     (yearTo ? 1 : 0) +
     (typeOfIp ? 1 : 0) +
-    (fieldOfInvention ? 1 : 0) +
+    (department ? 1 : 0) +
     (country ? 1 : 0);
 
   return {
@@ -343,7 +382,6 @@ export function useIPExploreState() {
     refinementChain,
     activeQuery,
     priorChain,
-    highlightTokens,
     currentPage,
     showSuggestions,
     setShowSuggestions,
@@ -366,8 +404,8 @@ export function useIPExploreState() {
     setYearTo,
     typeOfIp,
     setTypeOfIp,
-    fieldOfInvention,
-    setFieldOfInvention,
+    department,
+    setDepartment,
     country,
     setCountry,
     selectedInventor,
@@ -383,8 +421,12 @@ export function useIPExploreState() {
     pagination,
     relatedFaculty,
     facets,
+    allFacultyData,
+    isAllFacultyLoading,
     performSearch,
     startFreshSearch,
+    startDepartmentBrowse,
+    isBrowse,
     handleSearchKeyDown,
     goToPage,
     changeMode,
