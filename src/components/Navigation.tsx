@@ -55,20 +55,23 @@ const Navigation = () => {
         isScrolled && "bg-background/95 shadow-card border-border",
       )}
     >
-      <div className="flex items-center h-20 w-full pl-2 sm:pl-3 pr-4 sm:pr-6">
-        <div className="flex flex-1 items-center justify-between min-w-0 gap-3">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-20 min-w-0 gap-3">
           <Link to="/" className="flex items-center space-x-3 group min-w-0" aria-label="Research Ambit home">
             <img
               src={instituteSeal}
-              alt="IIT Delhi"
+              alt="Indian Institute of Technology Delhi"
               className="nav-seal-img"
             />
-            <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              IIT Delhi
-            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Research Ambit
+              </span>
+              <span className="text-xs text-muted-foreground">Indian Institute of Technology Delhi</span>
+            </div>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-1 shrink-0">
+          <div className="hidden lg:flex items-center space-x-1 shrink-0">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -97,7 +100,7 @@ const Navigation = () => {
             </Button>
           </div>
 
-          <div className="md:hidden flex items-center space-x-2 shrink-0">
+          <div className="lg:hidden flex items-center space-x-2 shrink-0">
             <Button
               variant="ghost"
               size="icon"
@@ -119,7 +122,7 @@ const Navigation = () => {
       </div>
 
       {isOpen && (
-        <div className="md:hidden mx-2 mb-2 py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-lg border border-border">
+        <div className="lg:hidden mx-2 mb-2 py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-lg border border-border">
           {navItems.map((item) => (
             <Link
               key={item.path}

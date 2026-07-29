@@ -890,17 +890,6 @@ All colors MUST be HSL.
   100% { background-position: 480px 0; }
 }
 
-@keyframes skeleton-flicker {
-  0%, 100% { opacity: 0.35; filter: blur(4px); }
-  50% { opacity: 0.85; filter: blur(1.5px); }
-}
-
-.skeleton-flicker-text {
-  background: hsl(var(--muted-foreground) / 0.55);
-  border-radius: 0.375rem;
-  animation: skeleton-flicker 1.6s ease-in-out infinite;
-}
-
 @keyframes edge-pulse {
   from { stroke-dashoffset: 140; }
   to { stroke-dashoffset: 0; }

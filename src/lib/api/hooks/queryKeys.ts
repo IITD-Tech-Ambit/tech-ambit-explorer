@@ -67,5 +67,7 @@ export const queryKeys = {
         document: (id: string) => [...queryKeys.ipSearch.all, 'document', id] as const,
         facultyForQuery: (query: string) =>
             [...queryKeys.ipSearch.all, 'facultyForQuery', query] as const,
+        inventorScoped: (inventorId: string, query: string, page: number) =>
+            [...queryKeys.ipSearch.all, 'inventorScoped', inventorId, query, page] as const,
     },
 } as const;

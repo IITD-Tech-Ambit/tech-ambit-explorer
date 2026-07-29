@@ -47,6 +47,7 @@
     "cmdk": "^1.1.1",
     "cytoscape": "^3.34.0",
     "cytoscape-fcose": "^2.2.0",
+    "d3-force": "^3.0.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
@@ -74,6 +75,7 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.20",
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",

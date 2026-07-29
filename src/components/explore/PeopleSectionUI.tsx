@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronLeft, ChevronRight, Loader2, UserCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Header ──────────────────────────────────────────────────────────────────
 
@@ -184,49 +185,70 @@ export function PeopleListContainer({ children }: { children: React.ReactNode })
   );
 }
 
-function PeopleFacultyRowSkeleton({ delayMs, widthPct }: { delayMs: number; widthPct: number }) {
+const SKELETON_STAGGER_MS = 40;
+
+/** Mirrors PeopleFacultyRow's exact bullet + name + count-pill + profile-icon layout. */
+function PeopleFacultyRowSkeleton({ delayMs, nameWidth }: { delayMs: number; nameWidth: string }) {
   return (
-    <li className="flex items-center gap-2">
-      <span
-        className="skeleton-flicker-text h-2 w-2 rounded-full shrink-0"
-        style={{ animationDelay: `${delayMs}ms` }}
-      />
-      <span
-        className="skeleton-flicker-text h-3.5"
-        style={{ animationDelay: `${delayMs}ms`, width: `${widthPct}%` }}
-      />
-      <span
-        className="skeleton-flicker-text h-5 w-8 rounded-full shrink-0 ml-auto"
-        style={{ animationDelay: `${delayMs}ms` }}
-      />
+    <li
+      className="flex items-stretch gap-1 animate-fade-in"
+      style={{ animationDelay: `${delayMs}ms`, animationFillMode: "backwards" }}
+    >
+      <div className="text-sm text-left flex flex-1 min-w-0 items-start justify-between rounded-md px-1 -mx-1">
+        <div className="flex items-start min-w-0 gap-2">
+          <span className="shrink-0 mt-[2px] text-muted-foreground/40">•</span>
+          <Skeleton className={cn("h-3.5", nameWidth)} />
+        </div>
+        <Skeleton className="h-4 w-6 ml-2 shrink-0 rounded-full" />
+      </div>
+      <span className="shrink-0 rounded-lg p-1.5 text-muted-foreground/25">
+        <UserCircle className="h-4 w-4" />
+      </span>
     </li>
   );
 }
 
-const SKELETON_GROUPS = [4, 3, 2];
-const SKELETON_ROW_WIDTHS = [72, 55, 64, 48, 60, 68, 52, 58, 63];
-const SKELETON_STAGGER_MS = 90;
+/** Mirrors PeopleDepartmentBlock's heading + count layout. */
+function PeopleDepartmentBlockSkeleton({
+  delayMs,
+  headingWidth,
+  rowWidths,
+}: {
+  delayMs: number;
+  headingWidth: string;
+  rowWidths: string[];
+}) {
+  return (
+    <div className="mb-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Skeleton className={cn("h-3.5", headingWidth)} />
+      </div>
+      <ul className="space-y-2 pl-4">
+        {rowWidths.map((nameWidth, i) => (
+          <PeopleFacultyRowSkeleton key={i} delayMs={delayMs + (i + 1) * SKELETON_STAGGER_MS} nameWidth={nameWidth} />
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-/** Blurred, flickering name placeholders that resolve into real rows once data lands. */
+const SKELETON_GROUPS: { headingWidth: string; rowWidths: string[] }[] = [
+  { headingWidth: "w-28", rowWidths: ["w-24", "w-32", "w-20", "w-28"] },
+  { headingWidth: "w-20", rowWidths: ["w-28", "w-24", "w-16"] },
+  { headingWidth: "w-32", rowWidths: ["w-24", "w-28"] },
+];
+
+/** Placeholder rows that resolve into real rows once data lands, built from the shared Skeleton primitive. */
 export function PeopleLoadingState() {
-  let rowIndex = 0;
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading people">
-      {SKELETON_GROUPS.map((rowCount, groupIdx) => (
-        <div key={groupIdx}>
-          <div
-            className="skeleton-flicker-text h-3.5 w-28 mb-3"
-            style={{ animationDelay: `${groupIdx * SKELETON_STAGGER_MS}ms` }}
-          />
-          <ul className="space-y-3 pl-4">
-            {Array.from({ length: rowCount }).map((_, i) => {
-              const delayMs = rowIndex * SKELETON_STAGGER_MS;
-              const widthPct = SKELETON_ROW_WIDTHS[rowIndex % SKELETON_ROW_WIDTHS.length];
-              rowIndex++;
-              return <PeopleFacultyRowSkeleton key={i} delayMs={delayMs} widthPct={widthPct} />;
-            })}
-          </ul>
-        </div>
+      {SKELETON_GROUPS.map((group, groupIdx) => (
+        <PeopleDepartmentBlockSkeleton
+          key={groupIdx}
+          delayMs={groupIdx * SKELETON_STAGGER_MS * 5}
+          headingWidth={group.headingWidth}
+          rowWidths={group.rowWidths}
+        />
       ))}
     </div>
   );

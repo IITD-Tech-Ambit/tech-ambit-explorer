@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, FileText, Users, Loader2, X, ChevronDown, ChevronRight, Building, Sparkles } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
+import ExploreSearchLoader from "@/components/ExploreSearchLoader";
 import { SearchSuggestions } from "@/components/SearchSuggestions";
 import {
   PeopleSectionHeader,
@@ -245,7 +245,7 @@ const Explore = () => {
 
                     <div className="flex gap-2 pt-1">
                       <Button onClick={() => { applyFilters(); setShowFilters(false); }} size="sm">Apply</Button>
-                      <Button variant="outline" onClick={clearFilters} size="sm">Clear</Button>
+                      <Button variant="outline" onClick={() => { clearFilters(); setShowFilters(false); }} size="sm">Clear</Button>
                     </div>
                   </div>
                 )}
@@ -259,11 +259,18 @@ const Explore = () => {
                   Recent:
                 </span>
                 {searchHistory.slice(0, 5).map((entry) => (
-                  <button
+                  <div
                     key={entry.timestamp}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => replayRecentSearch(entry)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        replayRecentSearch(entry);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer"
                     title={
                       entry.refineWithin
                         ? `Refined "${entry.refineWithin}" to match "${entry.query}"`
@@ -283,7 +290,7 @@ const Explore = () => {
                     >
                       <X className="w-3 h-3" />
                     </button>
-                  </button>
+                  </div>
                 ))}
                 <button
                   type="button"
@@ -410,7 +417,7 @@ const Explore = () => {
       
       <section className="container mx-auto px-4 pt-4 pb-16 flex-1">
         
-        {isLoading && <ResultListSkeleton />}
+        {isLoading && <ExploreSearchLoader query={activeQuery} />}
 
         
         {!hasSearched && !isLoading && (
