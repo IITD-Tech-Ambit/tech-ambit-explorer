@@ -28,7 +28,7 @@ const IP_DEPARTMENT_SHORTCUTS = [
 
 const ExploreIP = () => {
   const {
-    searchQuery, setSearchQuery, refinementChain, activeQuery, currentPage,
+    searchQuery, setSearchQuery, refinementChain, baseQuery, activeQuery, currentPage,
     mode, showFilters, setShowFilters,
     yearFrom, setYearFrom, yearTo, setYearTo,
     typeOfIp, setTypeOfIp, department, setDepartment,

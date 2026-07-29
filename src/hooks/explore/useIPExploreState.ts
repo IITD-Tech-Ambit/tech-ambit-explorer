@@ -214,7 +214,8 @@ export function useIPExploreState() {
         setRefinementChain(next);
         setSearchQuery("");
         setCurrentPage(1);
-        setSelectedInventor(null);
+        // Refining keeps any selected inventor scope active — narrowing WITHIN their patents
+        // is the whole point of the drill-down flow, not a reason to drop it.
         setInventorScopedPage(1);
         writeUrl(next, { page: 1 });
         return;
