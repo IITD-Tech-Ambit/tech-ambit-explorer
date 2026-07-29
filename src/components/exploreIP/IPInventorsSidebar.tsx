@@ -3,6 +3,7 @@ import {
   PeopleFacultyRow,
   PeopleDepartmentBlock,
   PeopleListContainer,
+  PeopleLoadingState,
   PeopleEmptyState,
 } from "@/components/explore/PeopleSectionUI";
 import type { IPRelatedFaculty, IPAllFacultyForQueryResponse } from "@/lib/api/types";
@@ -11,6 +12,7 @@ import type { SelectedInventor } from "@/hooks/explore/useIPExploreState";
 type Props = {
   relatedFaculty: IPRelatedFaculty[];
   allFacultyData?: IPAllFacultyForQueryResponse;
+  isAllFacultyLoading?: boolean;
   selectedInventor: SelectedInventor | null;
   onSelectInventor: (inventor: SelectedInventor | null) => void;
   onViewProfile: (kerberos: string) => void;
@@ -24,6 +26,7 @@ type DeptGroup = { name: string; faculty: FacultyRow[] };
 export function IPInventorsSidebar({
   relatedFaculty,
   allFacultyData,
+  isAllFacultyLoading,
   selectedInventor,
   onSelectInventor,
   onViewProfile,
@@ -65,7 +68,9 @@ export function IPInventorsSidebar({
           isOpen ? "opacity-100" : "opacity-0 hidden"
         }`}
       >
-        {isEmpty ? (
+        {isAllFacultyLoading ? (
+          <PeopleLoadingState />
+        ) : isEmpty ? (
           <PeopleEmptyState
             title="No Inventors Found"
             description="No IIT Delhi faculty inventors found for this search"

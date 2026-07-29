@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Filter, FileText, Users, Loader2, X, ChevronDown, ChevronRight, Building, Sparkles } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import ExploreSearchLoader from "@/components/ExploreSearchLoader";
+import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
 import { SearchSuggestions } from "@/components/SearchSuggestions";
 import {
   PeopleSectionHeader,
@@ -417,7 +417,7 @@ const Explore = () => {
       
       <section className="container mx-auto px-4 pt-4 pb-16 flex-1">
         
-        {isLoading && <ExploreSearchLoader query={activeQuery} />}
+        {isLoading && <ResultListSkeleton />}
 
         
         {!hasSearched && !isLoading && (
