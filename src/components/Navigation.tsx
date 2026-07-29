@@ -71,7 +71,7 @@ const Navigation = () => {
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-1 shrink-0">
+          <div className="hidden lg:flex items-center space-x-1 shrink-0">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -100,7 +100,7 @@ const Navigation = () => {
             </Button>
           </div>
 
-          <div className="md:hidden flex items-center space-x-2 shrink-0">
+          <div className="lg:hidden flex items-center space-x-2 shrink-0">
             <Button
               variant="ghost"
               size="icon"
@@ -122,7 +122,7 @@ const Navigation = () => {
       </div>
 
       {isOpen && (
-        <div className="md:hidden mx-2 mb-2 py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-lg border border-border">
+        <div className="lg:hidden mx-2 mb-2 py-4 space-y-2 animate-fade-in bg-background/98 backdrop-blur-md rounded-lg border border-border">
           {navItems.map((item) => (
             <Link
               key={item.path}
