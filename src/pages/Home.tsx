@@ -20,6 +20,7 @@ import heroSlide3 from "@/assets/hero-slide-3.png";
 import heroSlide4 from "@/assets/hero-slide-4.png";
 import heroSlide5 from "@/assets/hero-slide-5.png";
 import researchCollage from "@/assets/iit-delhi-aerial.png";
+import instituteSeal from "@/assets/logo2-transparent.png";
 import { cn } from "@/lib/utils";
 
 const CAMPUS_VIDEO_SRC = "/videos/campus-research.mp4";
@@ -184,7 +185,7 @@ function FeatureCard({
       </div>
       <Link to={to} className="home-feature-tile">
         <div className={`absolute inset-0 bg-gradient-to-br ${accent} opacity-80 transition-opacity`} />
-        <div className="relative flex h-full flex-col">
+        <div className="relative z-[1] flex h-full flex-col">
           <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-background/80 text-primary shadow-sm ring-1 ring-border/60">
             <Icon className="h-5 w-5" />
           </div>
@@ -275,10 +276,18 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 pt-2">
-            {FEATURES.map((feature, index) => (
-              <FeatureCard key={feature.to} feature={feature} index={index} />
-            ))}
+          <div className="home-features-stage">
+            <img
+              src={instituteSeal}
+              alt=""
+              className="home-features-stage-logo"
+              aria-hidden
+            />
+            <div className="relative z-[1] grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 pt-2">
+              {FEATURES.map((feature, index) => (
+                <FeatureCard key={feature.to} feature={feature} index={index} />
+              ))}
+            </div>
           </div>
         </div>
       </section>
