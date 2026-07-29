@@ -10,8 +10,8 @@ type Props = {
   setYearTo: (v: string) => void;
   typeOfIp: string;
   setTypeOfIp: (v: string) => void;
-  fieldOfInvention: string;
-  setFieldOfInvention: (v: string) => void;
+  department: string;
+  setDepartment: (v: string) => void;
   country: string;
   setCountry: (v: string) => void;
   onApply: () => void;
@@ -26,15 +26,15 @@ export function IPFilterPanel({
   setYearTo,
   typeOfIp,
   setTypeOfIp,
-  fieldOfInvention,
-  setFieldOfInvention,
+  department,
+  setDepartment,
   country,
   setCountry,
   onApply,
   onClear,
 }: Props) {
   const typeOptions = facets.type_of_ip ?? [];
-  const fieldOptions = facets.field_of_invention ?? [];
+  const departmentOptions = facets.department ?? [];
   const countryOptions = facets.country ?? [];
 
   return (
@@ -84,16 +84,16 @@ export function IPFilterPanel({
         </div>
       )}
 
-      {fieldOptions.length > 0 && (
+      {departmentOptions.length > 0 && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Field of Invention</label>
+          <label className="text-xs font-medium text-muted-foreground">Department</label>
           <select
             className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
-            value={fieldOfInvention}
-            onChange={(e) => setFieldOfInvention(e.target.value)}
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
           >
-            <option value="">All fields</option>
-            {fieldOptions.map((opt) => (
+            <option value="">All departments</option>
+            {departmentOptions.map((opt) => (
               <option key={String(opt.value)} value={String(opt.value)}>
                 {opt.value} ({opt.count})
               </option>

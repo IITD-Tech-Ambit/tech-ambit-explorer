@@ -226,7 +226,6 @@ const PatentTimeline = ({ documents: initialDocuments, kerberos, facultyName, pa
         {selectedDocument && (
             <IPDocumentModal
                 document={selectedDocument}
-                highlightTokens={[]}
                 onClose={() => setSelectedDocument(null)}
                 onInventorClick={(_name, inventorKerberos) => openFacultyProfile(inventorKerberos)}
             />

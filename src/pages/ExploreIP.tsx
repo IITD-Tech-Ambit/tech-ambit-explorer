@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import ExploreSearchLoader from "@/components/ExploreSearchLoader";
@@ -16,28 +16,28 @@ import { useState } from "react";
 
 const EXAMPLE_IP_SEARCHES = ["microgrid", "battery storage", "solar cell", "biodegradable materials", "wireless sensor", "machine learning"];
 
-/** Facet value + keyword query so "browse by field" chips apply a real field_of_invention filter. */
-const IP_FIELD_SHORTCUTS = [
-  { label: "Electrical", value: "ELECTRICAL", query: "electrical" },
-  { label: "Chemical", value: "CHEMICAL", query: "chemical" },
-  { label: "Mechanical", value: "MECHANICAL ENGINEERING", query: "mechanical engineering" },
-  { label: "Physics", value: "PHYSICS", query: "physics" },
-  { label: "Electronics", value: "ELECTRONICS", query: "electronics" },
-  { label: "Computer Science", value: "COMPUTER SCIENCE", query: "computer science" },
+/** "Browse by department" chips: query text + exact department_name.keyword filter pin. */
+const IP_DEPARTMENT_SHORTCUTS = [
+  { label: "Electrical Engineering", department: "Electrical Engineering" },
+  { label: "Chemical Engineering", department: "Chemical Engineering" },
+  { label: "Mechanical Engineering", department: "Mechanical Engineering" },
+  { label: "Textile & Fibre Engineering", department: "Textile & Fibre Engineering" },
+  { label: "Biomedical Engineering", department: "Centre for Biomedical Engineering" },
+  { label: "Physics", department: "Physics Department" },
 ];
 
 const ExploreIP = () => {
   const {
-    searchQuery, setSearchQuery, refinementChain, activeQuery, highlightTokens, currentPage,
+    searchQuery, setSearchQuery, refinementChain, activeQuery, currentPage,
     mode, showFilters, setShowFilters,
     yearFrom, setYearFrom, yearTo, setYearTo,
-    typeOfIp, setTypeOfIp, fieldOfInvention, setFieldOfInvention,
+    typeOfIp, setTypeOfIp, department, setDepartment,
     country, setCountry,
     selectedInventor, selectInventor, selectedDocument, setSelectedDocument,
-    hasSearched, isLoading, results, pagination, relatedFaculty, facets,
+    hasSearched, isLoading, results, pagination, relatedFaculty, facets, allFacultyData,
     showSuggestions, setShowSuggestions, suggestionsRef, searchBoxRef,
     suggestData, isSuggestFetching, selectInventorSuggestion, selectDocumentSuggestion,
-    performSearch, startFreshSearch, handleSearchKeyDown, goToPage, changeMode,
+    performSearch, startFreshSearch, startDepartmentBrowse, isBrowse, handleSearchKeyDown, goToPage, changeMode,
     applyFilters, clearFilters, activeFilterCount, goToChainLevel, removeRefinementTerm, clearAll,
   } = useIPExploreState();
 
@@ -110,6 +110,7 @@ const ExploreIP = () => {
                       isLoading={isSuggestFetching}
                       onSelectInventor={selectInventorSuggestion}
                       onSelectDocument={selectDocumentSuggestion}
+                      onSelectDepartment={(d) => { setShowSuggestions(false); startDepartmentBrowse(d.name); }}
                       onClose={() => setShowSuggestions(false)}
                     />
                   </div>
@@ -164,8 +165,8 @@ const ExploreIP = () => {
                     setYearTo={setYearTo}
                     typeOfIp={typeOfIp}
                     setTypeOfIp={setTypeOfIp}
-                    fieldOfInvention={fieldOfInvention}
-                    setFieldOfInvention={setFieldOfInvention}
+                    department={department}
+                    setDepartment={setDepartment}
                     country={country}
                     setCountry={setCountry}
                     onApply={applyFilters}
@@ -175,7 +176,28 @@ const ExploreIP = () => {
               </div>
             </div>
 
-            {hasSearched && (
+            {hasSearched && isBrowse && (
+              <div className="flex flex-wrap items-center gap-1.5 w-full animate-fade-in">
+                <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
+                  Browsing:
+                </span>
+                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md text-sm font-medium shadow-sm bg-accent/60 text-accent-foreground border border-accent">
+                  <Building2 className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                  <span className="truncate max-w-[260px]">{department || activeQuery}</span>
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    title="Clear department browse"
+                    aria-label="Clear department browse"
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-background/60 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              </div>
+            )}
+
+            {hasSearched && !isBrowse && (
               <div className="flex flex-wrap items-center gap-1.5 w-full">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
                   {refinementChain.length > 1 ? "Narrowing:" : "Searching:"}
@@ -280,16 +302,17 @@ const ExploreIP = () => {
                 ))}
               </div>
 
-              <p className="text-sm font-medium text-foreground mb-3">Or browse by field</p>
+              <p className="text-sm font-medium text-foreground mb-3">Or browse by department</p>
               <div className="flex flex-wrap justify-center gap-2">
-                {IP_FIELD_SHORTCUTS.map((f) => (
+                {IP_DEPARTMENT_SHORTCUTS.map((d) => (
                   <button
-                    key={f.value}
+                    key={d.department}
                     type="button"
-                    onClick={() => startFreshSearch(f.query, { fieldOfInvention: f.value })}
-                    className="px-4 py-2 rounded-md bg-background text-muted-foreground text-sm font-medium border border-border hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    onClick={() => startDepartmentBrowse(d.department)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-background text-muted-foreground text-sm font-medium border border-border hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-colors"
                   >
-                    {f.label}
+                    <Building2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                    {d.label}
                   </button>
                 ))}
               </div>
@@ -330,6 +353,7 @@ const ExploreIP = () => {
             >
               <IPInventorsSidebar
                 relatedFaculty={relatedFaculty}
+                allFacultyData={allFacultyData}
                 selectedInventor={selectedInventor}
                 onSelectInventor={selectInventor}
                 onViewProfile={openFacultyProfile}
@@ -351,15 +375,24 @@ const ExploreIP = () => {
               {pagination && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground">
-                    Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span>{" "}
-                    result{pagination.total === 1 ? "" : "s"}
+                    {isBrowse ? (
+                      <>
+                        <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span>{" "}
+                        patent{pagination.total === 1 ? "" : "s"} in{" "}
+                        <span className="font-semibold text-foreground">{department}</span>
+                      </>
+                    ) : (
+                      <>
+                        Found <span className="font-semibold text-primary">{pagination.total.toLocaleString()}</span>{" "}
+                        result{pagination.total === 1 ? "" : "s"}
+                      </>
+                    )}
                   </p>
                 </div>
               )}
 
               <IPPaperList
                 results={results}
-                highlightTokens={highlightTokens}
                 onSelectDocument={setSelectedDocument}
                 onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
               />
@@ -375,7 +408,6 @@ const ExploreIP = () => {
       {selectedDocument && (
         <IPDocumentModal
           document={selectedDocument}
-          highlightTokens={highlightTokens}
           onClose={() => setSelectedDocument(null)}
           onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
         />

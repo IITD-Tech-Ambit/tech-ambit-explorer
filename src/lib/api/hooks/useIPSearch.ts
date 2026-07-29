@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
-import { searchIP, getIPDocumentById } from '../services/ipSearchService';
-import type { IPSearchRequest, IPSearchResponse, IPDocument } from '../types';
+import { searchIP, getIPDocumentById, getAllIPFacultyForQuery } from '../services/ipSearchService';
+import type { IPSearchRequest, IPSearchResponse, IPDocument, IPAllFacultyForQueryResponse, IPSearchFilters } from '../types';
 
 export const useIPSearch = (
     request: IPSearchRequest | null,
     options?: { enabled?: boolean; staleTime?: number; gcTime?: number }
 ) => {
-    const isEnabled = options?.enabled !== false && !!request && !!request.query?.trim();
+    // request is already null unless the caller has real query text or an intentional
+    // filter-only browse (see useIPExploreState's searchRequest) — no need to re-check query here.
+    const isEnabled = options?.enabled !== false && !!request;
 
     // Normalize query key to primitive/stable values so remounts and reorderings
     // of filters/search_in don't bust the cache (mirrors useSearchResearch).
@@ -33,6 +35,46 @@ export const useIPSearch = (
         enabled: isEnabled,
         staleTime: options?.staleTime ?? 1000 * 60 * 5,
         gcTime: options?.gcTime ?? 1000 * 60 * 10,
+        refetchOnMount: false,
+    });
+};
+
+/** Full-corpus People sidebar for patent search — mirrors useAllFacultyForQuery (general search). */
+export const useAllIPFacultyForQuery = (
+    query: string,
+    mode: string = 'advanced',
+    options?: { enabled?: boolean; search_in?: string[]; refine_chain?: string[] | null; filters?: IPSearchFilters }
+) => {
+    const filtersKeyForEnabled = options?.filters && Object.keys(options.filters).length > 0;
+    // Empty query is valid for a filter-only browse (mirrors POST /ip/search), but only when
+    // filters actually narrow the corpus — an empty query with no filters would aggregate the
+    // entire index for nothing.
+    const isEnabled = options?.enabled === true && (!!query.trim() || !!filtersKeyForEnabled);
+    const searchInKey = options?.search_in?.length
+        ? [...options.search_in].sort().join(',')
+        : '';
+    const refineChainKey = options?.refine_chain?.length ? options.refine_chain.join('') : '';
+    const filtersKey = options?.filters && Object.keys(options.filters).length > 0
+        ? JSON.stringify(options.filters)
+        : '';
+
+    return useQuery<IPAllFacultyForQueryResponse, Error>({
+        queryKey: [
+            ...queryKeys.ipSearch.facultyForQuery(query),
+            mode,
+            searchInKey,
+            refineChainKey,
+            filtersKey,
+        ],
+        queryFn: () =>
+            getAllIPFacultyForQuery(query, mode, {
+                search_in: options?.search_in,
+                refine_chain: options?.refine_chain,
+                filters: options?.filters,
+            }),
+        enabled: isEnabled,
+        staleTime: 1000 * 60 * 10,
+        gcTime: 1000 * 60 * 15,
         refetchOnMount: false,
     });
 };

@@ -59,7 +59,7 @@ const Explore = () => {
     handleAuthorClickByScopus,
   } = people;
 
-  const { selectedDocument, setSelectedDocument, filteredResults, sortedResults, highlightTokens } =
+  const { selectedDocument, setSelectedDocument, filteredResults, sortedResults } =
     useExploreResults({
       results,
       activeFilter,
@@ -789,7 +789,6 @@ const Explore = () => {
                   results={sortedResults}
                   groupByDepartment={groupByDepartment && !selectedAuthor}
                   selectedAuthor={selectedAuthor}
-                  highlightTokens={highlightTokens}
                   isDeptExpanded={isDeptExpanded}
                   toggleDepartment={toggleDepartment}
                   onSelectDocument={setSelectedDocument}
@@ -941,7 +940,6 @@ const Explore = () => {
         <ExploreDocumentModal
           document={selectedDocument}
           selectedAuthor={selectedAuthor}
-          highlightTokens={highlightTokens}
           onClose={() => setSelectedDocument(null)}
           onAuthorClick={handleAuthorClickByScopus}
         />

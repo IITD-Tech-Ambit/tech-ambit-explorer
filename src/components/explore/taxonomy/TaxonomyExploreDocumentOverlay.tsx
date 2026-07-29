@@ -68,7 +68,6 @@ const TaxonomyExploreDocumentOverlay = ({ paperId, onClose }: Props) => {
         <ExploreDocumentModal
             document={documentQuery.data}
             selectedAuthor={null}
-            highlightTokens={[]}
             onClose={onClose}
             onAuthorClick={handleAuthorClick}
             overlayClassName="!z-[60]"

@@ -2,11 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Globe2, Hash, ShieldCheck } from "lucide-react";
 import type { IPDocument } from "@/lib/api/types";
-import { formatAbstract, highlightTerms } from "@/lib/utils";
+import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
 
 type Props = {
   results: IPDocument[];
-  highlightTokens: string[];
   onSelectDocument: (doc: IPDocument) => void;
   onInventorClick: (name: string, kerberos: string) => void;
 };
@@ -17,12 +16,10 @@ function primaryInventor(doc: IPDocument) {
 
 function IPPaperCard({
   item,
-  highlightTokens,
   onSelect,
   onInventorClick,
 }: {
   item: IPDocument;
-  highlightTokens: string[];
   onSelect: (doc: IPDocument) => void;
   onInventorClick: (name: string, kerberos: string) => void;
 }) {
@@ -54,7 +51,7 @@ function IPPaperCard({
           )}
         </div>
         <CardTitle className="text-base sm:text-xl mb-2 leading-snug">
-          {highlightTerms(item.title, highlightTokens)}
+          {renderHighlightedText(item.highlight?.title ?? item.title)}
         </CardTitle>
 
         {pi && (
@@ -85,9 +82,9 @@ function IPPaperCard({
         )}
       </CardHeader>
       <CardContent>
-        {item.abstract && (
+        {(item.highlight?.abstract ?? item.abstract) && (
           <p className="text-muted-foreground mb-4 line-clamp-3">
-            {highlightTerms(formatAbstract(item.abstract), highlightTokens)}
+            {renderHighlightedAbstract(item.highlight?.abstract ?? item.abstract)}
           </p>
         )}
 
@@ -114,7 +111,7 @@ function IPPaperCard({
   );
 }
 
-export function IPPaperList({ results, highlightTokens, onSelectDocument, onInventorClick }: Props) {
+export function IPPaperList({ results, onSelectDocument, onInventorClick }: Props) {
   if (results.length === 0) return null;
 
   return (
@@ -123,7 +120,6 @@ export function IPPaperList({ results, highlightTokens, onSelectDocument, onInve
         <IPPaperCard
           key={item._id || index}
           item={item}
-          highlightTokens={highlightTokens}
           onSelect={onSelectDocument}
           onInventorClick={onInventorClick}
         />

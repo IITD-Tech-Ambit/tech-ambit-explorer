@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { FileText, Loader2, Search, UserCircle, Award } from "lucide-react";
+import { FileText, Loader2, Search, UserCircle, Award, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { IPSuggestResponse, SuggestIPInventor, SuggestIPDocument, IPSuggestIntent } from "@/lib/api/types";
+import type { IPSuggestResponse, SuggestIPInventor, SuggestIPDocument, SuggestIPDepartment, IPSuggestIntent } from "@/lib/api/types";
 
 export interface IPSearchSuggestionsHandle {
   /** Returns true if the key was handled (Arrow/Enter/Esc on an item), so the input skips its default. */
@@ -10,7 +10,8 @@ export interface IPSearchSuggestionsHandle {
 
 type FlatItem =
   | { kind: "inventor"; data: SuggestIPInventor }
-  | { kind: "document"; data: SuggestIPDocument };
+  | { kind: "document"; data: SuggestIPDocument }
+  | { kind: "department"; data: SuggestIPDepartment };
 
 interface IPSearchSuggestionsProps {
   query: string;
@@ -18,6 +19,7 @@ interface IPSearchSuggestionsProps {
   isLoading: boolean;
   onSelectInventor: (inventor: SuggestIPInventor) => void;
   onSelectDocument: (document: SuggestIPDocument) => void;
+  onSelectDepartment: (department: SuggestIPDepartment) => void;
   onClose: () => void;
   className?: string;
 }
@@ -53,7 +55,7 @@ function highlightPrefix(text: string, query: string) {
 
 export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearchSuggestionsProps>(
   function IPSearchSuggestions(
-    { query, data, isLoading, onSelectInventor, onSelectDocument, onClose, className },
+    { query, data, isLoading, onSelectInventor, onSelectDocument, onSelectDepartment, onClose, className },
     ref
   ) {
     const [activeIndex, setActiveIndex] = useState(-1);
@@ -64,15 +66,21 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
 
     const inventors = useMemo(() => data?.groups?.inventors ?? [], [data]);
     const documents = useMemo(() => data?.groups?.documents ?? [], [data]);
+    const departments = useMemo(() => data?.groups?.departments ?? [], [data]);
     const intent: IPSuggestIntent = data?.intent ?? "mixed";
     const inventorsFirst = intent !== "document";
 
+    // Departments are a fast "browse" shortcut, not part of the inventor/document intent
+    // ranking, so they always lead when present.
     const flat = useMemo<FlatItem[]>(() => {
       if (tooShort) return [];
+      const departmentItems: FlatItem[] = departments.map((d) => ({ kind: "department", data: d }));
       const inventorItems: FlatItem[] = inventors.map((a) => ({ kind: "inventor", data: a }));
       const documentItems: FlatItem[] = documents.map((p) => ({ kind: "document", data: p }));
-      return inventorsFirst ? [...inventorItems, ...documentItems] : [...documentItems, ...inventorItems];
-    }, [tooShort, inventors, documents, inventorsFirst]);
+      return inventorsFirst
+        ? [...departmentItems, ...inventorItems, ...documentItems]
+        : [...departmentItems, ...documentItems, ...inventorItems];
+    }, [tooShort, departments, inventors, documents, inventorsFirst]);
 
     useEffect(() => {
       setActiveIndex(-1);
@@ -86,7 +94,8 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
 
     const selectItem = (item: FlatItem) => {
       if (item.kind === "inventor") onSelectInventor(item.data);
-      else onSelectDocument(item.data);
+      else if (item.kind === "document") onSelectDocument(item.data);
+      else onSelectDepartment(item.data);
     };
 
     useImperativeHandle(ref, () => ({
@@ -126,7 +135,7 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
 
     if (tooShort) return null;
 
-    const hasContent = inventors.length > 0 || documents.length > 0;
+    const hasContent = inventors.length > 0 || documents.length > 0 || departments.length > 0;
     if (!isLoading && !hasContent) {
       return (
         <div className={cn("rounded-xl border border-border bg-popover shadow-xl p-4 text-sm text-muted-foreground", className)}>
@@ -135,8 +144,10 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
       );
     }
 
-    // Index offsets so inventors/documents map back into the flat keyboard list.
-    const firstGroupLen = inventorsFirst ? inventors.length : documents.length;
+    // Index offsets so departments/inventors/documents map back into the flat keyboard list.
+    // Departments always lead (see `flat` above).
+    const inventorsOffset = departments.length + (inventorsFirst ? 0 : documents.length);
+    const documentsOffset = departments.length + (inventorsFirst ? inventors.length : 0);
 
     const renderInventorRow = (a: SuggestIPInventor, flatIdx: number) => (
       <button
@@ -151,17 +162,21 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
           activeIndex === flatIdx ? "bg-primary/10" : "hover:bg-muted"
         )}
       >
-        <span className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-          <UserCircle className="h-5 w-5 text-primary" />
-        </span>
+        {a.image_url ? (
+          <img src={a.image_url} alt="" className="h-8 w-8 rounded-full object-cover shrink-0" />
+        ) : (
+          <span className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <UserCircle className="h-5 w-5 text-primary" />
+          </span>
+        )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground">
             {highlightPrefix(a.name, trimmed)}
           </span>
-          {a.is_faculty && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Award className="h-3 w-3" />
-              IIT Delhi Faculty
+          {a.is_faculty && a.department && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+              <Award className="h-3 w-3 shrink-0" />
+              <span className="truncate">{a.department}</span>
             </span>
           )}
         </span>
@@ -195,6 +210,33 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
       </button>
     );
 
+    const renderDepartmentRow = (d: SuggestIPDepartment, flatIdx: number) => (
+      <button
+        key={`dept-${d.name}-${flatIdx}`}
+        type="button"
+        data-idx={flatIdx}
+        onMouseEnter={() => setActiveIndex(flatIdx)}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onSelectDepartment(d)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg transition-colors",
+          activeIndex === flatIdx ? "bg-primary/10" : "hover:bg-muted"
+        )}
+      >
+        <span className="h-8 w-8 rounded-full bg-accent/40 flex items-center justify-center shrink-0">
+          <Building2 className="h-4 w-4 text-accent-foreground" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {highlightPrefix(d.name, trimmed)}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            Browse {d.count.toLocaleString()} patent{d.count === 1 ? "" : "s"}
+          </span>
+        </span>
+      </button>
+    );
+
     const GroupHeader = ({ label, hint }: { label: string; hint?: string }) => (
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
@@ -202,16 +244,22 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
       </div>
     );
 
+    const departmentsBlock = departments.length > 0 && (
+      <div>
+        <GroupHeader label="Departments" />
+        {departments.map((d, i) => renderDepartmentRow(d, i))}
+      </div>
+    );
     const inventorsBlock = inventors.length > 0 && (
       <div>
         <GroupHeader label="Inventors" hint={intent === "inventor" ? INTENT_HINT.inventor : undefined} />
-        {inventors.map((a, i) => renderInventorRow(a, inventorsFirst ? i : firstGroupLen + i))}
+        {inventors.map((a, i) => renderInventorRow(a, inventorsOffset + i))}
       </div>
     );
     const documentsBlock = documents.length > 0 && (
       <div>
         <GroupHeader label="Documents" hint={intent === "document" ? INTENT_HINT.document : undefined} />
-        {documents.map((p, i) => renderDocumentRow(p, inventorsFirst ? inventors.length + i : i))}
+        {documents.map((p, i) => renderDocumentRow(p, documentsOffset + i))}
       </div>
     );
 
@@ -230,6 +278,7 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
             Searching…
           </div>
         )}
+        {departmentsBlock}
         {inventorsFirst ? (
           <>
             {inventorsBlock}

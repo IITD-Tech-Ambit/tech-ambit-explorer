@@ -54,24 +54,10 @@ export function useExploreResults({
     return finalResults;
   }, [filteredResults, clientSort, selectedAuthor, authorScopedData]);
 
-  const highlightTokens = useMemo(() => {
-    const src = refinementChain.join(" ").trim();
-    if (!src) return [] as string[];
-    return Array.from(
-      new Set(
-        src
-          .toLowerCase()
-          .split(/\s+/)
-          .filter((t) => t.length >= 2)
-      )
-    );
-  }, [refinementChain]);
-
   return {
     selectedDocument,
     setSelectedDocument,
     filteredResults,
     sortedResults,
-    highlightTokens,
   };
 }

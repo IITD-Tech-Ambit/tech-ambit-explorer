@@ -2,11 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import type { IPDocument } from "@/lib/api/types";
-import { formatAbstract, highlightTerms } from "@/lib/utils";
+import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
 
 type Props = {
   document: IPDocument;
-  highlightTokens: string[];
   onClose: () => void;
   onInventorClick: (name: string, kerberos: string) => void;
   /** Extra classes for the full-screen overlay (e.g. higher z-index when stacked). */
@@ -22,7 +21,6 @@ function formatDate(value?: string) {
 
 export function IPDocumentModal({
   document: doc,
-  highlightTokens,
   onClose,
   onInventorClick,
   overlayClassName,
@@ -64,7 +62,7 @@ export function IPDocumentModal({
               )}
             </div>
             <h2 className="text-lg sm:text-2xl font-bold text-foreground leading-tight">
-              {highlightTerms(doc.title, highlightTokens)}
+              {renderHighlightedText(doc.highlight?.title ?? doc.title)}
             </h2>
             <p className="text-xs text-muted-foreground mt-2 font-mono">App. No. {doc.application_number}</p>
           </div>
@@ -109,11 +107,6 @@ export function IPDocumentModal({
                           </Badge>
                         )}
                       </div>
-                      {inv.is_faculty && inv.kerberos && (
-                        <div className="text-[10px] font-medium text-muted-foreground mt-1 tracking-wide uppercase">
-                          {inv.kerberos}
-                        </div>
-                      )}
                       {inv.address && (
                         <div className="text-[10px] text-muted-foreground mt-1 line-clamp-1 max-w-xs">
                           {inv.address}
@@ -137,7 +130,7 @@ export function IPDocumentModal({
             <div className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Abstract</h3>
               <div className="p-5 rounded-xl bg-muted/30 border border-border/50 leading-relaxed text-foreground/80 text-sm shadow-inner">
-                {highlightTerms(formatAbstract(doc.abstract), highlightTokens)}
+                {renderHighlightedAbstract(doc.highlight?.abstract ?? doc.abstract)}
               </div>
             </div>
           )}

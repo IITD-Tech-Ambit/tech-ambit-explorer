@@ -28,7 +28,6 @@ export function ChatIPSourceModal({ sourceId, onClose }: Props) {
     return (
       <IPDocumentModal
         document={document}
-        highlightTokens={[]}
         onClose={onClose}
         onInventorClick={openFacultyProfile}
         overlayClassName="!z-[170]"
