@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2 } from "lucide-react";
+import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2, FileText } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import ExploreSearchLoader from "@/components/ExploreSearchLoader";
+import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { IPPaperList } from "@/components/exploreIP/IPPaperList";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
@@ -28,13 +28,15 @@ const IP_DEPARTMENT_SHORTCUTS = [
 
 const ExploreIP = () => {
   const {
-    searchQuery, setSearchQuery, refinementChain, activeQuery, currentPage,
+    searchQuery, setSearchQuery, refinementChain, baseQuery, activeQuery, currentPage,
     mode, showFilters, setShowFilters,
     yearFrom, setYearFrom, yearTo, setYearTo,
     typeOfIp, setTypeOfIp, department, setDepartment,
     country, setCountry,
-    selectedInventor, selectInventor, selectedDocument, setSelectedDocument,
-    hasSearched, isLoading, results, pagination, relatedFaculty, facets, allFacultyData,
+    selectedInventor, selectInventor, inventorScopedPage, setInventorScopedPage,
+    inventorScopedData, isInventorScopedLoading, isInventorScopedFetching,
+    selectedDocument, setSelectedDocument,
+    hasSearched, isLoading, results, pagination, relatedFaculty, facets, allFacultyData, isAllFacultyLoading,
     showSuggestions, setShowSuggestions, suggestionsRef, searchBoxRef,
     suggestData, isSuggestFetching, selectInventorSuggestion, selectDocumentSuggestion,
     performSearch, startFreshSearch, startDepartmentBrowse, isBrowse, handleSearchKeyDown, goToPage, changeMode,
@@ -254,20 +256,6 @@ const ExploreIP = () => {
               </div>
             )}
 
-            {selectedInventor && (
-              <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 animate-slide-up">
-                <span className="text-sm text-foreground">
-                  Scoped to inventor <span className="font-semibold text-primary">{selectedInventor.name}</span>
-                </span>
-                <button
-                  onClick={() => selectInventor(null)}
-                  className="rounded-full p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  aria-label="Clear inventor scope"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -275,7 +263,7 @@ const ExploreIP = () => {
       {showFilters && <div className="fixed inset-0 z-40" onClick={() => setShowFilters(false)} />}
 
       <section className="container mx-auto px-4 pt-4 pb-16 flex-1">
-        {isLoading && <ExploreSearchLoader query={hasSearched ? activeQuery : undefined} />}
+        {isLoading && <ResultListSkeleton />}
 
         {!hasSearched && !isLoading && (
           <div className="flex flex-col items-center justify-center text-center pt-10 pb-10 sm:pt-14 sm:pb-14">
@@ -354,6 +342,7 @@ const ExploreIP = () => {
               <IPInventorsSidebar
                 relatedFaculty={relatedFaculty}
                 allFacultyData={allFacultyData}
+                isAllFacultyLoading={isAllFacultyLoading}
                 selectedInventor={selectedInventor}
                 onSelectInventor={selectInventor}
                 onViewProfile={openFacultyProfile}
@@ -372,7 +361,44 @@ const ExploreIP = () => {
                 <h2 className="text-2xl font-bold text-foreground">Patents &amp; IP</h2>
               </div>
 
-              {pagination && (
+              {selectedInventor && (
+                <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 animate-slide-up">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {refinementChain.length > 1 ? (
+                        <>Showing <span className="font-semibold text-primary">{selectedInventor.name}</span>'s patents matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({mode} mode)</span></>
+                      ) : (
+                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedInventor.name}</span>'s filings <span className="text-muted-foreground ml-1">({mode} mode)</span></>
+                      )}
+                    </p>
+                    {inventorScopedData && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {inventorScopedData.inventor.total_patents} total patents by this inventor · {inventorScopedData.pagination?.total ?? 0} relevant to your query
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => selectInventor(null)}
+                    className="ml-3 shrink-0"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                </div>
+              )}
+
+              {selectedInventor && (isInventorScopedLoading || isInventorScopedFetching) && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {refinementChain.length > 1 ? `Refining within ${selectedInventor.name}'s patents...` : `Searching ${selectedInventor.name}'s patents...`}
+                  </p>
+                </div>
+              )}
+
+              {!selectedInventor && pagination && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-muted-foreground">
                     {isBrowse ? (
@@ -391,14 +417,33 @@ const ExploreIP = () => {
                 </div>
               )}
 
-              <IPPaperList
-                results={results}
-                onSelectDocument={setSelectedDocument}
-                onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
-              />
+              {selectedInventor && inventorScopedData && inventorScopedData.results.length === 0 && !isInventorScopedLoading && !isInventorScopedFetching && (
+                <div className="text-center py-12 bg-accent-light border border-accent rounded-lg">
+                  <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+                  <h3 className="text-lg font-semibold mb-1">No Matching Patents</h3>
+                  <p className="text-sm text-muted-foreground px-4">
+                    {selectedInventor.name} has {inventorScopedData.inventor.total_patents} patents, but none closely match "{activeQuery}"
+                  </p>
+                </div>
+              )}
 
-              {pagination && (
+              {(!selectedInventor || (inventorScopedData?.results.length ?? 0) > 0) && (
+                <IPPaperList
+                  results={selectedInventor ? (inventorScopedData?.results ?? []) : results}
+                  onSelectDocument={setSelectedDocument}
+                  onInventorClick={(_name, kerberos) => openFacultyProfile(kerberos)}
+                />
+              )}
+
+              {!selectedInventor && pagination && (
                 <IPPagination currentPage={currentPage} totalPages={pagination.total_pages} onGoToPage={goToPage} />
+              )}
+              {selectedInventor && inventorScopedData && inventorScopedData.pagination.total_pages > 1 && (
+                <IPPagination
+                  currentPage={inventorScopedPage}
+                  totalPages={inventorScopedData.pagination.total_pages}
+                  onGoToPage={setInventorScopedPage}
+                />
               )}
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from './queryKeys';
-import { searchIP, getIPDocumentById, getAllIPFacultyForQuery } from '../services/ipSearchService';
-import type { IPSearchRequest, IPSearchResponse, IPDocument, IPAllFacultyForQueryResponse, IPSearchFilters } from '../types';
+import { searchIP, getIPDocumentById, getAllIPFacultyForQuery, inventorScopedSearch } from '../services/ipSearchService';
+import type { IPSearchRequest, IPSearchResponse, IPDocument, IPAllFacultyForQueryResponse, IPSearchFilters, InventorScopedSearchRequest, InventorScopedSearchResponse } from '../types';
 
 export const useIPSearch = (
     request: IPSearchRequest | null,
@@ -75,6 +75,42 @@ export const useAllIPFacultyForQuery = (
         enabled: isEnabled,
         staleTime: 1000 * 60 * 10,
         gcTime: 1000 * 60 * 15,
+        refetchOnMount: false,
+    });
+};
+
+/** Inventor-scoped drill-down (Explore sidebar) — mirrors useAuthorScopedSearch (general search). */
+export const useInventorScopedSearch = (
+    request: InventorScopedSearchRequest | null,
+    options?: { enabled?: boolean }
+) => {
+    const isEnabled = options?.enabled !== false
+        && !!request
+        && !!request.query?.trim()
+        && !!request.inventor_id;
+
+    return useQuery<InventorScopedSearchResponse, Error>({
+        queryKey: [
+            ...queryKeys.ipSearch.inventorScoped(
+                request?.inventor_id || '',
+                request?.query || '',
+                request?.page || 1
+            ),
+            request?.mode || 'advanced',
+            request?.refine_within || null,
+            request?.refine_chain?.length ? request.refine_chain.join('') : null,
+            request?.per_page ?? 20,
+            request?.search_in?.length
+                ? [...request.search_in].sort().join(',')
+                : null,
+            request?.filters && Object.keys(request.filters).length > 0
+                ? JSON.stringify(request.filters)
+                : null,
+        ],
+        queryFn: () => inventorScopedSearch(request!),
+        enabled: isEnabled,
+        staleTime: 1000 * 60 * 5,
+        gcTime: 1000 * 60 * 10,
         refetchOnMount: false,
     });
 };

@@ -1,6 +1,6 @@
 import { ipSearchApiClient } from '../apiClient';
 import { ENDPOINTS } from '../endpoints';
-import type { IPSearchRequest, IPSearchResponse, IPDocument, IPDocumentResponse, IPSearchHealthResponse, IPSuggestResponse, IPAllFacultyForQueryResponse, IPSearchFilters } from '../types';
+import type { IPSearchRequest, IPSearchResponse, IPDocument, IPDocumentResponse, IPSearchHealthResponse, IPSuggestResponse, IPAllFacultyForQueryResponse, IPSearchFilters, InventorScopedSearchRequest, InventorScopedSearchResponse } from '../types';
 
 const EMPTY_IP_SUGGEST: IPSuggestResponse = {
   intent: 'mixed',
@@ -29,6 +29,11 @@ export async function getIPSuggestions(
 
 export async function searchIP(request: IPSearchRequest): Promise<IPSearchResponse> {
   const { data } = await ipSearchApiClient.post<IPSearchResponse>(ENDPOINTS.ip.search, request);
+  return data;
+}
+
+export async function inventorScopedSearch(request: InventorScopedSearchRequest): Promise<InventorScopedSearchResponse> {
+  const { data } = await ipSearchApiClient.post<InventorScopedSearchResponse>(ENDPOINTS.ip.inventorScope, request);
   return data;
 }
 

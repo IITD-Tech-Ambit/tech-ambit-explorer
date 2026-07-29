@@ -531,6 +531,36 @@ export interface IPDocumentResponse {
     document: IPDocument;
 }
 
+export interface InventorScopedSearchRequest {
+    query: string;
+    inventor_id: string;
+    page?: number;
+    per_page?: number;
+    mode?: 'basic' | 'advanced';
+    /** Legacy single-step refinement. Prefer refine_chain for multi-step narrowing. */
+    refine_within?: string;
+    /** Ordered prior queries (oldest first); each narrows within this inventor's patents. */
+    refine_chain?: string[];
+    search_in?: IPSearchInField[];
+    /** Same facet filters as POST /ip/search (minus kerberos, set by the endpoint itself). */
+    filters?: Omit<IPSearchFilters, 'kerberos'>;
+}
+
+export interface InventorScopedSearchResponse {
+    results: (IPDocument & { similarity_score?: number })[];
+    inventor: {
+        name: string;
+        inventor_id: string;
+        total_patents: number;
+    };
+    pagination: IPSearchPagination;
+    cacheHit?: boolean;
+    meta?: {
+        took_ms: number;
+        cache_hit: boolean;
+    };
+}
+
 export interface IPSearchHealthResponse {
     status: string;
     checks: {
