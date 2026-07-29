@@ -75,18 +75,18 @@ const FacultyCard = ({
             role="button"
             tabIndex={0}
         >
-            <CardContent className="p-6 flex flex-col gap-5 h-full">
-                <div className="flex items-start gap-4">
-                    <div className="relative">
+            <CardContent className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-5 h-full">
+                <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="relative shrink-0">
                         {faculty.profileImageUrl ? (
                             <img
                                 src={faculty.profileImageUrl}
                                 alt={faculty.name}
                                 loading="lazy"
-                                className="w-20 h-20 rounded-2xl object-cover shadow-md"
+                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-md"
                             />
                         ) : (
-                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 text-primary flex items-center justify-center text-xl font-semibold">
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 text-primary flex items-center justify-center text-xl font-semibold">
                                 {initials}
                             </div>
                         )}
@@ -99,7 +99,7 @@ const FacultyCard = ({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                                <h3 className="text-lg font-semibold leading-tight line-clamp-1">{faculty.name}</h3>
+                                <h3 className="text-base sm:text-lg font-semibold leading-tight line-clamp-1">{faculty.name}</h3>
                                 {faculty.designation && (
                                     <p className="text-sm text-primary font-medium line-clamp-1">{faculty.designation}</p>
                                 )}
@@ -107,8 +107,8 @@ const FacultyCard = ({
                                     {faculty.department?.name || "Faculty"}
                                 </p>
                             </div>
-                            <span className="text-[11px] uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">
-                                View
+                            <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">
+                                <span className="hidden sm:inline">View</span>
                                 <ArrowUpRight className="w-4 h-4" />
                             </span>
                         </div>

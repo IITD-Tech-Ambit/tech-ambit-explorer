@@ -132,13 +132,13 @@ const Directory = () => {
 
                     {/* Category Filter Tabs */}
                     <div className="mt-6 animate-slide-up">
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             {categoryConfig.map(({ key, label, icon: Icon, description }) => (
                                 <button
                                     key={key}
                                     onClick={() => handleCategoryChange(key)}
                                     className={cn(
-                                        "inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-medium text-sm transition-all duration-200",
+                                        "inline-flex items-center justify-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-medium text-sm transition-all duration-200",
                                         "border-2",
                                         activeCategory === key
                                             ? "bg-primary text-primary-foreground border-primary shadow-md"
@@ -157,7 +157,7 @@ const Directory = () => {
 
             <section className="container mx-auto px-4 pt-8 pb-16">
                 {isSearching && searchData && (
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                         <p className="text-sm text-muted-foreground">
                             Found <strong>{searchData.faculties.length}</strong> faculty members
                             {searchData.departments.length > 0 && (
@@ -165,27 +165,27 @@ const Directory = () => {
                             )}
                             {' '}matching "<strong>{debouncedSearch}</strong>"
                         </p>
-                        <Button variant="ghost" size="sm" onClick={clearSearch}>
+                        <Button variant="ghost" size="sm" onClick={clearSearch} className="self-start sm:self-auto">
                             Clear search
                         </Button>
                     </div>
                 )}
                 {!isSearching && activeCategory === 'all' && paginatedData?.pagination && (
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                         <p className="text-sm text-muted-foreground">
                             Showing <strong>{paginatedData.data.length}</strong> of <strong>{paginatedData.pagination.total}</strong> faculty members
                         </p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-2 sm:justify-end">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={!paginatedData.pagination.hasPrev}
                             >
-                                <ChevronLeft className="w-4 h-4 mr-1" />
-                                Previous
+                                <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Previous</span>
                             </Button>
-                            <span className="text-sm px-3 py-1 bg-muted rounded">
+                            <span className="text-sm px-3 py-1 bg-muted rounded whitespace-nowrap">
                                 Page {paginatedData.pagination.page} of {paginatedData.pagination.totalPages}
                             </span>
                             <Button
@@ -194,8 +194,8 @@ const Directory = () => {
                                 onClick={() => setPage(p => p + 1)}
                                 disabled={!paginatedData.pagination.hasNext}
                             >
-                                Next
-                                <ChevronRight className="w-4 h-4 ml-1" />
+                                <span className="hidden sm:inline">Next</span>
+                                <ChevronRight className="w-4 h-4 sm:ml-1" />
                             </Button>
                         </div>
                     </div>
@@ -226,7 +226,7 @@ const Directory = () => {
                 ) : isSearching ? (
                     // Search results view
                     searchData && searchData.faculties.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                             {searchData.faculties.map((faculty) => (
                                 <FacultyCard
                                     key={faculty._id}
@@ -252,7 +252,7 @@ const Directory = () => {
                 ) : activeCategory === 'all' ? (
                     // Simple grid view for "All" category
                     paginatedData?.data && paginatedData.data.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                             {paginatedData.data.map((faculty) => (
                                 <FacultyCard
                                     key={faculty._id}
