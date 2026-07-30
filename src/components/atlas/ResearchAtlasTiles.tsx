@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ChevronDown, ChevronRight, Columns2, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
+  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import {
 import { allNodeKeys, themeColorHex, TileManager } from "./atlasOctree";
 import { createThemeSphereLayout, type ThemeSphereLayout } from "./atlasThemeSphereLayout";
 import { themeDisplayName } from "./atlasClusters";
-import DepartmentCompareView from "./DepartmentCompareView";
 import {
   fetchKgAtlasClusterBreakdown, fetchKgAtlasYearIndices, fetchKgDepartmentAtlasIndices,
   fetchKgFacultyAtlasIndices, fetchKgFacultyIndex, fetchKgPaperMeta, type KgPaperMeta,
@@ -27,8 +26,11 @@ import type {
   KgAtlasClusterBreakdown,
   KgFacultyItem,
 } from "./types";
+import type { AtlasMode } from "./ResearchAtlas";
 
 const BG = "#000000";
+/** Default camera distance — far enough to see the full theme cloud on open. */
+const DEFAULT_CAMERA_Z = 9.6;
 const POINT_BUDGET = 250_000;
 const MAX_IN_FLIGHT = 8;
 // Max matched points held in the highlight overlay. Per-theme counts on the
@@ -54,7 +56,6 @@ export interface PickedPaper {
 
 const CLUSTER_LEVELS = ["topic", "subdomain", "domain", "theme"] as const;
 type ClusterLevel = (typeof CLUSTER_LEVELS)[number];
-type AtlasMode = "view" | "interactive" | "compare";
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -892,13 +893,11 @@ function ThemeClusterPanel({
 }
 
 function PaperPanel({
-  paper, detail, detailLoading, activeLevel, onLevelChange, onClose,
+  paper, detail, detailLoading, onClose,
 }: {
   paper: PickedPaper;
   detail: KgPaperMeta | null;
   detailLoading: boolean;
-  activeLevel: ClusterLevel | null;
-  onLevelChange: (level: ClusterLevel, value: string) => void;
   onClose: () => void;
 }) {
   const linkMeta = detail ? getPaperExternalUrl(detail) : null;
@@ -924,16 +923,13 @@ function PaperPanel({
           <p className="text-[10px] uppercase tracking-wide text-cyan-400/80 mb-2">Highlight related papers</p>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((t) => (
-              <button key={t.type} type="button" onClick={() => onLevelChange(t.type, t.label)}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] transition-colors",
-                  activeLevel === t.type
-                    ? "border-cyan-400/60 bg-cyan-950/50 text-cyan-100"
-                    : "border-slate-600/50 bg-slate-900/80 text-slate-300 hover:border-cyan-500/40 hover:text-white",
-                )}>
+              <span
+                key={t.type}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-600/50 bg-slate-900/80 px-3 py-1 text-[11px] text-slate-300 pointer-events-none select-none"
+              >
                 <Tag className="h-3 w-3 text-cyan-400/80" />
                 <span className="text-slate-500 mr-0.5">{t.type}:</span>{t.label}
-              </button>
+              </span>
             ))}
           </div>
         </div>
@@ -1065,7 +1061,6 @@ export default function ResearchAtlasTiles({
   const [selected, setSelected] = useState<PickedPaper | null>(null);
   const [detail, setDetail] = useState<KgPaperMeta | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [activeLevel, setActiveLevel] = useState<ClusterLevel | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [cursor, setCursor] = useState("grab");
   const [contextLost, setContextLost] = useState(false);
@@ -1116,7 +1111,6 @@ export default function ResearchAtlasTiles({
   const viewOnlyRef = useRef(false);
 
   const isViewMode = atlasMode === "view";
-  const isCompareMode = atlasMode === "compare";
   const isExploreMode = atlasMode === "interactive";
   const structuredFilterActive = Boolean(
     selectedDepartment || selectedFacultyId || selectedYears,
@@ -1141,7 +1135,7 @@ export default function ResearchAtlasTiles({
   useEffect(() => {
     const t = window.setTimeout(() => window.dispatchEvent(new Event("resize")), 520);
     return () => window.clearTimeout(t);
-  }, [isViewMode, isCompareMode]);
+  }, [isViewMode]);
 
   const markDirty = useCallback(() => {
     if (engineRef.current) engineRef.current.dirty = true;
@@ -1397,12 +1391,12 @@ export default function ResearchAtlasTiles({
     e.overlayGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     e.overlayGeom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     e.overlayGeom.setDrawRange(0, n);
-    // Same Additive theme look as the base atlas — no brightness boost.
+    // Soft additive overlay — same nebula style as the base cloud.
     e.overlayMat.blending = THREE.AdditiveBlending;
     e.overlayMat.depthTest = false;
-    e.overlayMat.uniforms.uSize.value = layout ? 0.12 : 0.09;
-    e.overlayMat.uniforms.uAlpha.value = layout ? 0.55 : 0.95;
-    e.overlayMat.uniforms.uMaxPx.value = 14.0 * Math.min(window.devicePixelRatio, 2);
+    e.overlayMat.uniforms.uSize.value = layout ? 0.08 : 0.07;
+    e.overlayMat.uniforms.uAlpha.value = layout ? 0.55 : 0.88;
+    e.overlayMat.uniforms.uMaxPx.value = 9.0 * Math.min(window.devicePixelRatio || 1, 2);
     e.overlayMat.needsUpdate = true;
     e.overlay.visible = n > 0;
     // Hide the full atlas cloud while filtering so only matched papers show.
@@ -1633,15 +1627,6 @@ export default function ResearchAtlasTiles({
       .finally(() => setDetailLoading(false));
   }, [selected]);
 
-  const handleLevelChange = useCallback((level: ClusterLevel, value: string) => {
-    setActiveLevel((prev) => (prev === level ? null : level));
-    const applied = activeLevel === level ? "" : value;
-    if (!applied) {
-      setSearchQuery("");
-      return;
-    }
-    setSearchQuery(applied);
-  }, [activeLevel]);
 
   useEffect(() => {
     if (loading || error || !treeRef.current || !dictRef.current) return;
@@ -1663,10 +1648,10 @@ export default function ResearchAtlasTiles({
     renderer.setClearColor(BG, 1);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(BG, 0.05);
+    scene.fog = new THREE.FogExp2(BG, 0.032);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-    camera.position.set(0, 0.2, 4.2);
+    camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
 
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
@@ -1675,20 +1660,22 @@ export default function ResearchAtlasTiles({
     controls.zoomSpeed = 0.8;
     controls.minDistance = 0.2;
     // Leave headroom for the drilled domain cloud, which frames from ~12-15 away.
-    controls.maxDistance = 20;
+    controls.maxDistance = 24;
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Soft additive “nebula dust” look (first-image style) — not hard pixel beads.
     const baseMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.058 },
+        uSize: { value: 0.055 },
         uDim: { value: 1.0 },
-        uMaxPx: { value: 13.0 * Math.min(window.devicePixelRatio, 2) },
+        uMaxPx: { value: 7.5 * dpr },
       },
       vertexShader: `
         attribute vec3 color; uniform float uSize; uniform float uMaxPx; varying vec3 vColor;
         void main() {
           vColor = color;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = min(uSize * (300.0 / -mv.z), uMaxPx);
+          gl_PointSize = min(uSize * (300.0 / max(-mv.z, 0.08)), uMaxPx);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
@@ -1697,13 +1684,14 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          // Soft disc with a brighter core so sparse outer dots stay readable.
-          float edge = smoothstep(0.5, 0.22, d);
-          float core = smoothstep(0.32, 0.0, d);
-          float alpha = (0.72 + 0.28 * core) * uDim * edge;
-          gl_FragColor = vec4(vColor, alpha);
+          // Soft falloff — KG clouds glow without hard square pixels.
+          float edge = smoothstep(0.5, 0.18, d);
+          gl_FragColor = vec4(vColor, 0.40 * uDim * edge);
         }`,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
     });
 
     const group = new THREE.Group();
@@ -1719,11 +1707,9 @@ export default function ResearchAtlasTiles({
     overlayGeom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
     const overlayMat = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.09 },
-        uAlpha: { value: 0.95 },
-        // Cap the on-screen sprite size (device px) so zooming into a cluster
-        // keeps crisp dots instead of ballooning into blurry discs.
-        uMaxPx: { value: 14.0 * Math.min(window.devicePixelRatio, 2) },
+        uSize: { value: 0.07 },
+        uAlpha: { value: 0.88 },
+        uMaxPx: { value: 9.0 * dpr },
       },
       vertexShader: `
         attribute vec3 color;
@@ -1733,7 +1719,7 @@ export default function ResearchAtlasTiles({
         void main() {
           vColor = color;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = min(uSize * (300.0 / -mv.z), uMaxPx);
+          gl_PointSize = min(uSize * (300.0 / max(-mv.z, 0.08)), uMaxPx);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
@@ -1743,11 +1729,13 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float edge = smoothstep(0.5, 0.26, d);
-          float core = smoothstep(0.28, 0.0, d);
-          gl_FragColor = vec4(vColor, uAlpha * edge * (0.85 + 0.15 * core));
+          float edge = smoothstep(0.5, 0.2, d);
+          gl_FragColor = vec4(vColor, uAlpha * edge);
         }`,
-      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
     });
     const overlay = new THREE.Points(overlayGeom, overlayMat);
     overlay.frustumCulled = false;
@@ -1866,11 +1854,11 @@ export default function ResearchAtlasTiles({
       line.renderOrder = 4;
 
       const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.018, 10, 10),
+        new THREE.SphereGeometry(0.02, 12, 12),
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.95,
+          opacity: 0.98,
           depthWrite: false,
           depthTest: false,
         }),
@@ -2008,7 +1996,7 @@ export default function ResearchAtlasTiles({
         dLine.visible = false;
 
         const dTip = new THREE.Mesh(
-          new THREE.SphereGeometry(0.016, 10, 10),
+          new THREE.SphereGeometry(0.018, 12, 12),
           new THREE.MeshBasicMaterial({
             color,
             transparent: true,
@@ -2159,7 +2147,6 @@ export default function ResearchAtlasTiles({
       const paper = pick(ev.clientX, ev.clientY);
       if (paper) {
         setSelected(paper);
-        setActiveLevel(null);
         setClusterTheme(null);
         setClusterBreakdown(null);
         return;
@@ -2296,7 +2283,7 @@ export default function ResearchAtlasTiles({
       frameDrillOverview();
       return;
     }
-    e.camera.position.set(0, 0.2, 4.2);
+    e.camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
     e.controls.target.set(0, 0, 0);
     e.controls.update();
     e.dirty = true;
@@ -2315,7 +2302,6 @@ export default function ResearchAtlasTiles({
     if (!q && !structuredFilterActive) return;
 
     setSelected(null);
-    setActiveLevel(null);
     setClusterTheme(theme);
     setClusterLoading(true);
 
@@ -2401,7 +2387,6 @@ export default function ResearchAtlasTiles({
   // domain sub-clusters. Clicking a domain narrows within the drilled theme.
   const drillIntoTheme = useCallback((theme: string) => {
     setSelected(null);
-    setActiveLevel(null);
     setClusterTheme(null);
     setClusterBreakdown(null);
     focusedDomainRef.current = null;
@@ -2469,7 +2454,6 @@ export default function ResearchAtlasTiles({
 
   selectPaperRef.current = (paper) => {
     setSelected(paper);
-    setActiveLevel(null);
     setClusterTheme(null);
     setClusterBreakdown(null);
   };
@@ -2497,7 +2481,6 @@ export default function ResearchAtlasTiles({
     setSelectedFacultyId("");
     setSelectedYears(0);
     setSearchQuery("");
-    setActiveLevel(null);
     setSelected(null); setHovered(null);
     setFilterThemeCounts([]);
     setDrillDomainCounts([]);
@@ -2515,7 +2498,6 @@ export default function ResearchAtlasTiles({
    *  dropdown filters (department / faculty / years) applied. */
   const exitPrimarySearch = () => {
     setSearchQuery("");
-    setActiveLevel(null);
     setSelected(null); setHovered(null);
     setDrillTheme(null);
     focusedDomainRef.current = null;
@@ -2528,7 +2510,7 @@ export default function ResearchAtlasTiles({
     // Back to the whole-cloud framing (the drill camera sits much further out).
     const e = engineRef.current;
     if (e) {
-      e.camera.position.set(0, 0.2, 4.2);
+      e.camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
       e.controls.target.set(0, 0, 0);
       e.controls.update();
       e.dirty = true;
@@ -2554,13 +2536,6 @@ export default function ResearchAtlasTiles({
 
   const enterInteractiveMode = () => {
     setAtlasMode("interactive");
-  };
-
-  const enterCompareMode = () => {
-    setSelected(null);
-    setHovered(null);
-    closeThemeCluster();
-    setAtlasMode("compare");
   };
 
   const showTooltip = hovered && !selected && !clusterTheme && isExploreMode;
@@ -2590,18 +2565,9 @@ export default function ResearchAtlasTiles({
   return (
     <div className={cn(
       "relative flex flex-col flex-1 min-h-0 bg-black text-white",
-      (isViewMode || isCompareMode) && "ring-1 ring-white/10",
+      isViewMode && "ring-1 ring-white/10",
     )}>
-      {isCompareMode && (
-        <DepartmentCompareView
-          departmentOptions={departmentOptions}
-          onExit={enterInteractiveMode}
-        />
-      )}
-      <div className={cn(
-        "absolute top-4 right-4 z-30 flex flex-wrap items-center justify-end gap-2",
-        isCompareMode && "hidden",
-      )}>
+      <div className="absolute top-4 right-4 z-30 flex flex-wrap items-center justify-end gap-2">
         {isExploreMode && (
           <>
             <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1 / 1.3)}
@@ -2621,10 +2587,10 @@ export default function ResearchAtlasTiles({
         <div
           className={cn(
             "inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg",
-            (isViewMode || isCompareMode) && "ring-1 ring-white/10",
+            isViewMode && "ring-1 ring-white/10",
           )}
           role="group"
-          aria-label="Atlas display mode"
+          aria-label="IITD-VERSE display mode"
         >
           <button
             type="button"
@@ -2654,28 +2620,11 @@ export default function ResearchAtlasTiles({
             <MousePointer2 className="h-3.5 w-3.5" />
             Explore
           </button>
-          <button
-            type="button"
-            onClick={enterCompareMode}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-              isCompareMode
-                ? "bg-white text-black shadow-sm"
-                : "text-slate-300 hover:text-white hover:bg-slate-800/80",
-            )}
-            aria-pressed={isCompareMode}
-          >
-            <Columns2 className="h-3.5 w-3.5" />
-            Compare
-          </button>
         </div>
       </div>
 
-      <header className={cn(
-        "absolute top-0 inset-x-0 z-20 pointer-events-none",
-        isCompareMode && "hidden",
-      )}>
-        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-44 sm:pr-72 lg:pr-80">
+      <header className="absolute top-0 inset-x-0 z-20 pointer-events-none">
+        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-44 sm:pr-64 lg:pr-72">
           <div className="flex-1 max-w-3xl mx-auto relative pointer-events-none">
             <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-700/70 bg-slate-900/90 p-2 shadow-lg backdrop-blur-md pointer-events-auto sm:grid-cols-3">
               <FilterCombobox
@@ -2967,7 +2916,7 @@ export default function ResearchAtlasTiles({
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex items-center gap-3 text-slate-300">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span>{contextLost ? "Restoring visualization…" : "Loading research atlas…"}</span>
+            <span>{contextLost ? "Restoring visualization…" : "Loading IITD-VERSE…"}</span>
           </div>
         </div>
       )}
@@ -3005,8 +2954,7 @@ export default function ResearchAtlasTiles({
 
       {selected && !clusterTheme && isExploreMode && (
         <PaperPanel paper={selected} detail={detail} detailLoading={detailLoading}
-          activeLevel={activeLevel} onLevelChange={handleLevelChange}
-          onClose={() => { setSelected(null); setActiveLevel(null); }} />
+          onClose={() => setSelected(null)} />
       )}
     </div>
   );

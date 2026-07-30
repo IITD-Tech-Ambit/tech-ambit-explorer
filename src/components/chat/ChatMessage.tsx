@@ -548,7 +548,7 @@ const SourcesBlock = ({
 
 // Internal portal pages the bot can send users to — rendered as a button-style
 // chip (opens in a new tab) so navigation reads as an action, not prose.
-const PORTAL_PAGES = ["/explore", "/research-areas", "/directory", "/atlas", "/magazines", "/contributors"];
+const PORTAL_PAGES = ["/explore", "/research-areas", "/directory", "/iitd-verse", "/magazines", "/contributors"];
 
 const MarkdownLink = ({
   href,

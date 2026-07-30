@@ -91,7 +91,7 @@ const DIM_SIZE = 0.011;
 const DIM_ALPHA = 0.18;
 const BASE_SIZE = 0.022;
 
-export type AtlasMode = "view" | "interactive" | "compare";
+export type AtlasMode = "view" | "interactive";
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -2193,7 +2193,7 @@ export default function ResearchAtlas({
         isViewMode && "ring-1 ring-white/10",
       )}
       role="group"
-      aria-label="Atlas display mode"
+      aria-label="IITD Verse display mode"
     >
       <button
         type="button"

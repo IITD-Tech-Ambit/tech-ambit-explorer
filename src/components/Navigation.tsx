@@ -40,7 +40,7 @@ const Navigation = () => {
     { name: "Explore", path: "/explore" },
     { name: "Research Areas", path: "/research-areas" },
     { name: "Directory", path: "/directory" },
-    { name: "Atlas", path: "/atlas" },
+    { name: "IITD Verse", path: "/iitd-verse" },
     { name: "Magazines", path: "/magazines" },
     { name: "Contributors", path: "/contributors" },
   ];

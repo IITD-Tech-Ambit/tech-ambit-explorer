@@ -10,7 +10,7 @@ const USE_TILES = import.meta.env.VITE_ATLAS_TILES !== "false";
 
 const Atlas = () => {
   const [atlasMode, setAtlasMode] = useState<AtlasMode>("interactive");
-  const isImmersive = atlasMode === "view" || atlasMode === "compare";
+  const isImmersive = atlasMode === "view";
   const rootRef = useRef<HTMLDivElement>(null);
 
   const handleModeChange = useCallback((next: AtlasMode) => {
@@ -18,8 +18,8 @@ const Atlas = () => {
     const root = rootRef.current;
     if (!root) return;
 
-    // Must run in the same user-gesture turn as the View/Compare/Explore click.
-    if (isImmersiveMode(next) && !document.fullscreenElement) {
+    // Must run in the same user-gesture turn as the View/Explore click.
+    if (next === "view" && !document.fullscreenElement) {
       void root.requestFullscreen().catch(() => {});
     } else if (next === "interactive" && document.fullscreenElement === root) {
       void document.exitFullscreen().catch(() => {});
@@ -65,9 +65,5 @@ const Atlas = () => {
     </div>
   );
 };
-
-function isImmersiveMode(mode: AtlasMode): boolean {
-  return mode === "view" || mode === "compare";
-}
 
 export default Atlas;

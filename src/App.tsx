@@ -31,6 +31,12 @@ function RedirectExploreBrowse() {
   return <Navigate to={`/research-areas${search}`} replace />;
 }
 
+/** Preserve query string when moving legacy /atlas → /iitd-verse. */
+function RedirectAtlas() {
+  const { search } = useLocation();
+  return <Navigate to={`/iitd-verse${search}`} replace />;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -86,7 +92,8 @@ const App = () => {
             <Route path="/explore/browse" element={<RedirectExploreBrowse />} />
             <Route path="/research-areas" element={<TaxonomyBrowse />} />
             <Route path="/directory" element={<Directory />} />
-            <Route path="/atlas" element={<Atlas />} />
+            <Route path="/iitd-verse" element={<Atlas />} />
+            <Route path="/atlas" element={<RedirectAtlas />} />
             <Route path="/faculty/:kerberos" element={<FacultyProfile />} />
             <Route path="/magazines" element={<Magazines />} />
             <Route path="/magazines/:id" element={<MagazineDetail />} />
