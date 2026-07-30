@@ -28,7 +28,7 @@ function IPPaperCard({
 
   return (
     <Card
-      className="hover:shadow-elegant transition-smooth cursor-pointer border-border"
+      className="min-w-0 hover:shadow-elegant transition-smooth cursor-pointer border-border"
       onClick={() => onSelect(item)}
     >
       <CardHeader>
@@ -89,18 +89,18 @@ function IPPaperCard({
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground min-w-0">
+            <div className="flex items-center gap-1 shrink-0">
               <Calendar className="h-4 w-4" />
               <span>{item.publication_year || "N/A"}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Hash className="h-4 w-4" />
-              <span className="truncate max-w-[140px] sm:max-w-none">{item.application_number}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <Hash className="h-4 w-4 shrink-0" />
+              <span className="truncate max-w-[140px] sm:max-w-[220px]">{item.application_number}</span>
             </div>
             {item.applicants?.length > 0 && (
-              <div className="hidden sm:flex items-center gap-1">
-                <ShieldCheck className="h-4 w-4" />
+              <div className="hidden sm:flex items-center gap-1 min-w-0">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
                 <span className="truncate max-w-[220px]">{item.applicants[0]}</span>
               </div>
             )}
