@@ -14,6 +14,10 @@ type Props = {
   allFacultyData?: IPAllFacultyForQueryResponse;
   isAllFacultyLoading?: boolean;
   selectedInventor: SelectedInventor | null;
+  /** Patent count for the currently-scoped inventor, from the same inventor-scope query driving
+   *  the page — used instead of the (now-disabled) full-corpus aggregation while scoped, so this
+   *  can't drift from what the page actually shows. */
+  scopedPatentCount?: number;
   onSelectInventor: (inventor: SelectedInventor | null) => void;
   onViewProfile: (kerberos: string) => void;
   isOpen: boolean;
@@ -28,6 +32,7 @@ export function IPInventorsSidebar({
   allFacultyData,
   isAllFacultyLoading,
   selectedInventor,
+  scopedPatentCount,
   onSelectInventor,
   onViewProfile,
   isOpen,
@@ -61,14 +66,41 @@ export function IPInventorsSidebar({
 
   return (
     <div className="w-full flex flex-col gap-4 pt-1 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)]">
-      <PeopleSectionHeader count={totalFacultyCount} isOpen={isOpen} onToggle={onToggle} />
+      <PeopleSectionHeader count={selectedInventor ? 1 : totalFacultyCount} isOpen={isOpen} onToggle={onToggle} />
 
       <div
         className={`flex flex-col xl:flex-1 xl:min-h-0 transition-all duration-300 overflow-hidden pr-0 sm:pr-4 ${
           isOpen ? "opacity-100" : "opacity-0 hidden"
         }`}
       >
-        {isAllFacultyLoading ? (
+        {selectedInventor ? (
+          // Scoped to one inventor: show just them, using the count from the same inventor-scope
+          // query driving the page instead of the full corpus-wide aggregation (which is disabled
+          // while scoped — see useIPExploreState), so this can't drift from what the page shows.
+          <div className="shrink-0 mt-2">
+            <p className="text-muted-foreground mb-3">
+              Viewing <span className="font-semibold text-primary">{selectedInventor.name}</span>
+            </p>
+            <PeopleListContainer>
+              <PeopleFacultyRow
+                name={selectedInventor.name}
+                paperCount={scopedPatentCount ?? 0}
+                isSelected
+                onSelect={() => onSelectInventor(null)}
+                onViewProfile={() => {
+                  if (selectedInventor.kerberos) onViewProfile(selectedInventor.kerberos);
+                }}
+              />
+            </PeopleListContainer>
+            <button
+              type="button"
+              className="text-primary hover:underline font-medium text-sm mt-3"
+              onClick={() => onSelectInventor(null)}
+            >
+              ← Browse all inventors
+            </button>
+          </div>
+        ) : isAllFacultyLoading ? (
           <PeopleLoadingState />
         ) : isEmpty ? (
           <PeopleEmptyState

@@ -201,11 +201,14 @@ export function useIPExploreState() {
     enabled: showSuggestions,
   });
 
+  // Disabled while scoped to one inventor: the full-corpus aggregate isn't useful once you're
+  // already viewing one inventor's patents, and skipping it avoids an independent query whose
+  // count can drift from what inventorScopedData (the actual page being shown) reports.
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllIPFacultyForQuery(
     isBrowse ? "" : activeQuery,
     mode,
     {
-      enabled: hasSearched && (isBrowse || !!activeQuery.trim()),
+      enabled: hasSearched && !selectedInventor && (isBrowse || !!activeQuery.trim()),
       refine_chain: priorChain.length > 0 ? priorChain : undefined,
       filters,
     }
