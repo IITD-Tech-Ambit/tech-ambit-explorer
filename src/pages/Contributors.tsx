@@ -432,35 +432,6 @@ const Contributors = () => {
         </div>
       </section>
 
-      <section className="relative py-16 sm:py-20">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/10 to-transparent dark:via-slate-900/10" />
-        <div className="container mx-auto px-4 relative z-10">
-          <SectionHeading subtitle="Partner units supporting Research Ambit">
-            In collaboration with:
-          </SectionHeading>
-          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 max-w-5xl mx-auto animate-slide-up">
-            {collaborators.map((org) => (
-              <div
-                key={org.name}
-                className="flex flex-col items-center gap-3 rounded-2xl border border-border/30 bg-white px-6 py-5 shadow-md dark:bg-slate-100"
-              >
-                <img
-                  src={org.logo}
-                  alt={org.fullName}
-                  className={cn(
-                    "object-contain",
-                    org.wide ? "h-16 sm:h-20 w-auto max-w-[14rem] sm:max-w-[18rem]" : "h-24 w-24 sm:h-28 sm:w-28",
-                  )}
-                />
-                <span className="text-xs sm:text-sm font-semibold tracking-wide text-slate-700">
-                  {org.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="relative py-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/15 to-transparent dark:via-slate-900/15" />
         <div className="container mx-auto px-4 relative z-10">
@@ -503,6 +474,35 @@ const Contributors = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 max-w-6xl mx-auto animate-slide-up">
             {libraryTeam.map((m) => (
               <MemberCard key={m.name} member={m} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative py-16 sm:py-20">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/10 to-transparent dark:via-slate-900/10" />
+        <div className="container mx-auto px-4 relative z-10">
+          <SectionHeading subtitle="Partner units supporting Research Ambit">
+            In collaboration with:
+          </SectionHeading>
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 max-w-5xl mx-auto animate-slide-up">
+            {collaborators.map((org) => (
+              <div
+                key={org.name}
+                className="flex flex-col items-center gap-3 rounded-2xl border border-border/30 bg-white px-6 py-5 shadow-md dark:bg-slate-100"
+              >
+                <img
+                  src={org.logo}
+                  alt={org.fullName}
+                  className={cn(
+                    "object-contain",
+                    org.wide ? "h-16 sm:h-20 w-auto max-w-[14rem] sm:max-w-[18rem]" : "h-24 w-24 sm:h-28 sm:w-28",
+                  )}
+                />
+                <span className="text-xs sm:text-sm font-semibold tracking-wide text-slate-700">
+                  {org.name}
+                </span>
+              </div>
             ))}
           </div>
         </div>
