@@ -77,6 +77,11 @@ const TaxonomyFacultyPapersModal = ({
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
 
+    useEffect(() => {
+        document.body.style.overflow = open ? "hidden" : "";
+        return () => { document.body.style.overflow = ""; };
+    }, [open]);
+
     if (!open) return null;
 
     const hasMore = papers.length < total;
