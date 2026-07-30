@@ -114,7 +114,7 @@ const PatentTimeline = ({ documents: initialDocuments, kerberos, facultyName, pa
                 </span>
             </div>
             {/* Same cap as PublicationTimeline's body so the two cards line up when shown side by side. */}
-            <div className="p-5 max-h-[640px] overflow-y-auto scrollbar-thin">
+            <div className="p-5 max-h-[640px] overflow-y-auto overscroll-contain scrollbar-thin">
                 <div className="relative">
                     <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-accent/60 via-accent/30 to-transparent rounded-full" />
 
@@ -134,7 +134,7 @@ const PatentTimeline = ({ documents: initialDocuments, kerberos, facultyName, pa
                                         </span>
                                     </div>
 
-                                    <div className={isExpanded ? "max-h-[320px] overflow-y-auto pr-1 scrollbar-thin" : ""}>
+                                    <div className={isExpanded ? "max-h-[320px] overflow-y-auto overscroll-contain pr-1 scrollbar-thin" : ""}>
                                         <div className="space-y-2">
                                             {visibleDocs.map((doc) => (
                                                 <PatentItemCard
