@@ -548,7 +548,9 @@ const SourcesBlock = ({
 
 // Internal portal pages the bot can send users to — rendered as a button-style
 // chip (opens in a new tab) so navigation reads as an action, not prose.
-const PORTAL_PAGES = ["/explore", "/research-areas", "/directory", "/iitd-verse", "/magazines", "/contributors"];
+// "/atlas" is the legacy alias that redirects to "/iitd-verse" — the bot links the
+// Atlas page as "/atlas", so both must be here or that chip loses its button styling.
+const PORTAL_PAGES = ["/explore", "/research-areas", "/directory", "/iitd-verse", "/atlas", "/magazines", "/contributors"];
 
 const MarkdownLink = ({
   href,
