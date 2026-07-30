@@ -5,7 +5,7 @@ import { useElementWidth } from "@/hooks/use-element-width";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ExternalLink, BookOpen, TrendingUp, BarChart2, PieChart as PieChartIcon,
-  ChevronDown, Copy, Check, RotateCcw, Download, Pencil, Image as ImageIcon,
+  ChevronDown, Copy, Check, Download, Image as ImageIcon,
   UserRound, Lightbulb, Compass,
 } from "lucide-react";
 import { isIPSource, type ChatSource, type ChatChartEvent, type ExploreLink, type LineChartData, type BarChartData, type PieChartData } from "@/lib/api/services/chatService";
@@ -769,12 +769,6 @@ const AssistantActions = ({
           <span>Download</span>
         </button>
       )}
-      {canRetry && onRetry && (
-        <button onClick={onRetry} title="Retry query" className={btnCls}>
-          <RotateCcw className="w-3 h-3" />
-          <span>Retry</span>
-        </button>
-      )}
     </div>
   );
 };
@@ -796,14 +790,6 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatM
         >
           {message.content}
         </div>
-        {onEdit && (
-          <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
-            <button onClick={() => onEdit(message.content)} title="Edit query" className={btnCls}>
-              <Pencil className="w-3 h-3" />
-              <span>Edit</span>
-            </button>
-          </div>
-        )}
       </div>
     );
   }
