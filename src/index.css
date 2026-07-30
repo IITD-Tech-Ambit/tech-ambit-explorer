@@ -1286,28 +1286,6 @@ All colors MUST be HSL.
   isolation: isolate;
 }
 
-.home-features-stage-logo {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 0;
-  width: min(48rem, 96%);
-  height: auto;
-  max-height: 92%;
-  aspect-ratio: 1;
-  object-fit: contain;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  opacity: 0.22;
-  filter: drop-shadow(0 12px 28px hsl(0 78% 42% / 0.12));
-  user-select: none;
-}
-
-.dark .home-features-stage-logo {
-  opacity: 0.28;
-  filter: drop-shadow(0 12px 28px hsl(0 72% 58% / 0.18));
-}
-
 .home-cta-band {
   animation: home-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }

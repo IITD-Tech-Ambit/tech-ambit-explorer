@@ -3,8 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import instituteSeal from "@/assets/logo2-transparent.png";
-import { Menu, X, Moon, Sun } from "lucide-react";
+import { Menu, X, Moon, Sun, LogIn, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,6 +13,7 @@ const Navigation = () => {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const location = useLocation();
+  const { user, isFaculty, login, logout } = useAuth();
 
   useEffect(() => {
     setMounted(true);
@@ -43,6 +45,8 @@ const Navigation = () => {
     { name: "IITD Verse", path: "/iitd-verse" },
     { name: "Magazines", path: "/magazines" },
     { name: "Contributors", path: "/contributors" },
+    // Faculty only: their own Directory profile page, right after Contributors.
+    ...(user && isFaculty ? [{ name: "Profile", path: `/faculty/${user.kerberos}` }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -57,19 +61,27 @@ const Navigation = () => {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20 min-w-0 gap-3">
-          <Link to="/" className="flex items-center space-x-3 group min-w-0" aria-label="Research Ambit home">
-            <img
-              src={instituteSeal}
-              alt="Indian Institute of Technology Delhi"
-              className="nav-seal-img"
-            />
-            <div className="flex flex-col">
+          <div className="flex items-center space-x-3 min-w-0">
+            <a
+              href="https://home.iitd.ac.in/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label="IIT Delhi homepage"
+            >
+              <img
+                src={instituteSeal}
+                alt="Indian Institute of Technology Delhi"
+                className="nav-seal-img"
+              />
+            </a>
+            <Link to="/" className="flex flex-col min-w-0 group" aria-label="Research Ambit home">
               <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 Research Ambit
               </span>
               <span className="text-xs text-muted-foreground">Indian Institute of Technology Delhi</span>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           <div className="hidden lg:flex items-center space-x-1 shrink-0">
             {navItems.map((item) => (
@@ -98,6 +110,23 @@ const Navigation = () => {
             >
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+            {user ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void logout()}
+                title={`Logged in as ${user.name}`}
+                className="ml-1 gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden xl:inline">Logout</span>
+              </Button>
+            ) : (
+              <Button variant="default" size="sm" onClick={login} className="ml-1 gap-1.5">
+                <LogIn className="h-4 w-4" />
+                Login
+              </Button>
+            )}
           </div>
 
           <div className="lg:hidden flex items-center space-x-2 shrink-0">
@@ -138,6 +167,21 @@ const Navigation = () => {
               {item.name}
             </Link>
           ))}
+          {user ? (
+            <button
+              onClick={() => { void logout(); setIsOpen(false); }}
+              className="flex w-full items-center gap-2 px-4 py-3 rounded-lg font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-200"
+            >
+              <LogOut className="h-4 w-4" /> Logout ({user.name.split(" ")[0]})
+            </button>
+          ) : (
+            <button
+              onClick={() => { login(); setIsOpen(false); }}
+              className="flex w-full items-center gap-2 px-4 py-3 rounded-lg font-medium text-primary hover:bg-primary/10 transition-all duration-200"
+            >
+              <LogIn className="h-4 w-4" /> Login
+            </button>
+          )}
         </div>
       )}
     </nav>

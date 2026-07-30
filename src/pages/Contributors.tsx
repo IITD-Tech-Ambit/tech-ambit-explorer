@@ -1,4 +1,5 @@
-import { Linkedin, Mail, Users, GraduationCap, Award, Star, Globe } from "lucide-react";import Navigation from "@/components/Navigation";
+import { Linkedin, Mail, Users, GraduationCap, Award, Star, Globe } from "lucide-react";
+import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +8,14 @@ import mentor1Avatar from "@/assets/image(OM).png";
 import mentor2Avatar from "@/assets/image(Harun).png";
 import mentor3Avatar from "@/assets/image(Shilpi).png";
 import mentor4Avatar from "@/assets/archana.jpeg";
+import mentor5Avatar from "@/assets/contributors/jyoti.png";
+import irdLogo from "@/assets/contributors/ird.png";
+import cscLogo from "@/assets/contributors/csc.png";
+import fittLogo from "@/assets/contributors/fitt.png";
+import nabiHasanAvatar from "@/assets/contributors/nabi-hasan.png";
+import manuTrAvatar from "@/assets/contributors/manu-tr.png";
+import mohitGargAvatar from "@/assets/contributors/mohit-garg.png";
+import satbirChauhanAvatar from "@/assets/contributors/satbir-chauhan.png";
 
 /* ───────── Data ───────── */
 
@@ -18,6 +27,32 @@ interface TeamMember {
   linkedin?: string;
   email?: string;
 }
+
+interface Collaborator {
+  name: string;
+  fullName: string;
+  logo: string;
+  wide?: boolean;
+}
+
+const collaborators: Collaborator[] = [
+  {
+    name: "IRD",
+    fullName: "Industrial Research and Development, IIT Delhi",
+    logo: irdLogo,
+  },
+  {
+    name: "CSC",
+    fullName: "Computer Services Centre, IIT Delhi",
+    logo: cscLogo,
+    wide: true,
+  },
+  {
+    name: "FITT",
+    fullName: "Foundation for Innovation and Technology Transfer",
+    logo: fittLogo,
+  },
+];
 
 const dean: TeamMember = {
   name: "Prof. Ashwini K Agrawal",
@@ -49,13 +84,40 @@ const mentors: TeamMember[] = [
     linkedin: "https://iprana-lab.github.io/",
     email: "mailto:omprakash@iitd.ac.in",
   },
-  
   {
     name: "Dr. Archana Trivedi",
     role: "Mentor",
     avatar: mentor4Avatar,
     linkedin: "https://www.linkedin.com/in/archana-trivedi-a1968115/?originalSubdomain=in",
-    email: "mailto:ird12649@iitd.ac.in",
+  },
+  {
+    name: "Mrs. Jyoti Grover",
+    role: "Mentor",
+    avatar: mentor5Avatar,
+    linkedin: "https://www.linkedin.com/in/jyoti-grover-2854413b6/",
+  },
+];
+
+const libraryTeam: TeamMember[] = [
+  {
+    name: "Nabi Hasan",
+    role: "Librarian & Head, Central Library",
+    avatar: nabiHasanAvatar,
+  },
+  {
+    name: "Manu TR",
+    role: "Assistant Librarian (Senior Scale)",
+    avatar: manuTrAvatar,
+  },
+  {
+    name: "Mohit Garg",
+    role: "Assistant Librarian (Senior Scale)",
+    avatar: mohitGargAvatar,
+  },
+  {
+    name: "Satbir Chauhan",
+    role: "Assistant Librarian",
+    avatar: satbirChauhanAvatar,
   },
 ];
 
@@ -171,9 +233,13 @@ const MemberCard = ({
     </h3>
 
     
-    <p className="text-muted-foreground text-sm mb-5 font-medium">{member.role}</p>
+    <p className={cn(
+      "text-muted-foreground text-sm font-medium text-center leading-snug px-1",
+      (member.linkedin || member.email) ? "mb-5" : "mb-0",
+    )}>{member.role}</p>
 
     
+    {(member.linkedin || member.email) && (
     <div className="flex items-center gap-3">
       {member.linkedin && (
         <a
@@ -196,6 +262,7 @@ const MemberCard = ({
         </a>
       )}
     </div>
+    )}
   </div>
 );
 
@@ -365,7 +432,6 @@ const Contributors = () => {
         </div>
       </section>
 
-      
       <section className="relative py-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/15 to-transparent dark:via-slate-900/15" />
         <div className="container mx-auto px-4 relative z-10">
@@ -383,7 +449,6 @@ const Contributors = () => {
         </div>
       </section>
 
-      
       <section className="relative py-20">
         <div className="absolute inset-0 bg-gradient-to-b from-muted/15 via-muted/25 to-transparent dark:from-slate-900/20 dark:via-slate-800/15" />
         <div className="absolute top-1/2 left-0 w-72 h-72 bg-primary/5 rounded-full blur-3xl -translate-y-1/2" />
@@ -392,7 +457,7 @@ const Contributors = () => {
           <SectionHeading subtitle="Guiding the next generation of researchers">
             Mentors in Charge
           </SectionHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto animate-slide-up">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto animate-slide-up">
             {mentors.map((m) => (
               <MemberCard key={m.name} member={m} />
             ))}
@@ -400,7 +465,49 @@ const Contributors = () => {
         </div>
       </section>
 
-      
+      <section className="relative py-20">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/15 to-transparent dark:via-slate-900/15" />
+        <div className="container mx-auto px-4 relative z-10">
+          <SectionHeading subtitle="Central Library partners enabling research discovery">
+            Library Team Contributors
+          </SectionHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 max-w-6xl mx-auto animate-slide-up">
+            {libraryTeam.map((m) => (
+              <MemberCard key={m.name} member={m} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="relative py-16 sm:py-20">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/10 to-transparent dark:via-slate-900/10" />
+        <div className="container mx-auto px-4 relative z-10">
+          <SectionHeading subtitle="Partner units supporting Research Ambit">
+            In collaboration with:
+          </SectionHeading>
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 max-w-5xl mx-auto animate-slide-up">
+            {collaborators.map((org) => (
+              <div
+                key={org.name}
+                className="flex flex-col items-center gap-3 rounded-2xl border border-border/30 bg-white px-6 py-5 shadow-md dark:bg-slate-100"
+              >
+                <img
+                  src={org.logo}
+                  alt={org.fullName}
+                  className={cn(
+                    "object-contain",
+                    org.wide ? "h-16 sm:h-20 w-auto max-w-[14rem] sm:max-w-[18rem]" : "h-24 w-24 sm:h-28 sm:w-28",
+                  )}
+                />
+                <span className="text-xs sm:text-sm font-semibold tracking-wide text-slate-700">
+                  {org.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="relative py-20 pb-28">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/3 to-transparent dark:via-primary/5" />
         <div className="container mx-auto px-4 relative z-10">
