@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -11,6 +11,11 @@ interface NavigateModalProps {
 const NavigateModal = ({ isOpen, onClose, onSubmit }: NavigateModalProps) => {
   const [inputData, setInputData] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

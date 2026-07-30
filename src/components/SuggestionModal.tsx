@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { X, Lightbulb, Loader2, CheckCircle2, ChevronDown, AlertCircle, ImagePlus, Trash2 } from "lucide-react";
 import { submitSuggestion, SUGGESTION_CATEGORIES, type SuggestionCategory } from "@/lib/api/services/suggestionService";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,11 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
     const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        document.body.style.overflow = open ? "hidden" : "";
+        return () => { document.body.style.overflow = ""; };
+    }, [open]);
 
     const validate = () => {
         const e: typeof errors = {};

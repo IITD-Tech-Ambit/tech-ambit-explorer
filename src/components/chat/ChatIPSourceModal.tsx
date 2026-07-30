@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
 import { useIPDocument } from "@/lib/api/hooks/useIPSearch";
@@ -17,6 +18,12 @@ export function ChatIPSourceModal({ sourceId, onClose }: Props) {
   const { data: document, isLoading, isError } = useIPDocument(sourceId ?? "", {
     enabled: !!sourceId,
   });
+
+  useEffect(() => {
+    // `document` above shadows the global — use window.document for the DOM.
+    window.document.body.style.overflow = sourceId ? "hidden" : "";
+    return () => { window.document.body.style.overflow = ""; };
+  }, [sourceId]);
 
   if (!sourceId) return null;
 

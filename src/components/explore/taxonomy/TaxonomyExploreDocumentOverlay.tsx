@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { ExploreDocumentModal } from "@/components/explore/ExploreDocumentModal";
@@ -29,6 +29,11 @@ const TaxonomyExploreDocumentOverlay = ({ paperId, onClose }: Props) => {
             /* ignore */
         }
     }, []);
+
+    useEffect(() => {
+        document.body.style.overflow = paperId ? "hidden" : "";
+        return () => { document.body.style.overflow = ""; };
+    }, [paperId]);
 
     if (!paperId) return null;
 
