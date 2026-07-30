@@ -231,11 +231,14 @@ export function useExploreSearchState() {
     setAuthorScopedPage(1);
   }, [searchFilters, refinementChain]);
 
+  // Disabled while scoped to one author: the full-corpus aggregate isn't useful once you're
+  // already viewing one person's papers, and skipping it avoids running an independent query
+  // whose count can drift from what authorScopedData (the actual page being shown) reports.
   const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
     activeQuery,
     searchMode,
     {
-      enabled: hasSearched,
+      enabled: hasSearched && !selectedAuthor,
       search_in: searchIn.length > 0 ? searchIn : undefined,
       refine_chain: priorChain.length > 0 ? priorChain : undefined,
       filters: searchFilters,

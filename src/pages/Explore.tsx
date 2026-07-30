@@ -456,7 +456,7 @@ const Explore = () => {
         )}
 
         
-        {hasSearched && !isLoading && (filteredResults.length > 0 || relatedFaculty.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
+        {hasSearched && !isLoading && (selectedAuthor || filteredResults.length > 0 || relatedFaculty.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
           <div 
             ref={containerRef}
             className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
@@ -472,15 +472,45 @@ const Explore = () => {
           className={`w-full flex flex-col gap-4 pt-1 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)]`}
         >
           <PeopleSectionHeader
-            count={peopleTotalCount}
+            count={selectedAuthor ? 1 : peopleTotalCount}
             isOpen={isPeopleSidebarOpen}
             onToggle={() => setIsPeopleSidebarOpen(!isPeopleSidebarOpen)}
           />
 
           <div className={`flex flex-col xl:flex-1 xl:min-h-0 transition-all duration-300 overflow-hidden pr-0 sm:pr-4 ${isPeopleSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
           <>
-            
-            {(showAllFaculty || relatedFaculty.length === 0) ? (() => {
+            {selectedAuthor ? (
+              // Scoped to one author: show just them, using the count already loaded for the
+              // page being shown (authorScopedData) instead of fetching/showing the full
+              // corpus-wide People list, which isn't relevant once you're already viewing one
+              // person's papers and can't drift from what this page actually reports.
+              <div className="shrink-0 mt-2">
+                <p className="text-muted-foreground mb-3">
+                  Viewing <span className="font-semibold text-primary">{selectedAuthor.name}</span>
+                </p>
+                <PeopleListContainer>
+                  <PeopleFacultyRow
+                    name={selectedAuthor.name}
+                    paperCount={authorScopedData?.pagination?.total ?? 0}
+                    isSelected
+                    onSelect={() => {
+                      setSelectedAuthor(null);
+                      setAuthorScopedPage(1);
+                    }}
+                    onViewProfile={() => void handleAuthorClickByScopus(selectedAuthor.author_id, selectedAuthor.name)}
+                  />
+                </PeopleListContainer>
+                <button
+                  className="text-primary hover:underline font-medium text-sm mt-3"
+                  onClick={() => {
+                    setSelectedAuthor(null);
+                    setAuthorScopedPage(1);
+                  }}
+                >
+                  ← Browse all people
+                </button>
+              </div>
+            ) : (showAllFaculty || relatedFaculty.length === 0) ? (() => {
               if (isAllFacultyLoading) {
                 return <PeopleLoadingState />;
               }

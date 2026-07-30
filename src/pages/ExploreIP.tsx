@@ -347,6 +347,7 @@ const ExploreIP = () => {
                 allFacultyData={allFacultyData}
                 isAllFacultyLoading={isAllFacultyLoading}
                 selectedInventor={selectedInventor}
+                scopedPatentCount={inventorScopedData?.pagination?.total}
                 onSelectInventor={selectInventor}
                 onViewProfile={openFacultyProfile}
                 isOpen={isSidebarOpen}
