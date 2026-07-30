@@ -201,9 +201,12 @@ const Directory = () => {
                     </div>
                 )}
                 {!isSearching && activeCategory !== 'all' && groupedData && (
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="mb-6">
                         <p className="text-sm text-muted-foreground">
                             <strong>{groupedData.totalDepartments}</strong> {categoryConfig.find(c => c.key === activeCategory)?.label.toLowerCase()} with <strong>{groupedData.totalFaculty}</strong> faculty members
+                        </p>
+                        <p className="text-xs mt-1.5 font-medium text-primary/90 bg-primary/5 border border-primary/15 rounded-md px-2.5 py-1.5 inline-block">
+                            Includes current and retired faculty members.
                         </p>
                     </div>
                 )}

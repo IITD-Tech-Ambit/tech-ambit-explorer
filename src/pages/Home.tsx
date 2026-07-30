@@ -20,7 +20,6 @@ import heroSlide3 from "@/assets/hero-slide-3.png";
 import heroSlide4 from "@/assets/hero-slide-4.png";
 import heroSlide5 from "@/assets/hero-slide-5.png";
 import researchCollage from "@/assets/iit-delhi-aerial.png";
-import instituteSeal from "@/assets/logo2-transparent.png";
 import { cn } from "@/lib/utils";
 
 const CAMPUS_VIDEO_SRC = "/videos/campus-research.mp4";
@@ -78,7 +77,7 @@ const FEATURES = [
     detail:
       "Walk a hierarchical map of research domains. Open any area to see related faculty and documents without guessing department names.",
     capabilities: [
-      "Navigate fields → subfields systematically",
+      "Navigate fields to subfields systematically",
       "Open faculty and documents per area",
       "Orient yourself before a deep search",
     ],
@@ -91,7 +90,7 @@ const FEATURES = [
     description:
       "Find people by department, school, or centre.",
     detail:
-      "Browse the institute directory with profiles that include expertise, metrics, and publication links — then open a full faculty page for deeper detail.",
+      "Browse the institute directory with profiles that include expertise, metrics, and publication links, then open a full faculty page for deeper detail.",
     capabilities: [
       "Browse departments, schools, and centres",
       "Open profiles with h-index and expertise",
@@ -106,7 +105,7 @@ const FEATURES = [
     description:
       "Explore a visual map of themes and papers.",
     detail:
-      "Move from institute-wide clusters into specific themes and papers. Use IITD-VERSE when you want orientation in space, not only ranked search results.",
+      "Move from institute-wide clusters into specific themes and papers. Use IITD Verse when you want orientation in space, not only ranked search results.",
     capabilities: [
       "See campus research as a visual landscape",
       "Zoom from clusters into individual papers",
@@ -121,7 +120,7 @@ const FEATURES = [
     description:
       "Read curated institute research stories.",
     detail:
-      "Institute magazines and narratives that explain breakthroughs in context — useful when you want the story behind a paper title.",
+      "Institute magazines and narratives that explain breakthroughs in context, useful when you want the story behind a paper title.",
     capabilities: [
       "Browse curated research magazines",
       "Read institute narratives and highlights",
@@ -309,18 +308,12 @@ const Home = () => {
               What you can do here
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-              Research Ambit is the institute&apos;s research discovery surface — not a single tool, but a set of ways to find people, papers, IP, and themes.
-              Hover a card for a quick preview — click to open it.
+              Research Ambit is the institute&apos;s research discovery surface: a set of ways to find people, papers, IP, and themes.
+              Hover a card for a quick preview, then click to open it.
             </p>
           </div>
 
           <div className="home-features-stage">
-            <img
-              src={instituteSeal}
-              alt=""
-              className="home-features-stage-logo"
-              aria-hidden
-            />
             <div className="relative z-[1] grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 pt-2">
               {FEATURES.map((feature, index) => (
                 <FeatureCard key={feature.to} feature={feature} index={index} />
@@ -338,7 +331,7 @@ const Home = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-12 lg:gap-16 items-center">
             <div className="order-2 lg:order-1">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight mb-5 text-foreground leading-tight">
-                Built around IIT Delhi research — searchable end to end
+                Built around IIT Delhi research, searchable end to end
               </h2>
               <p className="text-base sm:text-lg text-muted-foreground mb-8 leading-relaxed">
                 Whether you are looking for a collaborator, a paper, a patent trail, or the shape of a research area, start from one of the tools above and follow the links into faculty profiles and documents.

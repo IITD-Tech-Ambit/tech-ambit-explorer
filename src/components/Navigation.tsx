@@ -57,19 +57,27 @@ const Navigation = () => {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20 min-w-0 gap-3">
-          <Link to="/" className="flex items-center space-x-3 group min-w-0" aria-label="Research Ambit home">
-            <img
-              src={instituteSeal}
-              alt="Indian Institute of Technology Delhi"
-              className="nav-seal-img"
-            />
-            <div className="flex flex-col">
+          <div className="flex items-center space-x-3 min-w-0">
+            <a
+              href="https://home.iitd.ac.in/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label="IIT Delhi homepage"
+            >
+              <img
+                src={instituteSeal}
+                alt="Indian Institute of Technology Delhi"
+                className="nav-seal-img"
+              />
+            </a>
+            <Link to="/" className="flex flex-col min-w-0 group" aria-label="Research Ambit home">
               <span className="font-bold text-lg leading-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 Research Ambit
               </span>
               <span className="text-xs text-muted-foreground">Indian Institute of Technology Delhi</span>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           <div className="hidden lg:flex items-center space-x-1 shrink-0">
             {navItems.map((item) => (
