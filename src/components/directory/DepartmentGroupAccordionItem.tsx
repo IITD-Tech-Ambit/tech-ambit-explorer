@@ -10,7 +10,7 @@ import { useDepartmentGroupFaculties } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty, GroupedDepartment, GroupedDepartmentFaculty } from "@/lib/api/types";
 import { DEPT_URLS } from "@/lib/deptUrls";
 
-/** Current Heads of Department (HOD), keyed by department name. */
+/** Current Heads of Department / School / Centre, keyed by unit name. */
 const DEPT_HODS: Record<string, string> = {
     "Applied Mechanics":                           "Sawan S. Sinha",
     "Biochemical Engineering & Biotechnology":     "Preeti Srivastava",
@@ -28,6 +28,38 @@ const DEPT_HODS: Record<string, string> = {
     "Mechanical Engineering":                      "Subbarao P M V",
     "Physics Department":                          "Sujeet Chaudhary",
     "Textile & Fibre Engineering":                 "Deepti Gupta",
+
+    // Schools
+    "Amar Nath and Shashi Khosla School of Information Technology": "Srikanta Bedathur",
+    "Bharti School of Telecommunication Technology and Management": "Manav R. Bhatnagar",
+    "Kusuma School of Biological Sciences":                         "Vivekanandan Perumal",
+    "School of Artificial Intelligence":                            "Parag Singla",
+    "School of Interdisciplinary Research":                         "B. Premachandran",
+    "School of Public Policy":                                      "Ambuj D. Sagar",
+
+    // Centres
+    "Centre for Applied Research in Electronics":
+        "Samaresh Das",
+    "Centre for Atmospheric Sciences":
+        "Sagnik Dey",
+    "Centre for Automotive Research and Tribology":
+        "Santanu Kumar Mishra",
+    "Centre for Biomedical Engineering":
+        "Tapan K. Gandhi",
+    "Centre for Rural Development and Technology":
+        "Vivek Kumar",
+    "Centre for Sensors, Instrumentation and Cyber Physical System Engineering (SeNSE)":
+        "Kedar Khare",
+    "Computer Centre":
+        "Smruti Ranjan Sarangi",
+    "Educational Technology Services Centre":
+        "Sourabh B. Paul",
+    "National Resource Centre for Value Education in Engineering":
+        "James Gomes",
+    "Optics and Photonics Centre":
+        "Kedar Khare",
+    "Transportation Research and Injury Prevention Programme (TRIPP)":
+        "Girish Agrawal",
 };
 
 /** Kerberos (email prefix) for each HOD — avoids ambiguous search results. */
@@ -47,6 +79,38 @@ const DEPT_HOD_KERBEROS: Record<string, string> = {
     "Mechanical Engineering":                      "pmvs",
     "Physics Department":                          "sujeetc",
     "Textile & Fibre Engineering":                 "deepti",
+
+    // Schools
+    "Amar Nath and Shashi Khosla School of Information Technology": "srikanta",
+    "Bharti School of Telecommunication Technology and Management": "manav",
+    "Kusuma School of Biological Sciences":                         "vperumal",
+    "School of Artificial Intelligence":                            "parags",
+    "School of Interdisciplinary Research":                         "prem",
+    "School of Public Policy":                                      "asagar",
+
+    // Centres
+    "Centre for Applied Research in Electronics":
+        "samareshdas",
+    "Centre for Atmospheric Sciences":
+        "sagnik",
+    "Centre for Automotive Research and Tribology":
+        "skmishra",
+    "Centre for Biomedical Engineering":
+        "tgandhi",
+    "Centre for Rural Development and Technology":
+        "vivekk",
+    "Centre for Sensors, Instrumentation and Cyber Physical System Engineering (SeNSE)":
+        "kedark",
+    "Computer Centre":
+        "srsarangi",
+    "Educational Technology Services Centre":
+        "sbpaul",
+    "National Resource Centre for Value Education in Engineering":
+        "jgomes",
+    "Optics and Photonics Centre":
+        "kedark",
+    "Transportation Research and Injury Prevention Programme (TRIPP)":
+        "girish",
 };
 
 async function resolveHodKerberos(departmentName: string, hodName: string): Promise<string | null> {
@@ -82,6 +146,7 @@ const DepartmentGroupAccordionItem = ({
 
     const deptUrl = DEPT_URLS[deptGroup.department.name];
     const hodName = DEPT_HODS[deptGroup.department.name];
+    const headLabel = category === "schools" || category === "centres" ? "Head" : "HOD";
 
     return (
         <AccordionItem
@@ -128,11 +193,11 @@ const DepartmentGroupAccordionItem = ({
                                             if (k) navigate(`/faculty/${k}`);
                                         } catch { /* ignore */ }
                                     }}
-                                    title={`View profile of HOD: ${hodName}`}
+                                    title={`View profile of ${headLabel}: ${hodName}`}
                                     className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/70 hover:text-primary bg-muted/60 hover:bg-primary/10 border border-border/60 hover:border-primary/30 rounded-full px-2 py-0.5 transition-all whitespace-nowrap"
                                 >
                                     <UserCircle className="w-2.5 h-2.5" />
-                                    HOD: {hodName}
+                                    {headLabel}: {hodName}
                                 </button>
                             )}
                         </div>

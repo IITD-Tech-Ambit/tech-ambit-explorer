@@ -33,6 +33,13 @@ const HERO_SLIDES = [
   { src: heroSlide5, alt: "IIT Delhi academic block and courtyard" },
 ];
 
+const QS_RANKING = {
+  year: 2027,
+  global: 118,
+  previousGlobal: 123,
+  india: 1,
+} as const;
+
 const FEATURES = [
   {
     title: "Explore Research",
@@ -95,17 +102,17 @@ const FEATURES = [
     accent: "from-indigo-500/15 to-blue-500/5",
   },
   {
-    title: "Research Atlas",
+    title: "IITD Verse",
     description:
       "Explore a visual map of themes and papers.",
     detail:
-      "Move from institute-wide clusters into specific themes and papers. Use the atlas when you want orientation in space, not only ranked search results.",
+      "Move from institute-wide clusters into specific themes and papers. Use IITD-VERSE when you want orientation in space, not only ranked search results.",
     capabilities: [
       "See campus research as a visual landscape",
       "Zoom from clusters into individual papers",
       "Spot related work you might miss in text search",
     ],
-    to: "/atlas",
+    to: "/iitd-verse",
     icon: Globe,
     accent: "from-emerald-500/15 to-teal-500/5",
   },
@@ -220,18 +227,18 @@ const Home = () => {
         </div>
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-xs sm:max-w-xl md:max-w-2xl lg:max-w-3xl animate-fade-in">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-sm mb-6">
+          <div className="max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl animate-fade-in">
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-xs sm:text-sm mb-4 sm:mb-6">
               <span>Discover Research Excellence</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-4 sm:mb-6 leading-tight text-white">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 leading-tight text-white">
               Exploring Innovation and Research at{" "}
               <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
                 IIT Delhi
               </span>
             </h1>
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/80 mb-8 sm:mb-10 leading-relaxed">
+            <p className="text-sm sm:text-lg md:text-xl lg:text-2xl text-white/80 mb-6 sm:mb-10 leading-relaxed">
               Your gateway to cutting-edge interdisciplinary research, sustainability initiatives,
               and breakthrough innovations from India&apos;s premier engineering institution.
             </p>
@@ -242,15 +249,46 @@ const Home = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </Button>
               </Link>
-              <Link to="/atlas" className="w-full sm:w-auto">
+              <Link to="/iitd-verse" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto group text-sm sm:text-base bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300">
-                  Explore Atlas
+                  Explore IITD Verse
                   <Globe className="ml-2 h-4 w-4 sm:h-5 sm:w-5 group-hover:rotate-12 transition-transform duration-300" />
                 </Button>
               </Link>
             </div>
           </div>
         </div>
+
+        <aside
+          className="home-qs-panel hidden md:block"
+          aria-label={`QS World University Rankings ${QS_RANKING.year}`}
+        >
+          <div className="home-qs-panel-inner">
+            <div className="home-qs-panel-top">
+              <p className="home-qs-kicker">QS World University Rankings {QS_RANKING.year}</p>
+              <p className="home-qs-lede">
+                Ranked{" "}
+                <span className="text-white font-extrabold">{QS_RANKING.global}th globally</span>
+                {" "}·{" "}
+                <span className="text-white font-extrabold">#{QS_RANKING.india} in India</span>
+              </p>
+            </div>
+
+            <div className="home-qs-ranks">
+              <div className="home-qs-rank-main">
+                <span className="home-qs-rank-value">{QS_RANKING.global}</span>
+                <span className="home-qs-rank-label">Global rank</span>
+                <span className="home-qs-rank-note">
+                  Up from {QS_RANKING.previousGlobal} in {QS_RANKING.year - 1}
+                </span>
+              </div>
+              <div className="home-qs-rank-india">
+                <span className="home-qs-rank-value">#{QS_RANKING.india}</span>
+                <span className="home-qs-rank-label">In India</span>
+              </div>
+            </div>
+          </div>
+        </aside>
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden md:flex flex-col items-center gap-2 text-white/60 z-10 pointer-events-none">
           <span className="text-xs uppercase tracking-widest">Scroll to explore</span>
@@ -310,7 +348,7 @@ const Home = () => {
                 {[
                   { icon: FolderSearch, text: "Search across publications and intellectual property" },
                   { icon: GraduationCap, text: "Browse departments, schools, and centres" },
-                  { icon: Globe, text: "See themes spatially in the Research Atlas" },
+                  { icon: Globe, text: "See themes spatially in IITD Verse" },
                 ].map(({ icon: Icon, text }) => (
                   <li key={text} className="flex items-start gap-3">
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -321,9 +359,9 @@ const Home = () => {
                 ))}
               </ul>
 
-              <Link to="/atlas" className="inline-block">
+              <Link to="/iitd-verse" className="inline-block">
                 <Button size="lg" className="group shadow-lg shadow-primary/20">
-                  Open the Atlas
+                  Open IITD Verse
                   <Globe className="ml-2 h-5 w-5 group-hover:rotate-12 transition-transform" />
                 </Button>
               </Link>

@@ -311,7 +311,7 @@ const ExploreIP = () => {
           </div>
         )}
 
-        {hasSearched && !isLoading && results.length === 0 && (
+        {hasSearched && !isLoading && !selectedInventor && results.length === 0 && (
           <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
             <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
               <Lightbulb className="h-7 w-7 text-muted-foreground/60" />
@@ -335,7 +335,7 @@ const ExploreIP = () => {
           </div>
         )}
 
-        {hasSearched && !isLoading && results.length > 0 && (
+        {hasSearched && !isLoading && (selectedInventor || results.length > 0) && (
           <div className="flex flex-col xl:flex-row items-start gap-4">
             <div
               className={`relative shrink-0 flex items-stretch transition-all duration-300 ease-in-out w-full ${

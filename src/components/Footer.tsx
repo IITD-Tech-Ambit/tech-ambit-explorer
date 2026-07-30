@@ -123,7 +123,7 @@ const Footer = () => {
                 { to: "/explore", label: "Explore Research" },
                 { to: "/research-areas", label: "Research Areas" },
                 { to: "/directory", label: "Directory" },
-                { to: "/atlas", label: "Atlas" },
+                { to: "/iitd-verse", label: "IITD Verse" },
                 { to: "/magazines", label: "Magazines" },
                 { to: "/contributors", label: "Contributors" },
               ].map((link) => (
@@ -189,7 +189,7 @@ const Footer = () => {
                   <span>iitdambit@iitd.ac.in</span>
                 </a>
               </li>
-              <li className="group">
+              {/*<li className="group">
                 <a 
                   href="tel:+911126591234"
                   className="flex items-center space-x-3 text-muted-foreground hover:text-foreground transition-colors duration-300"
@@ -199,7 +199,7 @@ const Footer = () => {
                   </div>
                   <span>+91-011-2659-7135</span>
                 </a>
-              </li>
+              </li>*/}
             </ul>
           </div>
         </div>
