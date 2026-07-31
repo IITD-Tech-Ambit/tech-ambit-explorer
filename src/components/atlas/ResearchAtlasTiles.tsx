@@ -30,7 +30,7 @@ import type { AtlasMode } from "./ResearchAtlas";
 
 const BG = "#000000";
 /** Default camera distance — far enough to see the full theme cloud on open. */
-const DEFAULT_CAMERA_Z = 9.6;
+const DEFAULT_CAMERA_Z = 15.5;
 const POINT_BUDGET = 250_000;
 const MAX_IN_FLIGHT = 8;
 // Max matched points held in the highlight overlay. Per-theme counts on the
@@ -432,6 +432,18 @@ function buildDomainSpreadLayout(points: AtlasPointCoord[]): DrillLayout {
 function drillOverviewCameraZ(layout: DrillLayout | null): number {
   if (!layout || layout.centers.length <= 1) return 3.6;
   return Math.max(4.8, (layout.extent + 0.55) * 2.55);
+}
+
+/** Pull back far enough that every theme cloud + label fits in the first view. */
+function themeOverviewCameraZ(layout: ThemeSphereLayout | null): number {
+  if (!layout?.centers.length) return DEFAULT_CAMERA_Z;
+  let extent = 0;
+  for (const c of layout.centers) {
+    const cloud = Math.hypot(c.cx, c.cy, c.cz) + c.blobR;
+    const label = Math.hypot(c.lx, c.ly, c.lz) + 0.35;
+    extent = Math.max(extent, cloud, label);
+  }
+  return Math.max(DEFAULT_CAMERA_Z, (extent + 1.1) * 2.45);
 }
 
 type ThemeFilterCluster = {
@@ -1110,6 +1122,17 @@ export default function ResearchAtlasTiles({
   const themesClickableRef = useRef(true);
   const viewOnlyRef = useRef(false);
 
+  /** World position where an overlay paper is currently drawn (layout or raw). */
+  const resolvePaperDisplayPos = useCallback((
+    index: number,
+    fallback: { x: number; y: number; z: number },
+  ): [number, number, number] => {
+    const laid = drillLayoutRef.current?.posById.get(index)
+      ?? themeFilterLayoutRef.current?.posById.get(index);
+    if (laid) return laid;
+    return [fallback.x, fallback.y, fallback.z];
+  }, []);
+
   const isViewMode = atlasMode === "view";
   const isExploreMode = atlasMode === "interactive";
   const structuredFilterActive = Boolean(
@@ -1178,12 +1201,11 @@ export default function ResearchAtlasTiles({
     if (!e) return;
     for (const [, entry] of e.labelByTheme) {
       const { root, titleEl, countEl, themeName } = entry;
-      // The label block is clickable (drills into the theme); the inner spans
-      // stay pass-through so the hit falls to the root's click handler.
-      // In view mode labels stay visible but are not interactive.
-      root.style.pointerEvents = clickable ? "auto" : "none";
-      root.style.cursor = clickable ? "pointer" : "default";
-      titleEl.style.pointerEvents = "none";
+      // Only the theme name text is hit-testable; root/count/dots pass through.
+      root.style.pointerEvents = "none";
+      root.style.cursor = "default";
+      titleEl.style.pointerEvents = clickable ? "auto" : "none";
+      titleEl.style.cursor = clickable ? "pointer" : "default";
       countEl.style.pointerEvents = "none";
       root.style.transform = "translate(-6px,-50%)";
       root.style.display = "flex";
@@ -1191,12 +1213,15 @@ export default function ResearchAtlasTiles({
       root.style.alignItems = "flex-start";
       root.style.gap = "2px";
       root.style.whiteSpace = "nowrap";
+      root.style.padding = "";
+      root.style.margin = "";
 
-      titleEl.style.display = "block";
+      titleEl.style.display = "inline-block";
       titleEl.textContent = themeDisplayName(themeName);
       titleEl.style.fontSize = filterActive ? "11px" : "12px";
       titleEl.style.textDecoration = "none";
-      titleEl.style.cursor = clickable ? "pointer" : "default";
+      titleEl.style.padding = "4px 6px";
+      titleEl.style.margin = "-4px -6px";
 
       countEl.style.display = "block";
       countEl.style.fontSize = filterActive ? "9px" : "10px";
@@ -1395,8 +1420,8 @@ export default function ResearchAtlasTiles({
     e.overlayMat.blending = THREE.AdditiveBlending;
     e.overlayMat.depthTest = false;
     e.overlayMat.uniforms.uSize.value = layout ? 0.08 : 0.07;
-    e.overlayMat.uniforms.uAlpha.value = layout ? 0.55 : 0.88;
-    e.overlayMat.uniforms.uMaxPx.value = 9.0 * Math.min(window.devicePixelRatio || 1, 2);
+    e.overlayMat.uniforms.uAlpha.value = layout ? 0.58 : 0.78;
+    e.overlayMat.uniforms.uMaxPx.value = 10.0 * Math.min(window.devicePixelRatio || 1, 2);
     e.overlayMat.needsUpdate = true;
     e.overlay.visible = n > 0;
     // Hide the full atlas cloud while filtering so only matched papers show.
@@ -1648,10 +1673,11 @@ export default function ResearchAtlasTiles({
     renderer.setClearColor(BG, 1);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(BG, 0.032);
+    scene.fog = new THREE.FogExp2(BG, 0.018);
 
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-    camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 120);
+    const startZ = themeOverviewCameraZ(themeSphereLayout);
+    camera.position.set(0, 0.35, startZ);
 
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
@@ -1660,15 +1686,15 @@ export default function ResearchAtlasTiles({
     controls.zoomSpeed = 0.8;
     controls.minDistance = 0.2;
     // Leave headroom for the drilled domain cloud, which frames from ~12-15 away.
-    controls.maxDistance = 24;
+    controls.maxDistance = 36;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // Soft additive “nebula dust” look (first-image style) — not hard pixel beads.
+    // Readable dots without packing into a solid glow at overview distance.
     const baseMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uSize: { value: 0.055 },
+        uSize: { value: 0.068 },
         uDim: { value: 1.0 },
-        uMaxPx: { value: 7.5 * dpr },
+        uMaxPx: { value: 8.5 * dpr },
       },
       vertexShader: `
         attribute vec3 color; uniform float uSize; uniform float uMaxPx; varying vec3 vColor;
@@ -1684,9 +1710,9 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          // Soft falloff — KG clouds glow without hard square pixels.
-          float edge = smoothstep(0.5, 0.18, d);
-          gl_FragColor = vec4(vColor, 0.40 * uDim * edge);
+          // Soft dust mote — enough body to read, not enough to bleach cores.
+          float edge = smoothstep(0.5, 0.14, d);
+          gl_FragColor = vec4(vColor, 0.48 * uDim * edge);
         }`,
       transparent: true,
       depthWrite: false,
@@ -1708,8 +1734,8 @@ export default function ResearchAtlasTiles({
     const overlayMat = new THREE.ShaderMaterial({
       uniforms: {
         uSize: { value: 0.07 },
-        uAlpha: { value: 0.88 },
-        uMaxPx: { value: 9.0 * dpr },
+        uAlpha: { value: 0.78 },
+        uMaxPx: { value: 10.0 * dpr },
       },
       vertexShader: `
         attribute vec3 color;
@@ -1729,7 +1755,7 @@ export default function ResearchAtlasTiles({
           vec2 c = gl_PointCoord - vec2(0.5);
           float d = length(c);
           if (d > 0.5) discard;
-          float edge = smoothstep(0.5, 0.2, d);
+          float edge = smoothstep(0.5, 0.16, d);
           gl_FragColor = vec4(vColor, uAlpha * edge);
         }`,
       transparent: true,
@@ -1777,8 +1803,7 @@ export default function ResearchAtlasTiles({
 
       const root = document.createElement("div");
       root.style.cssText = [
-        "pointer-events:auto",
-        "cursor:pointer",
+        "pointer-events:none",
         "user-select:none",
         "transform:translate(-6px,-50%)",
         "display:flex",
@@ -1788,42 +1813,30 @@ export default function ResearchAtlasTiles({
         "white-space:nowrap",
         "text-align:left",
       ].join(";");
-      root.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        // In view mode papers stay non-interactive, but theme names still drill.
-        if (!viewOnlyRef.current) {
-          // CSS2D labels sit above the canvas — prefer a paper under the cursor.
-          const paper = pickPaperRef.current(ev.clientX, ev.clientY);
-          if (paper) {
-            selectPaperRef.current(paper);
-            return;
-          }
-        }
-        onThemeLabelClickRef.current(themeName);
-      });
-      root.addEventListener("mousemove", (ev) => {
-        if (viewOnlyRef.current) return;
-        const paper = pickPaperRef.current(ev.clientX, ev.clientY);
-        hoverPaperRef.current(paper, ev.clientX, ev.clientY);
-      });
-      root.addEventListener("mouseleave", () => {
-        hoverPaperRef.current(null, 0, 0);
-      });
 
       const titleEl = document.createElement("span");
       titleEl.dataset.theme = themeName;
       titleEl.title = themeName;
       titleEl.style.cssText = [
-        "pointer-events:none",
-        "display:block",
+        "pointer-events:auto",
+        "cursor:pointer",
+        "display:inline-block",
         "font-size:12px",
         "font-weight:600",
         `color:${color}`,
         "line-height:1.25",
         "letter-spacing:0.01em",
+        "padding:4px 6px",
+        "margin:-4px -6px",
         "text-shadow:0 0 8px rgba(0,0,0,0.95),0 1px 3px rgba(0,0,0,0.9)",
       ].join(";");
       titleEl.textContent = themeDisplayName(themeName);
+      // Theme name text drills. Nearby canvas dots are suppressed by hit-zone logic.
+      titleEl.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        onThemeLabelClickRef.current(themeName);
+      });
 
       const countEl = document.createElement("span");
       countEl.style.cssText = [
@@ -1854,7 +1867,7 @@ export default function ResearchAtlasTiles({
       line.renderOrder = 4;
 
       const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.02, 12, 12),
+        new THREE.SphereGeometry(0.045, 12, 12),
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
@@ -2048,7 +2061,6 @@ export default function ResearchAtlasTiles({
       clientX: number,
       clientY: number,
     ): { kind: "theme" | "domain"; theme: string; domain: string } | null => {
-      if (viewOnlyRef.current) return null;
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -2057,17 +2069,38 @@ export default function ResearchAtlasTiles({
       for (const hit of hits) {
         if (!hit.object.visible) continue;
         const ud = hit.object.userData ?? {};
+        // Theme tips never drill — only the theme name text does.
+        if (ud.isThemeTip) continue;
         if (ud.isDomainTip) {
+          if (viewOnlyRef.current) continue;
           return { kind: "domain", theme: String(ud.theme || ""), domain: String(ud.domain || "") };
         }
-        if (ud.isThemeTip) {
-          return { kind: "theme", theme: String(ud.theme || ""), domain: "" };
+      }
+      return null;
+    };
+
+    /** Screen-space hit on a theme name (with pad). Used to suppress nearby dots. */
+    const pickThemeNameAt = (clientX: number, clientY: number, padPx = 14): string | null => {
+      if (drillThemeRef.current) return null;
+      for (const [, entry] of labelByTheme) {
+        if (!entry.obj.visible) continue;
+        const r = entry.titleEl.getBoundingClientRect();
+        if (
+          clientX >= r.left - padPx
+          && clientX <= r.right + padPx
+          && clientY >= r.top - padPx
+          && clientY <= r.bottom + padPx
+        ) {
+          return entry.themeName;
         }
       }
       return null;
     };
 
     const pick = (clientX: number, clientY: number): PickedPaper | null => {
+      // Dots under/near a theme name must not steal the name click.
+      if (pickThemeNameAt(clientX, clientY)) return null;
+
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -2082,11 +2115,9 @@ export default function ResearchAtlasTiles({
         if (hits.length && hits[0].index != null) {
           const p = overlayPointsRef.current[hits[0].index];
           if (p) {
-            // While drilled the point is drawn at its laid-out cluster position,
-            // so the marker must use that (not the original) coordinate.
-            const laid = drillThemeRef.current
-              ? drillLayoutRef.current?.posById.get(p.i)
-              : undefined;
+            // While drilled/filtered the point is drawn at its laid-out position,
+            // so selection highlight must use that (not the original) coordinate.
+            const [x, y, z] = resolvePaperDisplayPos(p.i, p);
             return {
               i: p.i,
               id: p.id,
@@ -2094,9 +2125,7 @@ export default function ResearchAtlasTiles({
               theme: p.theme,
               domain: p.domain || "",
               citations: 0,
-              x: laid ? laid[0] : p.x,
-              y: laid ? laid[1] : p.y,
-              z: laid ? laid[2] : p.z,
+              x, y, z,
             };
           }
         }
@@ -2117,16 +2146,24 @@ export default function ResearchAtlasTiles({
     const onMove = (ev: MouseEvent) => {
       if (viewOnlyRef.current) {
         setHovered(null);
-        // Theme tips stay clickable in view mode — hint with a pointer cursor.
         hoverFrame++;
         if (hoverFrame % 2 !== 0) return;
-        setCursor(pickTip(ev.clientX, ev.clientY)?.kind === "theme" ? "pointer" : "grab");
+        if (pickThemeNameAt(ev.clientX, ev.clientY)) {
+          setCursor("pointer");
+          return;
+        }
+        setCursor("grab");
         return;
       }
       hoverFrame++;
       if (hoverFrame % 2 !== 0) return;
       const rect = container.getBoundingClientRect();
       setTooltipPos({ x: ev.clientX - rect.left, y: ev.clientY - rect.top });
+      if (pickThemeNameAt(ev.clientX, ev.clientY)) {
+        setHovered(null);
+        setCursor("pointer");
+        return;
+      }
       const paper = pick(ev.clientX, ev.clientY);
       if (paper) {
         setHovered(paper);
@@ -2137,23 +2174,25 @@ export default function ResearchAtlasTiles({
       setCursor(pickTip(ev.clientX, ev.clientY) ? "pointer" : "grab");
     };
     const onClick = (ev: MouseEvent) => {
-      if (viewOnlyRef.current) {
-        // Papers/domains stay non-interactive, but theme tips still drill.
-        const tip = pickTip(ev.clientX, ev.clientY);
-        if (tip?.kind === "theme") onThemeLabelClickRef.current(tip.theme);
+      // Near a theme name: drill that theme; do not select surrounding dots.
+      const themeName = pickThemeNameAt(ev.clientX, ev.clientY);
+      if (themeName) {
+        onThemeLabelClickRef.current(themeName);
         return;
       }
-      // Prefer paper hits so labels/tips never block selecting papers.
+      if (viewOnlyRef.current) return;
+      // Domain tips stay interactive (theme tips do not).
+      const tip = pickTip(ev.clientX, ev.clientY);
+      if (tip?.kind === "domain") {
+        onDomainLabelClickRef.current(tip.theme, tip.domain);
+        return;
+      }
       const paper = pick(ev.clientX, ev.clientY);
       if (paper) {
         setSelected(paper);
         setClusterTheme(null);
         setClusterBreakdown(null);
-        return;
       }
-      const tip = pickTip(ev.clientX, ev.clientY);
-      if (tip?.kind === "theme") onThemeLabelClickRef.current(tip.theme);
-      else if (tip?.kind === "domain") onDomainLabelClickRef.current(tip.theme, tip.domain);
     };
     const onLeave = () => { setHovered(null); setCursor("grab"); };
 
@@ -2257,6 +2296,7 @@ export default function ResearchAtlasTiles({
     const e = engineRef.current;
     if (!e) return;
     if (selected) {
+      // Place the selection marker on the drawn paper position (layout coords).
       e.marker.position.set(selected.x, selected.y, selected.z);
       e.marker.visible = true;
     } else {
@@ -2283,7 +2323,7 @@ export default function ResearchAtlasTiles({
       frameDrillOverview();
       return;
     }
-    e.camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
+    e.camera.position.set(0, 0.35, themeOverviewCameraZ(themeSphereLayoutRef.current));
     e.controls.target.set(0, 0, 0);
     e.controls.update();
     e.dirty = true;
@@ -2453,7 +2493,8 @@ export default function ResearchAtlasTiles({
   };
 
   selectPaperRef.current = (paper) => {
-    setSelected(paper);
+    const [x, y, z] = resolvePaperDisplayPos(paper.i, paper);
+    setSelected({ ...paper, x, y, z });
     setClusterTheme(null);
     setClusterBreakdown(null);
   };
@@ -2510,7 +2551,7 @@ export default function ResearchAtlasTiles({
     // Back to the whole-cloud framing (the drill camera sits much further out).
     const e = engineRef.current;
     if (e) {
-      e.camera.position.set(0, 0.2, DEFAULT_CAMERA_Z);
+      e.camera.position.set(0, 0.35, themeOverviewCameraZ(themeSphereLayoutRef.current));
       e.controls.target.set(0, 0, 0);
       e.controls.update();
       e.dirty = true;
@@ -2551,7 +2592,7 @@ export default function ResearchAtlasTiles({
     setClusterTheme(null);
     setClusterBreakdown(null);
     setClusterDomain(null);
-    setSelected({
+    const base = {
       ...paper,
       id: fromOverlay?.id || paper.id,
       title: fromOverlay?.title || paper.title,
@@ -2559,8 +2600,10 @@ export default function ResearchAtlasTiles({
       x: fromOverlay?.x ?? paper.x,
       y: fromOverlay?.y ?? paper.y,
       z: fromOverlay?.z ?? paper.z,
-    });
-  }, []);
+    };
+    const [x, y, z] = resolvePaperDisplayPos(base.i, base);
+    setSelected({ ...base, x, y, z });
+  }, [resolvePaperDisplayPos]);
 
   return (
     <div className={cn(
