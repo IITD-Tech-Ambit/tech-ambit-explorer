@@ -84,9 +84,11 @@ export const useInventorScopedSearch = (
     request: InventorScopedSearchRequest | null,
     options?: { enabled?: boolean }
 ) => {
+    // request is already null unless the caller has real query text or an intentional
+    // filter-only browse (see useIPExploreState's inventorScopedRequest) — re-checking
+    // query.trim() here would disable the request the browse case is supposed to run.
     const isEnabled = options?.enabled !== false
         && !!request
-        && !!request.query?.trim()
         && !!request.inventor_id;
 
     return useQuery<InventorScopedSearchResponse, Error>({

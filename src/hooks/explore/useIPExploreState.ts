@@ -174,10 +174,14 @@ export function useIPExploreState() {
 
   // Same contract as POST /ip/search: main `query` is the newest chain term, `refine_chain` is
   // the prior chain — so refining while an inventor is selected narrows within their patents.
+  // In browse mode (isBrowse) the newest term is only a facet label for the breadcrumb — same
+  // as searchRequest above, the backend gets an empty query so it runs a filter-only browse of
+  // this inventor's patents instead of literal-matching the label as text (which was silently
+  // returning 0, since a patent rarely repeats its own department's name verbatim).
   const inventorScopedRequest = useMemo<InventorScopedSearchRequest | null>(() => {
-    if (!selectedInventor || !activeQuery.trim()) return null;
+    if (!selectedInventor || (!isBrowse && !activeQuery.trim())) return null;
     return {
-      query: activeQuery,
+      query: isBrowse ? "" : activeQuery,
       inventor_id: selectedInventor.kerberos,
       page: inventorScopedPage,
       per_page: 20,
@@ -185,7 +189,7 @@ export function useIPExploreState() {
       ...(priorChain.length > 0 ? { refine_chain: priorChain } : {}),
       ...(Object.keys(filters).length > 0 ? { filters } : {}),
     };
-  }, [selectedInventor, activeQuery, priorChain, inventorScopedPage, mode, filters]);
+  }, [selectedInventor, activeQuery, priorChain, inventorScopedPage, mode, filters, isBrowse]);
 
   const {
     data: inventorScopedData,

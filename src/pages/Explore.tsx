@@ -484,9 +484,6 @@ const Explore = () => {
               // corpus-wide People list, which isn't relevant once you're already viewing one
               // person's papers and can't drift from what this page actually reports.
               <div className="shrink-0 mt-2">
-                <p className="text-muted-foreground mb-3">
-                  Viewing <span className="font-semibold text-primary">{selectedAuthor.name}</span>
-                </p>
                 <PeopleListContainer>
                   <PeopleFacultyRow
                     name={selectedAuthor.name}
@@ -499,15 +496,6 @@ const Explore = () => {
                     onViewProfile={() => void handleAuthorClickByScopus(selectedAuthor.author_id, selectedAuthor.name)}
                   />
                 </PeopleListContainer>
-                <button
-                  className="text-primary hover:underline font-medium text-sm mt-3"
-                  onClick={() => {
-                    setSelectedAuthor(null);
-                    setAuthorScopedPage(1);
-                  }}
-                >
-                  ← Browse all people
-                </button>
               </div>
             ) : (() => {
               // allFacultyData (GET /search/faculty-for-query) is the single source of truth for

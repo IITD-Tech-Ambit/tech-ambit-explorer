@@ -82,9 +82,6 @@ export function IPInventorsSidebar({
           // query driving the page instead of the full corpus-wide aggregation (which is disabled
           // while scoped — see useIPExploreState), so this can't drift from what the page shows.
           <div className="shrink-0 mt-2">
-            <p className="text-muted-foreground mb-3">
-              Viewing <span className="font-semibold text-primary">{selectedInventor.name}</span>
-            </p>
             <PeopleListContainer>
               <PeopleFacultyRow
                 name={selectedInventor.name}
@@ -96,13 +93,6 @@ export function IPInventorsSidebar({
                 }}
               />
             </PeopleListContainer>
-            <button
-              type="button"
-              className="text-primary hover:underline font-medium text-sm mt-3"
-              onClick={() => onSelectInventor(null)}
-            >
-              ← Browse all inventors
-            </button>
           </div>
         ) : isAllFacultyLoading ? (
           <PeopleLoadingState />
