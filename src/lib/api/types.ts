@@ -252,6 +252,13 @@ export interface DirectoryFaculty {
     metricVisibility?: { h_index: boolean; citations: boolean; papers: boolean; patents: boolean };
     designation?: string | null;
     workingFromYear?: number | null;
+    /** Profile-only sections. Present only on the /faculty/:kerberos/profile read
+     * (never in search/listings). Content is null when the faculty has hidden the
+     * section; the *Visible flags say whether it's shown. */
+    background?: string | null;
+    qualifications?: string[] | null;
+    backgroundVisible?: boolean;
+    qualificationsVisible?: boolean;
 }
 
 export interface DirectoryPagination {
