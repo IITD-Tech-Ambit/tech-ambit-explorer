@@ -97,22 +97,24 @@ const TaxonomyFieldPicker = ({
                 )}
             </div>
 
-            <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                    Domain
-                </h3>
-                {domainNode ? (
-                    <FieldPill label={domainNode.name} onRemove={onClearDomain} />
-                ) : domainsQuery.isLoading ? (
-                    <OptionsSkeleton />
-                ) : (
-                    <div className="flex flex-wrap gap-3">
-                        {domains?.map((d) => (
-                            <FieldOption key={d.id} label={d.name} onSelect={() => onSelectDomain(d)} />
-                        ))}
-                    </div>
-                )}
-            </div>
+            {(themeNode || domainNode) && (
+                <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                        Domain
+                    </h3>
+                    {domainNode ? (
+                        <FieldPill label={domainNode.name} onRemove={onClearDomain} />
+                    ) : domainsQuery.isLoading ? (
+                        <OptionsSkeleton />
+                    ) : (
+                        <div className="flex flex-wrap gap-3">
+                            {domains?.map((d) => (
+                                <FieldOption key={d.id} label={d.name} onSelect={() => onSelectDomain(d)} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {browseFilters && (
                 <div className="pt-2 border-t border-border/60">
