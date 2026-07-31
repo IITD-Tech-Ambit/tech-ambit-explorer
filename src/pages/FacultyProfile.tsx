@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -374,17 +374,17 @@ const FacultyProfile = () => {
 
                     {/* Left Sidebar — a slim fixed-width rail on lg+ so the timelines get most of the width */}
                     <div className="lg:w-72 lg:flex-shrink-0 space-y-6">
-                        {faculty.research_areas && faculty.research_areas.length > 0 && (
+                        {faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
                             <SectionCard icon={TrendingUp} title="Research Areas">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {faculty.research_areas.map((area, idx) => (
-                                        <Badge
-                                            key={idx}
-                                            variant="secondary"
-                                            className="text-[11px] px-2.5 py-1 rounded-lg bg-primary/8 text-primary border border-primary/15 hover:bg-primary/12 transition-colors"
+                                    {faculty.dominant_domains.map((area) => (
+                                        <Link
+                                            key={area.slug}
+                                            to={`/research-areas?domain=${encodeURIComponent(area.slug)}&experts=1`}
+                                            className="text-[11px] px-2.5 py-1 rounded-lg bg-primary/8 text-primary border border-primary/15 hover:bg-primary/15 hover:border-primary/30 transition-colors"
                                         >
-                                            {area}
-                                        </Badge>
+                                            {area.name}
+                                        </Link>
                                     ))}
                                 </div>
                             </SectionCard>

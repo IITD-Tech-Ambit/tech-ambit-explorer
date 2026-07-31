@@ -63,13 +63,17 @@ const TaxonomyFieldPicker = ({
     const themes = rankByPaperCount(themesQuery.data?.themes);
     const themeNode = themes?.find((t) => t.slug === selectedTheme);
 
-    const domainsQuery = useTaxonomyDomains(selectedTheme, department, !!selectedTheme);
+    // Domain is an independent classification axis from Thematic Area (a paper/faculty can be
+    // filtered by domain alone — see Domain model, "Domains do NOT nest under Thematic Areas").
+    // Always fetch/show it so a domain-only deep link (e.g. from a faculty profile's Research
+    // Areas pills) can render its selected pill without first requiring a theme pick.
+    const domainsQuery = useTaxonomyDomains(selectedTheme, department, true);
     const domains = rankByPaperCount(domainsQuery.data?.domains);
     const domainNode = domains?.find((d) => d.slug === selectedDomain);
 
-    // Reflects the deepest level picked — domain once chosen, theme alone before that.
-    const browseFilters = themeNode
-        ? { theme: themeNode.slug, domain: domainNode?.slug, department }
+    // Reflects whichever level(s) are picked — either axis alone, or both together.
+    const browseFilters = (themeNode || domainNode)
+        ? { theme: themeNode?.slug, domain: domainNode?.slug, department }
         : undefined;
     const recommendedQuery = useTaxonomyFaculty(browseFilters ?? {}, 1, 1, !!browseFilters);
     const recommendedCount = recommendedQuery.data?.recommended_count;
@@ -93,24 +97,22 @@ const TaxonomyFieldPicker = ({
                 )}
             </div>
 
-            {themeNode && (
-                <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                        Domain
-                    </h3>
-                    {domainNode ? (
-                        <FieldPill label={domainNode.name} onRemove={onClearDomain} />
-                    ) : domainsQuery.isLoading ? (
-                        <OptionsSkeleton />
-                    ) : (
-                        <div className="flex flex-wrap gap-3">
-                            {domains?.map((d) => (
-                                <FieldOption key={d.id} label={d.name} onSelect={() => onSelectDomain(d)} />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+            <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                    Domain
+                </h3>
+                {domainNode ? (
+                    <FieldPill label={domainNode.name} onRemove={onClearDomain} />
+                ) : domainsQuery.isLoading ? (
+                    <OptionsSkeleton />
+                ) : (
+                    <div className="flex flex-wrap gap-3">
+                        {domains?.map((d) => (
+                            <FieldOption key={d.id} label={d.name} onSelect={() => onSelectDomain(d)} />
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {browseFilters && (
                 <div className="pt-2 border-t border-border/60">

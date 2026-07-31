@@ -234,7 +234,11 @@ export function useExploreSearchState() {
   // Disabled while scoped to one author: the full-corpus aggregate isn't useful once you're
   // already viewing one person's papers, and skipping it avoids running an independent query
   // whose count can drift from what authorScopedData (the actual page being shown) reports.
-  const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllFacultyForQuery(
+  const {
+    data: allFacultyData,
+    isLoading: isAllFacultyLoadingRaw,
+    isFetching: isAllFacultyFetching,
+  } = useAllFacultyForQuery(
     activeQuery,
     searchMode,
     {
@@ -244,10 +248,15 @@ export function useExploreSearchState() {
       filters: searchFilters,
     }
   );
+  // isLoading is only true on this query key's very first fetch — once any People data has ever
+  // loaded, submitting a NEW query keeps isLoading false while the new fetch runs, so callers
+  // gating on isLoading alone would keep rendering the PREVIOUS query's stale faculty list (wrong
+  // people, wrong counts) until the new response arrives. Fold isFetching in here so every
+  // consumer gets the fix for free.
+  const isAllFacultyLoading = isAllFacultyLoadingRaw || isAllFacultyFetching;
 
   const results = searchData?.results || [];
   const pagination = searchData?.pagination || null;
-  const relatedFaculty = searchData?.related_faculty || [];
 
   const clearAll = useCallback(() => {
     setSearchQuery("");
@@ -518,7 +527,6 @@ export function useExploreSearchState() {
     isAllFacultyLoading,
     results,
     pagination,
-    relatedFaculty,
     clearAll,
     goToChainLevel,
     popRefinement,

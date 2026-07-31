@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { RelatedFaculty } from "@/lib/api";
-import { getFacultyByScopusId, getFacultyById } from "@/lib/api/services/directoryService";
+import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
 import type { SelectedAuthor } from "./useExploreSearchState";
 
 const PEOPLE_PER_PAGE = 20;
@@ -10,14 +9,13 @@ const kerberosFromEmail = (email?: string) =>
   email ? email.split("@")[0]?.toLowerCase() : "";
 
 type UseExplorePeopleArgs = {
-  relatedFaculty: RelatedFaculty[];
   allFacultyData:
     | {
         total_faculty: number;
         total_matching_papers: number;
         departments: Array<{
           name: string;
-          faculty: Array<{ author_id: string; name: string; paper_count: number }>;
+          faculty: Array<{ author_id: string; name: string; paper_count: number; citation_count?: number }>;
         }>;
       }
     | undefined;
@@ -28,7 +26,6 @@ type UseExplorePeopleArgs = {
 };
 
 export function useExplorePeople({
-  relatedFaculty,
   allFacultyData,
   isAllFacultyLoading,
   selectedAuthor,
@@ -55,7 +52,6 @@ export function useExplorePeople({
     if (typeof window === "undefined") return false;
     return window.matchMedia("(min-width: 1280px)").matches;
   });
-  const [showAllFaculty, setShowAllFaculty] = useState(false);
   const [isPeopleLoadingMore, setIsPeopleLoadingMore] = useState(false);
   const [peoplePage, setPeoplePage] = useState(1);
 
@@ -122,12 +118,9 @@ export function useExplorePeople({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [showAllFaculty, allFacultyData, isPeopleSidebarOpen, isPeopleLoadingMore]);
+  }, [allFacultyData, isPeopleSidebarOpen, isPeopleLoadingMore]);
 
-  const peopleTotalCount =
-    showAllFaculty || relatedFaculty.length === 0
-      ? (allFacultyData?.total_faculty ?? 0)
-      : relatedFaculty.length;
+  const peopleTotalCount = allFacultyData?.total_faculty ?? 0;
 
   const toggleDepartment = (dept: string) => {
     setExpandedDepts((prev) => ({
@@ -137,16 +130,6 @@ export function useExplorePeople({
   };
 
   const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
-
-  const openRelatedFacultyProfile = async (faculty: RelatedFaculty) => {
-    try {
-      const full = await getFacultyById(faculty._id);
-      const k = kerberosFromEmail(full.email);
-      if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
-    } catch {
-      /* ignore */
-    }
-  };
 
   const openAggregatedFacultyProfile = async (scopusAuthorId: string, _fallbackName?: string) => {
     try {
@@ -174,8 +157,6 @@ export function useExplorePeople({
     setGroupByDepartment,
     isPeopleSidebarOpen,
     setIsPeopleSidebarOpen,
-    showAllFaculty,
-    setShowAllFaculty,
     isPeopleLoadingMore,
     peoplePage,
     setPeoplePage,
@@ -189,10 +170,8 @@ export function useExplorePeople({
     peopleTotalCount,
     toggleDepartment,
     isDeptExpanded,
-    openRelatedFacultyProfile,
     openAggregatedFacultyProfile,
     handleAuthorClickByScopus,
-    relatedFaculty,
     allFacultyData,
     isAllFacultyLoading,
     selectedAuthor,

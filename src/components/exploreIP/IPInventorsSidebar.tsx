@@ -18,6 +18,9 @@ type Props = {
    *  the page — used instead of the (now-disabled) full-corpus aggregation while scoped, so this
    *  can't drift from what the page actually shows. */
   scopedPatentCount?: number;
+  /** True once narrowed past the first term — row counts are hidden past that point since the
+   *  approximate count can diverge from click-through. */
+  isRefined?: boolean;
   onSelectInventor: (inventor: SelectedInventor | null) => void;
   onViewProfile: (kerberos: string) => void;
   isOpen: boolean;
@@ -33,6 +36,7 @@ export function IPInventorsSidebar({
   isAllFacultyLoading,
   selectedInventor,
   scopedPatentCount,
+  isRefined,
   onSelectInventor,
   onViewProfile,
   isOpen,
@@ -127,7 +131,7 @@ export function IPInventorsSidebar({
                       <PeopleFacultyRow
                         key={faculty._id}
                         name={faculty.name}
-                        paperCount={faculty.ipCount}
+                        paperCount={isRefined ? undefined : faculty.ipCount}
                         isSelected={isSelected}
                         onSelect={() => {
                           if (!faculty.kerberos) return;

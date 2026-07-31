@@ -34,14 +34,13 @@ const Explore = () => {
     suggestData, isSuggestFetching, recentQueries,
     yearFrom, setYearFrom, yearTo, setYearTo, perPage, setPerPage, searchIn,
     searchData, isLoading, authorScopedData, isAuthorScopedLoading, isAuthorScopedFetching,
-    allFacultyData, isAllFacultyLoading, results, pagination, relatedFaculty,
+    allFacultyData, isAllFacultyLoading, results, pagination,
     clearAll, goToChainLevel, popRefinement, changeMode, goToPage, performSearch,
     handleSearchKeyDown, selectAuthorSuggestion, selectPaperSuggestion, selectRecentSuggestion,
     applyFilters, clearFilters, replayRecentSearch,
   } = search;
 
   const people = useExplorePeople({
-    relatedFaculty,
     allFacultyData,
     isAllFacultyLoading,
     selectedAuthor,
@@ -51,11 +50,11 @@ const Explore = () => {
   const {
     PEOPLE_PER_PAGE, groupByDepartment, setGroupByDepartment,
     isPeopleSidebarOpen, setIsPeopleSidebarOpen,
-    showAllFaculty, setShowAllFaculty, isPeopleLoadingMore,
+    isPeopleLoadingMore,
     peoplePage, setPeoplePage, sidebarWidth, isResizingState,
     leftColRef, containerRef, peopleSentinelRef, peopleHasMoreRef,
     startResizing, peopleTotalCount, toggleDepartment, isDeptExpanded,
-    openRelatedFacultyProfile, openAggregatedFacultyProfile,
+    openAggregatedFacultyProfile,
     handleAuthorClickByScopus,
   } = people;
 
@@ -456,7 +455,7 @@ const Explore = () => {
         )}
 
         
-        {hasSearched && !isLoading && (selectedAuthor || filteredResults.length > 0 || relatedFaculty.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
+        {hasSearched && !isLoading && (selectedAuthor || filteredResults.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
           <div 
             ref={containerRef}
             className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
@@ -510,7 +509,15 @@ const Explore = () => {
                   ← Browse all people
                 </button>
               </div>
-            ) : (showAllFaculty || relatedFaculty.length === 0) ? (() => {
+            ) : (() => {
+              // allFacultyData (GET /search/faculty-for-query) is the single source of truth for
+              // the People sidebar: a relevance-gated, full-corpus aggregate that agrees with what
+              // AuthorScopedSearch shows on click. There used to be a second "From Results" mode
+              // sourced from POST /search's related_faculty — naive page-scoped co-authorship,
+              // crediting anyone who co-wrote ANY paper on the current results page whether or not
+              // their own contribution was why it matched. That produced counts clicking through
+              // would contradict (shown with a count, 0 papers on click), so it's gone rather than
+              // patched again.
               if (isAllFacultyLoading) {
                 return <PeopleLoadingState />;
               }
@@ -545,15 +552,7 @@ const Explore = () => {
                 <>
                   <div className="shrink-0 mb-4 mt-2">
                     <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{allFacultyData.total_faculty}</span> faculty across all {allFacultyData.total_matching_papers.toLocaleString()} matching papers{' '}
-                      {relatedFaculty.length > 0 && (
-                        <button
-                          className="text-primary hover:underline font-medium text-sm"
-                          onClick={() => { setShowAllFaculty(false); setPeoplePage(1); }}
-                        >
-                          (Show results from this page)
-                        </button>
-                      )}
+                      Found <span className="font-semibold text-primary">{allFacultyData.total_faculty}</span> faculty across all {allFacultyData.total_matching_papers.toLocaleString()} matching papers
                     </p>
                   </div>
                   <PeopleListContainer>
@@ -570,124 +569,14 @@ const Explore = () => {
                             <PeopleFacultyRow
                               key={faculty.author_id}
                               name={faculty.name}
-                              paperCount={faculty.paper_count}
+                              // Hidden once narrowed — the approximate count can diverge from click-through.
+                              paperCount={refinementChain.length > 1 ? undefined : faculty.paper_count}
                               isSelected={isSelected}
                               onSelect={() => {
                                 setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id });
                                 setAuthorScopedPage(1);
                               }}
                               onViewProfile={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
-                            />
-                          );
-                        })}
-                      </PeopleDepartmentBlock>
-                    ))}
-
-                    {hasMore && (
-                      <PeopleLoadMoreSentinel sentinelRef={peopleSentinelRef} isLoading={isPeopleLoadingMore} />
-                    )}
-                    {!hasMore && allFacultyFlat.length > PEOPLE_PER_PAGE && (
-                      <p className="text-xs text-center text-muted-foreground py-2">All {allFacultyFlat.length} faculty shown</p>
-                    )}
-                  </PeopleListContainer>
-                </>
-              );
-            })() : (() => {
-              /* From Results mode - uses related_faculty from search response + expert_id */
-
-              if (relatedFaculty.length === 0) {
-                return (
-                  <PeopleEmptyState
-                    title="No Authors Found"
-                    description="No IIT Delhi affiliated authors found in the current page results"
-                  />
-                );
-              }
-
-              // Enrich related_faculty with precise paper counts from allFacultyData.
-              // Use the higher of (From Results) vs (Show All) count — the "From Results"
-              // count is kerberos-aware (MongoDB hydrated) while "Show All" relies on
-              // OpenSearch aggregations which may not have kerberos indexed yet.
-              const enrichedFaculty = relatedFaculty.map(f => {
-                let preciseCount = f.paperCount;
-                if (allFacultyData?.departments) {
-                  for (const dept of allFacultyData.departments) {
-                    const found = dept.faculty.find(af => af.author_id === f.expert_id);
-                    if (found) {
-                      preciseCount = Math.max(preciseCount, found.paper_count);
-                      break;
-                    }
-                  }
-                }
-                return { ...f, paperCount: preciseCount };
-              });
-
-              const deptGroups: Record<string, { faculty: typeof enrichedFaculty; totalCount: number }> = {};
-              enrichedFaculty.forEach(faculty => {
-                const dept = faculty.department?.name || 'Unknown';
-                if (!deptGroups[dept]) deptGroups[dept] = { faculty: [], totalCount: 0 };
-                deptGroups[dept].faculty.push(faculty);
-                deptGroups[dept].totalCount += faculty.paperCount;
-              });
-
-              const sortedDepts = Object.keys(deptGroups).sort((a, b) => {
-                const countDiff = deptGroups[b].totalCount - deptGroups[a].totalCount;
-                if (countDiff !== 0) return countDiff;
-                return a.localeCompare(b);
-              });
-
-              const allFacultyFlat = sortedDepts.flatMap(dept =>
-                deptGroups[dept].faculty.map(f => ({ faculty: f, department: dept }))
-              );
-              const visibleCount = peoplePage * PEOPLE_PER_PAGE;
-              const visibleItems = allFacultyFlat.slice(0, visibleCount);
-              const hasMore = visibleCount < allFacultyFlat.length;
-
-              const deptOrder: string[] = [];
-              const groupedVisible: Record<string, typeof enrichedFaculty> = {};
-              visibleItems.forEach(item => {
-                if (!groupedVisible[item.department]) {
-                  groupedVisible[item.department] = [];
-                  deptOrder.push(item.department);
-                }
-                groupedVisible[item.department].push(item.faculty);
-              });
-
-              return (
-                <>
-                  <div className="shrink-0 mb-4 mt-2">
-                    <p className="text-muted-foreground">
-                      Found <span className="font-semibold text-primary">{enrichedFaculty.length}</span> faculty on this page{' '}
-                      <button
-                        className="text-primary hover:underline font-medium text-sm"
-                        onClick={() => { setShowAllFaculty(true); setPeoplePage(1); }}
-                      >
-                        (show all)
-                      </button>
-                    </p>
-                  </div>
-                  <PeopleListContainer>
-                    {(() => { peopleHasMoreRef.current = hasMore; return null; })()}
-                    {deptOrder.map(department => (
-                      <PeopleDepartmentBlock
-                        key={department}
-                        department={department}
-                        count={deptGroups[department].faculty.length}
-                      >
-                        {groupedVisible[department].map((faculty) => {
-                          const facultyAuthorId = faculty.expert_id || '';
-                          const isSelected = selectedAuthor?.author_id === facultyAuthorId;
-                          return (
-                            <PeopleFacultyRow
-                              key={faculty._id}
-                              name={faculty.name}
-                              paperCount={faculty.paperCount}
-                              isSelected={isSelected}
-                              onSelect={() => {
-                                setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: facultyAuthorId });
-                                setAuthorScopedPage(1);
-                              }}
-                              onViewProfile={() => void openRelatedFacultyProfile(faculty)}
                             />
                           );
                         })}
