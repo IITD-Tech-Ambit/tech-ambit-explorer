@@ -51,11 +51,11 @@ function kgClusterOffset(
   const b = hash01(seed + 71);
   const c = hash01(seed + 97);
 
-  // Mix of compact core + open fringe (KG nebula, not a solid ball).
-  const densityPower = 1.15;
+  // Mix of compact core + open fringe (airier KG nebula, not a solid ball).
+  const densityPower = 0.72;
   let r = radius * u ** densityPower;
-  // ~12% of points spray farther for a wispy knowledge-graph edge.
-  if (a > 0.88) r *= 1.15 + b * 0.35;
+  // ~22% of points spray farther for a wispy knowledge-graph edge.
+  if (a > 0.78) r *= 1.25 + b * 0.55;
 
   const theta = v * Math.PI * 2;
   const cosPhi = w * 2 - 1;
@@ -82,9 +82,9 @@ function themeShape(themeId: number): [number, number, number] {
 }
 
 function blobRadiusForCount(count: number, maxCount: number): number {
-  // Bigger themes → larger clouds; keep a soft KG look (not tiny hard cores).
+  // Bigger themes → larger clouds; keep an airy KG look (not tiny hard cores).
   const t = Math.max(1, count) / Math.max(1, maxCount);
-  return 0.58 + 0.95 * Math.pow(t, 0.55);
+  return 0.72 + 1.15 * Math.pow(t, 0.55);
 }
 
 /**
@@ -99,12 +99,12 @@ export function createThemeSphereLayout(
   const counts = themes.map((t) => countByTheme.get(t) ?? 1);
   const maxCount = Math.max(1, ...counts);
   const radii = counts.map((c) => blobRadiusForCount(c, maxCount));
-  const maxBlob = radii.reduce((m, r) => Math.max(m, r), 0.58);
-  // Close enough to feel like one knowledge graph, gap enough to stay readable.
-  const gap = 0.36;
+  const maxBlob = radii.reduce((m, r) => Math.max(m, r), 0.72);
+  // Wider spacing so theme clouds stay distinct instead of merging.
+  const gap = 0.55;
   const spreadR = n <= 1
     ? 0
-    : Math.max(2.35, ((2 * maxBlob + gap) * Math.sqrt(n) / 3.81) * 1.4);
+    : Math.max(2.9, ((2 * maxBlob + gap) * Math.sqrt(n) / 3.81) * 1.65);
 
   type Node = { theme: string; count: number; blobR: number; x: number; y: number; z: number };
   const nodes: Node[] = themes.map((theme, k) => {
