@@ -95,6 +95,10 @@ export interface SearchDocument {
     publication_year: number;
     document_type: string;
     field_associated?: string;
+    // Professor department resolved via Faculty.department for the paper's first IITD author —
+    // distinct from field_associated (a Scopus subject-field tag on the paper itself). Used for
+    // department grouping in the Explore paper list.
+    department?: string;
     citation_count?: number;
     reference_count?: number;
     subject_area?: string[];
@@ -135,6 +139,7 @@ export interface RelatedFaculty {
         name: string;
     } | null;
     paperCount: number;
+    citationCount: number;
 }
 
 export interface SearchResponse {
@@ -218,6 +223,12 @@ export interface DirectoryDepartment {
     category?: string;
 }
 
+export interface DominantDomain {
+    name: string;
+    slug: string;
+    paperCount: number;
+}
+
 export interface DirectoryFaculty {
     _id: string;
     name: string;
@@ -225,6 +236,10 @@ export interface DirectoryFaculty {
     citationCount: number | null;
     hIndex: number | null;
     research_areas: string[];
+    // Faculty's precomputed dominant taxonomy Domains — used by the faculty profile page's
+    // Research Areas section (clickable through to /research-areas?domain=<slug>), distinct
+    // from research_areas above which also pads in expertise/subjects for the directory listing.
+    dominant_domains?: DominantDomain[];
     orcId?: string;
     scopusId?: string;
     googleScholarId?: string;
@@ -373,8 +388,10 @@ export interface FacultyForQueryDepartment {
         name: string;
         author_id: string;
         paper_count: number;
+        citation_count: number;
     }[];
     total_paper_count: number;
+    total_citation_count: number;
 }
 
 export interface AllFacultyForQueryResponse {

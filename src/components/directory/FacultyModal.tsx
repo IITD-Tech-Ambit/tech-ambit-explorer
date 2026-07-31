@@ -1,11 +1,13 @@
+import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Mail, BookOpen, Award, ExternalLink, Building2, Loader2, FileText } from "lucide-react";
 import type { ElementType } from "react";
 import { useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
 import type { DirectoryFaculty } from "@/lib/api/types";
 import PublicationTimeline from "@/components/PublicationTimeline";
+import { cn } from "@/lib/utils";
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
@@ -144,16 +146,21 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
 
                 <ScrollArea className="flex-1 max-h-[50vh]">
                     <div className="p-6 pt-2 space-y-6">
-                        {faculty.research_areas && faculty.research_areas.length > 0 && (
+                        {faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
                             <div>
                                 <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
                                     Research Areas
                                 </h4>
                                 <div className="flex flex-wrap gap-2">
-                                    {faculty.research_areas.map((area, idx) => (
-                                        <Badge key={idx} variant="secondary" className="text-xs">
-                                            {area}
-                                        </Badge>
+                                    {faculty.dominant_domains.map((area) => (
+                                        <Link
+                                            key={area.slug}
+                                            to={`/research-areas?domain=${encodeURIComponent(area.slug)}&experts=1`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className={cn(badgeVariants({ variant: "secondary" }), "text-xs hover:bg-secondary/70 transition-colors")}
+                                        >
+                                            {area.name}
+                                        </Link>
                                     ))}
                                 </div>
                             </div>

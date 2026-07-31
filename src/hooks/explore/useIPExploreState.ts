@@ -204,7 +204,11 @@ export function useIPExploreState() {
   // Disabled while scoped to one inventor: the full-corpus aggregate isn't useful once you're
   // already viewing one inventor's patents, and skipping it avoids an independent query whose
   // count can drift from what inventorScopedData (the actual page being shown) reports.
-  const { data: allFacultyData, isLoading: isAllFacultyLoading } = useAllIPFacultyForQuery(
+  const {
+    data: allFacultyData,
+    isLoading: isAllFacultyLoadingRaw,
+    isFetching: isAllFacultyFetching,
+  } = useAllIPFacultyForQuery(
     isBrowse ? "" : activeQuery,
     mode,
     {
@@ -213,6 +217,11 @@ export function useIPExploreState() {
       filters,
     }
   );
+  // isLoading is only true on this query key's very first fetch — once any inventor data has
+  // ever loaded, submitting a NEW query keeps isLoading false while the new fetch runs, so a
+  // naive isLoading-only gate would keep rendering the PREVIOUS query's stale list until the new
+  // response arrives. Fold isFetching in so every consumer gets the fix for free.
+  const isAllFacultyLoading = isAllFacultyLoadingRaw || isAllFacultyFetching;
 
   const results = searchData?.results ?? [];
   const pagination = searchData?.pagination ?? null;

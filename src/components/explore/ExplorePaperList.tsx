@@ -122,7 +122,9 @@ export function ExplorePaperList({
 
   const groupedByDept = results.reduce(
     (groups, item) => {
-      const dept = item.field_associated || "Other";
+      // Resolved via the paper's professor (Faculty.department), not field_associated —
+      // a paper's Scopus subject-field tag doesn't reflect which IITD department it belongs to.
+      const dept = item.department || "Other";
       if (!groups[dept]) groups[dept] = [];
       groups[dept].push(item);
       return groups;
@@ -130,9 +132,14 @@ export function ExplorePaperList({
     {} as Record<string, SearchDocument[]>
   );
 
+  const citationsByDept = (dept: string) =>
+    groupedByDept[dept].reduce((sum, item) => sum + (item.citation_count || 0), 0);
+
   const sortedDepartments = Object.keys(groupedByDept).sort((a, b) => {
     if (a === "Other") return 1;
     if (b === "Other") return -1;
+    const citationDiff = citationsByDept(b) - citationsByDept(a);
+    if (citationDiff !== 0) return citationDiff;
     return a.localeCompare(b);
   });
 

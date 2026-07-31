@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Award, BookOpen, Mail, ArrowUpRight, FileText } from "lucide-react";
@@ -189,23 +190,24 @@ const FacultyCard = ({
                         )}
                     </div>
                 ) : (
-                    faculty.research_areas && faculty.research_areas.length > 0 && (
+                    faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
                         <div className="mt-auto pt-3 border-t border-dashed border-border/80 flex flex-wrap gap-1.5">
-                            {faculty.research_areas.slice(0, 4).map((area, idx) => (
-                                <Badge
-                                    key={`${area}-${idx}`}
-                                    variant="secondary"
+                            {faculty.dominant_domains.slice(0, 4).map((area) => (
+                                <Link
+                                    key={area.slug}
+                                    to={`/research-areas?domain=${encodeURIComponent(area.slug)}&experts=1`}
+                                    onClick={(e) => e.stopPropagation()}
                                     className={cn(
-                                        "text-[11px] px-2 py-0.5 bg-primary/10 text-primary",
-                                        "hover:bg-primary/20"
+                                        "inline-flex items-center rounded-full text-[11px] px-2 py-0.5 font-semibold bg-primary/10 text-primary",
+                                        "hover:bg-primary/20 transition-colors"
                                     )}
                                 >
-                                    {area.length > 24 ? area.slice(0, 24) + "…" : area}
-                                </Badge>
+                                    {area.name.length > 24 ? area.name.slice(0, 24) + "…" : area.name}
+                                </Link>
                             ))}
-                            {faculty.research_areas.length > 4 && (
+                            {faculty.dominant_domains.length > 4 && (
                                 <Badge variant="outline" className="text-[10px] px-2 py-0.5">
-                                    +{faculty.research_areas.length - 4}
+                                    +{faculty.dominant_domains.length - 4}
                                 </Badge>
                             )}
                         </div>

@@ -109,39 +109,41 @@ export function PeopleFacultyRow({
   onViewProfile,
 }: {
   name: string;
-  paperCount: number;
+  paperCount?: number | null;
   isSelected: boolean;
   onSelect: () => void;
   onViewProfile: () => void;
 }) {
   return (
-    <li className="flex items-stretch gap-1">
+    <li className="flex items-center gap-1">
       <button
         type="button"
         onClick={onSelect}
         className={cn(
-          "text-sm text-left flex flex-1 min-w-0 items-start justify-between transition-colors rounded-md px-1 -mx-1 touch-manipulation",
+          "text-sm text-left flex flex-1 min-w-0 items-center justify-between transition-colors rounded-md px-1 -mx-1 touch-manipulation",
           isSelected ? "text-primary font-semibold" : "text-muted-foreground hover:text-primary",
         )}
       >
-        <div className="flex items-start min-w-0">
-          <span className="shrink-0 mr-2 mt-[2px]">•</span>
+        <div className="flex items-center min-w-0">
+          <span className="shrink-0 mr-2">•</span>
           <span className="truncate">{name}</span>
         </div>
-        <span
-          className={cn(
-            "text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 tabular-nums",
-            isSelected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-          )}
-        >
-          {paperCount}
-        </span>
+        {paperCount != null && (
+          <span
+            className={cn(
+              "text-xs ml-2 shrink-0 rounded-full px-2 py-0.5 tabular-nums",
+              isSelected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+            )}
+          >
+            {paperCount}
+          </span>
+        )}
       </button>
       <button
         type="button"
         title="View profile"
         aria-label={`View profile for ${name}`}
-        className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+        className="shrink-0 flex items-center justify-center rounded-lg p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
         onClick={onViewProfile}
       >
         <UserCircle className="h-4 w-4" />
