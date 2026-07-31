@@ -31,8 +31,9 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
 
-    const hIndex = summaryData?.hIndex ?? faculty.hIndex ?? 0;
-    const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
+    // null => the faculty has hidden this metric; keep it null so the pill is not shown.
+    const hIndex = summaryData?.hIndex ?? faculty.hIndex;
+    const citations = summaryData?.citationCount ?? faculty.citationCount;
     const totalPapers = summaryData?.stats?.totalPapers ?? 0;
 
     const handleNavigateAuthor = async (authorId: string, matchedProfile: string | null, _name: string) => {
@@ -135,8 +136,8 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
-                        <StatPill icon={Award} label="h-index" value={hIndex} />
-                        <StatPill icon={BookOpen} label="citations" value={citations} />
+                        {hIndex != null && <StatPill icon={Award} label="h-index" value={hIndex} />}
+                        {citations != null && <StatPill icon={BookOpen} label="citations" value={citations} />}
                         {totalPapers > 0 && <StatPill icon={FileText} label="papers" value={totalPapers} />}
                     </div>
                 </DialogHeader>

@@ -222,8 +222,8 @@ export interface DirectoryFaculty {
     _id: string;
     name: string;
     email: string;
-    citationCount: number;
-    hIndex: number;
+    citationCount: number | null;
+    hIndex: number | null;
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
@@ -231,6 +231,10 @@ export interface DirectoryFaculty {
     department: DirectoryDepartment | null;
     tags?: string[];
     profileImageUrl?: string | null;
+    /** Which metrics the faculty has chosen to show. A hidden metric's value is
+     * redacted to null above; these flags drive the owner's edit-mode toggles and
+     * hiding the computed papers/patents counts. Missing => all visible. */
+    metricVisibility?: { h_index: boolean; citations: boolean; papers: boolean; patents: boolean };
     designation?: string | null;
     workingFromYear?: number | null;
 }
@@ -259,8 +263,8 @@ export interface GroupedDepartmentFaculty {
     _id: string;
     name: string;
     email: string;
-    citationCount: number;
-    hIndex: number;
+    citationCount: number | null;
+    hIndex: number | null;
     research_areas: string[];
     orcId?: string;
     scopusId?: string;

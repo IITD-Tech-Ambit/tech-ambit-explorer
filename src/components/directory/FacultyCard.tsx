@@ -126,8 +126,8 @@ const FacultyCard = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <Stat icon={Award} label="h-index" value={faculty.hIndex ?? 0} />
-                    <Stat icon={BookOpen} label="citations" value={faculty.citationCount ?? 0} />
+                    {faculty.hIndex != null && <Stat icon={Award} label="h-index" value={faculty.hIndex} />}
+                    {faculty.citationCount != null && <Stat icon={BookOpen} label="citations" value={faculty.citationCount} />}
                 </div>
 
                 {showAreaPapers ? (

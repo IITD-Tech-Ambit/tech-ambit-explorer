@@ -17,6 +17,34 @@ async function unwrap<T>(request: Promise<{ data: ApiEnvelope<T> }>, fallbackErr
 export const searchFaculties = (query: string, limit: number = 10): Promise<DirectorySearchResult> =>
     unwrap(apiClient.get('/directory/search', { params: { q: query, limit } }), 'Search failed');
 
+/** Faculty self-service: replace one's own profile image. Multipart upload;
+ * the gateway session-gates it and the backend enforces owner-only. Returns the
+ * new CDN URL. */
+export const uploadFacultyImage = async (kerberos: string, file: File): Promise<string> => {
+    const form = new FormData();
+    form.append('image', file);
+    const result = await unwrap<{ profileImageUrl: string }>(
+        apiClient.post(`/directory/faculty/${encodeURIComponent(kerberos)}/image`, form),
+        'Failed to update profile image',
+    );
+    return result.profileImageUrl;
+};
+
+export type MetricVisibility = { h_index: boolean; citations: boolean; papers: boolean; patents: boolean };
+
+/** Faculty self-service: toggle which of their metrics are shown publicly.
+ * Owner-only; the value is never deleted, only hidden. Returns the new flags. */
+export const updateFacultyVisibility = async (
+    kerberos: string,
+    flags: Partial<MetricVisibility>,
+): Promise<MetricVisibility> => {
+    const result = await unwrap<{ metricVisibility: MetricVisibility }>(
+        apiClient.patch(`/directory/faculty/${encodeURIComponent(kerberos)}/visibility`, flags),
+        'Failed to update visibility',
+    );
+    return result.metricVisibility;
+};
+
 export const getFaculties = (
     page: number = 1,
     limit: number = 9,
