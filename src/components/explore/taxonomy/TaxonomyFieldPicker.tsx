@@ -65,9 +65,12 @@ const TaxonomyFieldPicker = ({
 
     // Domain is an independent classification axis from Thematic Area (a paper/faculty can be
     // filtered by domain alone — see Domain model, "Domains do NOT nest under Thematic Areas").
-    // Always fetch/show it so a domain-only deep link (e.g. from a faculty profile's Research
-    // Areas pills) can render its selected pill without first requiring a theme pick.
-    const domainsQuery = useTaxonomyDomains(selectedTheme, department, true);
+    // Only fetched once there's a reason to: a theme picked (scoped list) or a domain deep-linked
+    // (to resolve its pill). Fetching unconditionally on page load populated the query cache with
+    // the full unscoped domain list, which useTaxonomyDomains' keepPreviousData placeholder then
+    // flashed as a placeholder every time a theme was picked afterward — the full list would
+    // render for a beat before snapping to the correct theme-scoped one.
+    const domainsQuery = useTaxonomyDomains(selectedTheme, department, !!selectedTheme || !!selectedDomain);
     const domains = rankByPaperCount(domainsQuery.data?.domains);
     const domainNode = domains?.find((d) => d.slug === selectedDomain);
 
