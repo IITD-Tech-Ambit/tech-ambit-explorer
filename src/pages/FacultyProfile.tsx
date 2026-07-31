@@ -3,9 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
-    FileText, TrendingUp, FileBadge2,
+    FileText, TrendingUp, FileBadge2, Pencil, Camera, X,
 } from "lucide-react";
-import type { ElementType } from "react";
+import { useState, useRef, useEffect, type ElementType, type ChangeEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useFacultyByKerberos, useFacultyResearchSummary } from "@/lib/api/hooks/useDirectory";
@@ -13,6 +15,11 @@ import { useFacultyPatents } from "@/lib/api/hooks/useIPSearch";
 import PublicationTimeline from "@/components/PublicationTimeline";
 import PatentTimeline from "@/components/PatentTimeline";
 import { getDepartmentUrl } from "@/lib/deptUrls";
+import { useAuth } from "@/contexts/AuthContext";
+import { uploadFacultyImage, updateFacultyVisibility, type MetricVisibility } from "@/lib/api/services/directoryService";
+import { queryKeys } from "@/lib/api/hooks/queryKeys";
+
+const ALL_VISIBLE: MetricVisibility = { h_index: true, citations: true, papers: true, patents: true };
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
@@ -36,6 +43,59 @@ const FacultyProfile = () => {
     const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyByKerberos(kerberos);
     const { data: summaryData, isLoading: isSummaryLoading } = useFacultyResearchSummary(kerberos);
     const { data: patentsData, isLoading: isPatentsLoading } = useFacultyPatents(kerberos, faculty?.name ?? "");
+
+    // A faculty member may edit ONLY their own profile (their kerberos === this page's).
+    const { user } = useAuth();
+    const isOwner = !!user && user.kerberos?.toLowerCase() === kerberos;
+    const queryClient = useQueryClient();
+    const [editMode, setEditMode] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Metric-visibility toggles (owner edits these; hidden metrics are already
+    // redacted server-side, so `faculty.metricVisibility` is the source of truth).
+    const serverVis: MetricVisibility = { ...ALL_VISIBLE, ...(faculty?.metricVisibility ?? {}) };
+    const [visFlags, setVisFlags] = useState<MetricVisibility>(ALL_VISIBLE);
+    const [savingVis, setSavingVis] = useState(false);
+    useEffect(() => {
+        if (faculty?.metricVisibility) setVisFlags({ ...ALL_VISIBLE, ...faculty.metricVisibility });
+    }, [faculty?.metricVisibility]);
+
+    const handleSaveVisibility = async () => {
+        setSavingVis(true);
+        setUploadError(null);
+        try {
+            await updateFacultyVisibility(kerberos, visFlags);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
+            setEditMode(false);
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : "Failed to save visibility.");
+        } finally {
+            setSavingVis(false);
+        }
+    };
+
+    const handleImageSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ""; // let the same file be re-picked after an error
+        if (!file) return;
+        if (!file.type.startsWith("image/")) { setUploadError("Please choose an image file."); return; }
+        if (file.size > 5 * 1024 * 1024) { setUploadError("Image must be under 5 MB."); return; }
+        setUploadError(null);
+        setUploading(true);
+        try {
+            await uploadFacultyImage(kerberos, file);
+            // Refresh this profile + every directory listing so the new image
+            // appears here and in directory results at once.
+            await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
+            setEditMode(false);
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : "Upload failed.");
+        } finally {
+            setUploading(false);
+        }
+    };
 
     if (isFacultyLoading) {
         return (
@@ -132,15 +192,35 @@ const FacultyProfile = () => {
                 <div className="absolute -bottom-12 -left-12 w-72 h-72 rounded-full bg-accent/5 blur-3xl pointer-events-none" />
 
                 <div className="relative container mx-auto px-4 pt-10 pb-12">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={goBack}
-                        className="-ml-2 mb-8 text-muted-foreground hover:text-foreground group"
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-0.5" />
-                        Back
-                    </Button>
+                    <div className="flex items-center justify-between mb-8">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={goBack}
+                            className="-ml-2 text-muted-foreground hover:text-foreground group"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-0.5" />
+                            Back
+                        </Button>
+                        {isOwner && (
+                            editMode ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { setEditMode(false); setUploadError(null); }}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="w-4 h-4 mr-1.5" />
+                                    Cancel
+                                </Button>
+                            ) : (
+                                <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                                    <Pencil className="w-4 h-4 mr-1.5" />
+                                    Edit
+                                </Button>
+                            )
+                        )}
+                    </div>
 
                     <div className="flex flex-col lg:flex-row items-start gap-8">
                         <div className="flex-shrink-0">
@@ -158,12 +238,42 @@ const FacultyProfile = () => {
                                         {initials}
                                     </div>
                                 )}
+                                {isOwner && editMode && (
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={uploading}
+                                        title="Change photo"
+                                        className="absolute inset-0 z-10 rounded-3xl bg-black/45 hover:bg-black/55 flex flex-col items-center justify-center gap-1 text-white text-xs font-medium cursor-pointer transition-colors disabled:cursor-wait"
+                                    >
+                                        {uploading ? (
+                                            <Loader2 className="w-6 h-6 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Camera className="w-6 h-6" />
+                                                <span>Change photo</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
                                 {deptCode && (
                                     <Badge className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[10px] px-2.5 py-1 bg-primary text-primary-foreground border border-primary/20 shadow-lg whitespace-nowrap">
                                         {deptCode.toUpperCase()}
                                     </Badge>
                                 )}
                             </div>
+                            {isOwner && (
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleImageSelected}
+                                />
+                            )}
+                            {uploadError && (
+                                <p className="mt-3 text-xs text-destructive text-center max-w-36">{uploadError}</p>
+                            )}
                         </div>
 
                         <div className="flex-1 min-w-0 pt-1">
@@ -220,15 +330,39 @@ const FacultyProfile = () => {
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl">
-                                <BigStatCard icon={Award} label="H-Index" value={hIndex} color="primary" />
-                                <BigStatCard icon={BookOpen} label="Citations" value={citations.toLocaleString()} color="accent" />
-                                {totalPapers > 0 && (
+                                {serverVis.h_index && <BigStatCard icon={Award} label="H-Index" value={hIndex} color="primary" />}
+                                {serverVis.citations && <BigStatCard icon={BookOpen} label="Citations" value={citations.toLocaleString()} color="accent" />}
+                                {serverVis.papers && totalPapers > 0 && (
                                     <BigStatCard icon={FileText} label="Papers" value={totalPapers} color="primary" />
                                 )}
-                                {!isPatentsLoading && totalPatents > 0 && (
+                                {serverVis.patents && !isPatentsLoading && totalPatents > 0 && (
                                     <BigStatCard icon={FileBadge2} label="Patents" value={totalPatents} color="accent" />
                                 )}
                             </div>
+
+                            {isOwner && editMode && (
+                                <div className="mt-5 rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-4 max-w-md">
+                                    <p className="text-sm font-semibold mb-1">Show on your public profile</p>
+                                    <p className="text-xs text-muted-foreground mb-3">
+                                        Hidden metrics disappear everywhere (profile, directory, search) but are kept and can be shown again anytime.
+                                    </p>
+                                    <div className="space-y-2.5">
+                                        {([["h_index", "H-Index"], ["citations", "Citations"], ["papers", "Papers"], ["patents", "Patents"]] as const).map(([key, label]) => (
+                                            <div key={key} className="flex items-center justify-between">
+                                                <span className="text-sm text-muted-foreground">{label}</span>
+                                                <Switch
+                                                    checked={visFlags[key]}
+                                                    onCheckedChange={(v) => setVisFlags((f) => ({ ...f, [key]: v }))}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button size="sm" className="mt-4" onClick={handleSaveVisibility} disabled={savingVis}>
+                                        {savingVis && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+                                        Save visibility
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
