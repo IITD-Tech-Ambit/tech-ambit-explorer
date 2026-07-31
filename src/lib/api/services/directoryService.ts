@@ -45,6 +45,34 @@ export const updateFacultyVisibility = async (
     return result.metricVisibility;
 };
 
+export type FacultyProfileExtras = {
+    background: string;
+    qualifications: string[];
+    backgroundVisible: boolean;
+    qualificationsVisible: boolean;
+};
+
+/** Faculty self-service: load one's OWN Background / Qualifications for editing.
+ * Owner-only; returns the full content even when a section is hidden (unlike the
+ * public profile read, which redacts hidden sections). */
+export const getFacultyProfileExtras = (kerberos: string): Promise<FacultyProfileExtras> =>
+    unwrap<FacultyProfileExtras>(
+        apiClient.get(`/directory/faculty/${encodeURIComponent(kerberos)}/profile-extras`),
+        'Failed to load profile sections',
+    );
+
+/** Faculty self-service: save Background / Qualifications + their visibility.
+ * Owner-only. Content is kept even when hidden. Validation is enforced only when
+ * a section is shown (background >= 100 chars, >= 1 qualification). */
+export const updateFacultyProfileExtras = (
+    kerberos: string,
+    extras: { background: string; qualifications: string[]; background_visible: boolean; qualifications_visible: boolean },
+): Promise<FacultyProfileExtras> =>
+    unwrap<FacultyProfileExtras>(
+        apiClient.patch(`/directory/faculty/${encodeURIComponent(kerberos)}/profile-extras`, extras),
+        'Failed to update profile sections',
+    );
+
 export const getFaculties = (
     page: number = 1,
     limit: number = 9,

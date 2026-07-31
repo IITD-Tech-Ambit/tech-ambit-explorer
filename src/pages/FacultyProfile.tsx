@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
-    FileText, TrendingUp, FileBadge2, Pencil, Camera, X,
+    FileText, TrendingUp, FileBadge2, Pencil, Camera, X, Plus, GraduationCap,
 } from "lucide-react";
 import { useState, useRef, useEffect, type ElementType, type ChangeEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,10 +16,14 @@ import PublicationTimeline from "@/components/PublicationTimeline";
 import PatentTimeline from "@/components/PatentTimeline";
 import { getDepartmentUrl } from "@/lib/deptUrls";
 import { useAuth } from "@/contexts/AuthContext";
-import { uploadFacultyImage, updateFacultyVisibility, type MetricVisibility } from "@/lib/api/services/directoryService";
+import {
+    uploadFacultyImage, updateFacultyVisibility, getFacultyProfileExtras,
+    updateFacultyProfileExtras, type MetricVisibility, type FacultyProfileExtras,
+} from "@/lib/api/services/directoryService";
 import { queryKeys } from "@/lib/api/hooks/queryKeys";
 
 const ALL_VISIBLE: MetricVisibility = { h_index: true, citations: true, papers: true, patents: true };
+const BACKGROUND_MIN = 100;
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
@@ -61,6 +65,62 @@ const FacultyProfile = () => {
     useEffect(() => {
         if (faculty?.metricVisibility) setVisFlags({ ...ALL_VISIBLE, ...faculty.metricVisibility });
     }, [faculty?.metricVisibility]);
+
+    // Background / Qualifications editor state. The DRAFT (`extras`) is loaded from
+    // the owner-only endpoint when edit mode opens, so the owner can edit even
+    // hidden content (the public read redacts it). Display (non-edit) uses the
+    // public `faculty.*` fields instead.
+    const [extras, setExtras] = useState<FacultyProfileExtras | null>(null);
+    const [extrasLoading, setExtrasLoading] = useState(false);
+    const [savingExtras, setSavingExtras] = useState(false);
+    const [extrasError, setExtrasError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!editMode || !isOwner || extras || extrasLoading) return;
+        setExtrasLoading(true);
+        getFacultyProfileExtras(kerberos)
+            .then((e) => setExtras(e))
+            .catch((err) => setExtrasError(err instanceof Error ? err.message : "Failed to load sections."))
+            .finally(() => setExtrasLoading(false));
+    }, [editMode, isOwner, kerberos, extras, extrasLoading]);
+
+    const closeEdit = () => {
+        setEditMode(false);
+        setUploadError(null);
+        setExtrasError(null);
+        setExtras(null); // drop unsaved draft so the next open reloads server state
+    };
+
+    const handleSaveExtras = async () => {
+        if (!extras) return;
+        const background = extras.background;
+        const qualifications = extras.qualifications.map((q) => q.trim()).filter(Boolean);
+        if (extras.backgroundVisible && background.trim().length < BACKGROUND_MIN) {
+            setExtrasError(`Background must be at least ${BACKGROUND_MIN} characters to show it.`);
+            return;
+        }
+        if (extras.qualificationsVisible && qualifications.length === 0) {
+            setExtrasError("Add at least one qualification to show this section.");
+            return;
+        }
+        setSavingExtras(true);
+        setExtrasError(null);
+        try {
+            const saved = await updateFacultyProfileExtras(kerberos, {
+                background,
+                qualifications,
+                background_visible: extras.backgroundVisible,
+                qualifications_visible: extras.qualificationsVisible,
+            });
+            setExtras(saved);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
+            setEditMode(false);
+        } catch (err) {
+            setExtrasError(err instanceof Error ? err.message : "Failed to save.");
+        } finally {
+            setSavingExtras(false);
+        }
+    };
 
     const handleSaveVisibility = async () => {
         setSavingVis(true);
@@ -207,7 +267,7 @@ const FacultyProfile = () => {
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => { setEditMode(false); setUploadError(null); }}
+                                    onClick={closeEdit}
                                     className="text-muted-foreground hover:text-foreground"
                                 >
                                     <X className="w-4 h-4 mr-1.5" />
@@ -390,6 +450,20 @@ const FacultyProfile = () => {
                             </SectionCard>
                         )}
 
+                        {/* Qualifications (public display) */}
+                        {!editMode && faculty.qualificationsVisible && faculty.qualifications && faculty.qualifications.length > 0 && (
+                            <SectionCard icon={GraduationCap} title="Qualifications">
+                                <ul className="space-y-2">
+                                    {faculty.qualifications.map((q, i) => (
+                                        <li key={i} className="text-sm text-foreground/90 flex gap-2">
+                                            <span className="text-primary mt-0.5 shrink-0">•</span>
+                                            <span>{q}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </SectionCard>
+                        )}
+
                         {(scopusId || googleScholarId) && (
                             <div className="space-y-2">
                                 {scopusId && (
@@ -429,6 +503,119 @@ const FacultyProfile = () => {
                         Publications genuinely spans full width (not just visually, but in the actual
                         grid template) for the many faculty with 0 patents. */}
                     <div className="flex-1 min-w-0">
+                        {/* Background & Qualifications editor (owner, edit mode). Roomy card
+                            here rather than the cramped hero; loads full content incl. hidden. */}
+                        {isOwner && editMode && (
+                            <div className="mb-6 rounded-2xl border border-border/60 bg-card/80 backdrop-blur shadow-sm overflow-hidden">
+                                <div className="px-5 py-4 border-b border-border/50 bg-muted/20">
+                                    <h2 className="text-sm font-semibold text-foreground tracking-wide">Background &amp; Qualifications</h2>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Optional profile sections. Turn one on to show it publicly; your text is kept even while hidden.
+                                    </p>
+                                </div>
+                                <div className="p-5 space-y-6">
+                                    {extrasLoading || !extras ? (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading your sections…
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Background */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Background</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.backgroundVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, backgroundVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <textarea
+                                                    value={extras.background}
+                                                    onChange={(e) => setExtras((x) => (x ? { ...x, background: e.target.value } : x))}
+                                                    rows={5}
+                                                    placeholder="A short background / bio (at least 100 characters to show it)…"
+                                                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                />
+                                                <p className={`mt-1 text-xs ${extras.backgroundVisible && extras.background.trim().length < BACKGROUND_MIN ? "text-destructive" : "text-muted-foreground"}`}>
+                                                    {extras.background.trim().length} characters · {BACKGROUND_MIN} minimum to show
+                                                </p>
+                                            </div>
+
+                                            {/* Qualifications */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Qualifications</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.qualificationsVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, qualificationsVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {extras.qualifications.map((q, i) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <input
+                                                                value={q}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.qualifications];
+                                                                    arr[i] = e.target.value;
+                                                                    return { ...x, qualifications: arr };
+                                                                })}
+                                                                placeholder="e.g. Ph.D. in Computer Science, Stanford University (2010)"
+                                                                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                                onClick={() => setExtras((x) => (x ? { ...x, qualifications: x.qualifications.filter((_, j) => j !== i) } : x))}
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setExtras((x) => (x ? { ...x, qualifications: [...x.qualifications, ""] } : x))}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-1.5" />
+                                                        Add qualification
+                                                    </Button>
+                                                </div>
+                                                {extras.qualificationsVisible && extras.qualifications.filter((q) => q.trim()).length === 0 && (
+                                                    <p className="mt-1 text-xs text-destructive">Add at least one qualification to show this section.</p>
+                                                )}
+                                            </div>
+
+                                            {extrasError && <p className="text-sm text-destructive">{extrasError}</p>}
+                                            <Button size="sm" onClick={handleSaveExtras} disabled={savingExtras}>
+                                                {savingExtras && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+                                                Save background &amp; qualifications
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Background (public display) */}
+                        {!editMode && faculty.backgroundVisible && faculty.background && (
+                            <div className="mb-6">
+                                <SectionCard icon={User} title="Background">
+                                    <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{faculty.background}</p>
+                                </SectionCard>
+                            </div>
+                        )}
+
                         <div className={`grid grid-cols-1 gap-6 items-start ${showPatentsColumn ? "xl:grid-cols-2" : ""}`}>
                             <div className="space-y-6 min-w-0">
                                 {isSummaryLoading ? (
