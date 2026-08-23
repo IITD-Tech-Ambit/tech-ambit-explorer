@@ -46,11 +46,14 @@ export const useGroupedFaculties = (
 
 export const useDepartmentGroupsSummary = (
     category: string = 'departments',
-    options?: Omit<UseQueryOptions<GroupedDepartmentsResponse, Error>, 'queryKey' | 'queryFn'>
+    options?: Omit<UseQueryOptions<GroupedDepartmentsResponse, Error>, 'queryKey' | 'queryFn'> & {
+        includeEmeritus?: boolean;
+    }
 ): UseQueryResult<GroupedDepartmentsResponse, Error> => {
+    const includeEmeritus = options?.includeEmeritus === true;
     return useQuery<GroupedDepartmentsResponse, Error>({
-        queryKey: queryKeys.directory.groupSummary(category),
-        queryFn: () => getDepartmentGroupsSummary(category),
+        queryKey: queryKeys.directory.groupSummary(category, includeEmeritus),
+        queryFn: () => getDepartmentGroupsSummary(category, includeEmeritus),
         staleTime: 5 * 60 * 1000,
         ...options,
     });
@@ -59,11 +62,14 @@ export const useDepartmentGroupsSummary = (
 export const useDepartmentGroupFaculties = (
     category: string,
     departmentId: string,
-    options?: Omit<UseQueryOptions<DepartmentGroupFacultiesResponse, Error>, 'queryKey' | 'queryFn'>
+    options?: Omit<UseQueryOptions<DepartmentGroupFacultiesResponse, Error>, 'queryKey' | 'queryFn'> & {
+        includeEmeritus?: boolean;
+    }
 ): UseQueryResult<DepartmentGroupFacultiesResponse, Error> => {
+    const includeEmeritus = options?.includeEmeritus === true;
     return useQuery<DepartmentGroupFacultiesResponse, Error>({
-        queryKey: queryKeys.directory.groupFaculties(category, departmentId),
-        queryFn: () => getDepartmentGroupFaculties(category, departmentId),
+        queryKey: queryKeys.directory.groupFaculties(category, departmentId, includeEmeritus),
+        queryFn: () => getDepartmentGroupFaculties(category, departmentId, includeEmeritus),
         enabled: !!category && !!departmentId,
         staleTime: 5 * 60 * 1000,
         ...options,

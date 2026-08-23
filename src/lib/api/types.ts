@@ -221,6 +221,7 @@ export interface DirectoryDepartment {
     name: string;
     code: string;
     category?: string;
+    officialUrl?: string;
 }
 
 export interface DominantDomain {
@@ -244,6 +245,7 @@ export interface DirectoryFaculty {
     scopusId?: string;
     googleScholarId?: string;
     department: DirectoryDepartment | null;
+    affiliations?: DirectoryDepartment[];
     tags?: string[];
     profileImageUrl?: string | null;
     /** Which metrics the faculty has chosen to show. A hidden metric's value is

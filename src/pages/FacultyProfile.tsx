@@ -197,7 +197,10 @@ const FacultyProfile = () => {
     const deptName = dept?.name?.trim();
     const deptCode = dept?.code?.trim();
     const deptCategory = dept?.category?.trim();
-    const deptUrl = getDepartmentUrl(deptName);
+    const deptUrl = dept?.officialUrl || getDepartmentUrl(deptName);
+    const extraUnits = (faculty.affiliations || []).filter(
+        (unit) => unit?.name && unit.name !== deptName
+    );
 
     const hIndex = summaryData?.hIndex ?? faculty.hIndex ?? 0;
     const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
@@ -378,6 +381,37 @@ const FacultyProfile = () => {
                                         </div>
                                     )
                                 )}
+                                {extraUnits.map((unit) => {
+                                    const extraUrl = unit.officialUrl || getDepartmentUrl(unit.name);
+                                    return extraUrl ? (
+                                        <a
+                                            key={unit._id || unit.code}
+                                            href={extraUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm text-foreground hover:text-primary hover:border-primary/30 transition-colors"
+                                        >
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-none mb-0.5">
+                                                    Also
+                                                </p>
+                                                <p className="text-sm font-semibold leading-none">{unit.name}</p>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div
+                                            key={unit._id || unit.code}
+                                            className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm"
+                                        >
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-none mb-0.5">
+                                                    Also
+                                                </p>
+                                                <p className="text-sm font-semibold leading-none">{unit.name}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                                 {faculty.email && (
                                     <a
                                         href={`mailto:${faculty.email}`}

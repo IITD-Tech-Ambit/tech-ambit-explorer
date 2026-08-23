@@ -56,7 +56,7 @@ const collaborators: Collaborator[] = [
 
 const dean: TeamMember = {
   name: "Prof. Ashwini K Agrawal",
-  role: "Dean in Charge",
+  role: "Dean, Research and Development",
   avatar: deanAvatar,
   linkedin: "https://textile.iitd.ac.in/faculty-profile/7",
   email: "mailto:ashwini@textile.iitd.ac.in",
