@@ -26,9 +26,10 @@ export const queryKeys = {
         yearPublications: (kerberos: string, year: number) => [...queryKeys.directory.all, 'yearPubs', kerberos, year] as const,
         search: (query: string) => [...queryKeys.directory.all, 'search', query] as const,
         grouped: (category: string) => [...queryKeys.directory.all, 'grouped', category] as const,
-        groupSummary: (category: string) => [...queryKeys.directory.all, 'groupSummary', category] as const,
-        groupFaculties: (category: string, departmentId: string) =>
-            [...queryKeys.directory.all, 'groupFaculties', category, departmentId] as const,
+        groupSummary: (category: string, includeEmeritus = false) =>
+            [...queryKeys.directory.all, 'groupSummary', category, includeEmeritus] as const,
+        groupFaculties: (category: string, departmentId: string, includeEmeritus = false) =>
+            [...queryKeys.directory.all, 'groupFaculties', category, departmentId, includeEmeritus] as const,
     },
 
     taxonomy: {

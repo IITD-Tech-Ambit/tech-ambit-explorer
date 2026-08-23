@@ -84,14 +84,18 @@ export const getFaculties = (
 export const getGroupedFaculties = (category: string = 'departments'): Promise<GroupedDepartmentsResponse> =>
     unwrap(apiClient.get('/directory/grouped', { params: { category } }), 'Failed to fetch grouped faculties');
 
-export const getDepartmentGroupsSummary = (category: string = 'departments'): Promise<GroupedDepartmentsResponse> =>
-    unwrap(apiClient.get('/directory/grouped', { params: { category, summaryOnly: 'true' } }), 'Failed to fetch department groups');
+export const getDepartmentGroupsSummary = (
+    category: string = 'departments',
+    includeEmeritus: boolean = false
+): Promise<GroupedDepartmentsResponse> =>
+    unwrap(apiClient.get('/directory/grouped', { params: { category, summaryOnly: 'true', includeEmeritus } }), 'Failed to fetch department groups');
 
 export const getDepartmentGroupFaculties = (
     category: string,
-    departmentId: string
+    departmentId: string,
+    includeEmeritus: boolean = false
 ): Promise<DepartmentGroupFacultiesResponse> =>
-    unwrap(apiClient.get(`/directory/grouped/${departmentId}/faculties`, { params: { category } }), 'Failed to fetch department faculties');
+    unwrap(apiClient.get(`/directory/grouped/${departmentId}/faculties`, { params: { category, includeEmeritus } }), 'Failed to fetch department faculties');
 
 export const getFacultyById = (id: string): Promise<DirectoryFaculty> =>
     unwrap(apiClient.get(`/directory/${id}`), 'Failed to fetch faculty');

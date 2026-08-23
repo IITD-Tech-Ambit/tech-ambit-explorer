@@ -17,6 +17,7 @@ const DEPT_HODS: Record<string, string> = {
     "Chemical Engineering":                        "Anurag S. Rathore",
     "Chemistry Department":                        "S. Nagendran",
     "Civil Engineering":                           "Vasant Matsagar",
+    "Department of Civil & Environmental Engineering": "Vasant Matsagar",
     "Computer Science & Engineering":              "Naveen Garg",
     "Department of Design":                        "Sumer Singh",
     "Department of Energy Science & Engineering":  "Ramesh Narayanan",
@@ -144,7 +145,7 @@ const DepartmentGroupAccordionItem = ({
         enabled: isOpen,
     });
 
-    const deptUrl = DEPT_URLS[deptGroup.department.name];
+    const deptUrl = deptGroup.department.officialUrl || DEPT_URLS[deptGroup.department.name];
     const hodName = DEPT_HODS[deptGroup.department.name];
     const headLabel = category === "schools" || category === "centres" ? "Head" : "HOD";
 

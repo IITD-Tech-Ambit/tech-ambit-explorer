@@ -107,6 +107,11 @@ const FacultyCard = ({
                                 <p className="text-sm text-muted-foreground line-clamp-1">
                                     {faculty.department?.name || "Faculty"}
                                 </p>
+                                {faculty.affiliations && faculty.affiliations.length > 0 && (
+                                    <p className="text-xs text-muted-foreground/80 line-clamp-1">
+                                        Also: {faculty.affiliations.map((u) => u.name).filter(Boolean).join(", ")}
+                                    </p>
+                                )}
                             </div>
                             <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">
                                 <span className="hidden sm:inline">View</span>
