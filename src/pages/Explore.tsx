@@ -17,6 +17,7 @@ import {
 import { ExploreDocumentModal } from "@/components/explore/ExploreDocumentModal";
 import { ExplorePaperList } from "@/components/explore/ExplorePaperList";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
+import { SearchModeSwitch, SEARCH_MODE_LABEL } from "@/components/explore/SearchModeSwitch";
 import { useExploreSearchState } from "@/hooks/explore/useExploreSearchState";
 import { useExplorePeople } from "@/hooks/explore/useExplorePeople";
 import { useExploreResults } from "@/hooks/explore/useExploreResults";
@@ -156,30 +157,7 @@ const Explore = () => {
 
               
               <div className="flex items-center shrink-0 w-full sm:w-auto">
-                <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center w-full sm:w-auto">
-                  <button
-                    onClick={() => changeMode('basic')}
-                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      searchMode === 'basic'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="BM25 Keyword matching only"
-                  >
-                    Basic
-                  </button>
-                  <button
-                    onClick={() => changeMode('advanced')}
-                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      searchMode === 'advanced'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Hybrid Keyword + AI Semantic matching"
-                  >
-                    Advanced
-                  </button>
-                </div>
+                <SearchModeSwitch mode={searchMode} onChange={changeMode} />
               </div>
 
               
@@ -439,7 +417,7 @@ const Explore = () => {
             <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
             {searchMode === 'basic' && (
               <>
-                <p className="text-sm text-muted-foreground mt-1">Basic mode only matches exact keywords — Advanced mode also understands meaning and related terms.</p>
+                <p className="text-sm text-muted-foreground mt-1">Exact only matches the words you typed — Nearest also finds related work that uses different wording.</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -447,7 +425,7 @@ const Explore = () => {
                   onClick={() => changeMode('advanced')}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  Try Advanced mode
+                  Try Nearest
                 </Button>
               </>
             )}
@@ -609,9 +587,9 @@ const Explore = () => {
                   <div className="flex-1">
                     <p className="text-sm font-medium text-foreground">
                       {refinementChain.length > 1 ? (
-                        <>Showing <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                        <>Showing <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({SEARCH_MODE_LABEL[searchMode]})</span></>
                       ) : (
-                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">({searchMode} mode)</span></>
+                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s works <span className="text-muted-foreground ml-1">({SEARCH_MODE_LABEL[searchMode]})</span></>
                       )}
                     </p>
                     {authorScopedData && (
