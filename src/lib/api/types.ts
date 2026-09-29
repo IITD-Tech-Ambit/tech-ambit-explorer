@@ -396,6 +396,7 @@ export interface FacultyForQueryDepartment {
     faculty: {
         name: string;
         author_id: string;
+        kerberos?: string | null;
         paper_count: number;
         citation_count: number;
     }[];
