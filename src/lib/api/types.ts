@@ -120,9 +120,9 @@ export interface SearchPagination {
     per_page: number;
     // True full count of matching papers (track_total_hits) — the headline figure.
     total: number;
-    // Number of top candidates cross-encoder reranked (transparency only). Pages within this
-    // window are reranked; deeper pages are paginated in raw hybrid-score order. This does NOT
-    // bound navigation.
+    // Number of top candidates the cross-encoder actually reranked (0 if this page was
+    // supposed to be reranked and the call failed). Pages within this window are reranked;
+    // deeper pages are paginated in raw hybrid-score order. This does NOT bound navigation.
     ranked_window?: number;
     // Derived from the true `total` (so the page count agrees with the headline), clamped only
     // to the deepest page servable within OpenSearch's max_result_window.
@@ -155,6 +155,7 @@ export interface SearchResponse {
     };
     message?: string;
     fuzzy_fallback?: boolean;
+    reranked?: boolean;
     cacheHit?: boolean;
 }
 
@@ -547,6 +548,7 @@ export interface IPSearchResponse {
     suggestions?: string[];
     fuzzy_fallback?: boolean;
     message?: string;
+    reranked?: boolean;
     meta?: {
         took_ms: number;
         cache_hit: boolean;
