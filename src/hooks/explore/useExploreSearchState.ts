@@ -13,7 +13,7 @@ import { useSearchHistory } from "@/hooks/use-search-history";
 import type { SearchSuggestionsHandle } from "@/components/SearchSuggestions";
 
 export type SearchInField = "title" | "abstract" | "author" | "subject_area" | "field";
-export type SelectedAuthor = { name: string; author_id: string };
+export type SelectedAuthor = { name: string; author_id: string; kerberos?: string | null };
 
 /**
  * URL + refinement chain + search/filter state for Explore.

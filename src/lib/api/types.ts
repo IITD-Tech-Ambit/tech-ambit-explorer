@@ -262,6 +262,29 @@ export interface DirectoryFaculty {
     qualifications?: string[] | null;
     backgroundVisible?: boolean;
     qualificationsVisible?: boolean;
+    /** Awards & Honors — null when the faculty has hidden the section. */
+    awards?: string[] | null;
+    awardsVisible?: boolean;
+    /** Faculty-added research areas. Shown alongside dominant_domains but NOT
+     * clickable (they don't map to a taxonomy domain slug). Always present. */
+    customResearchAreas?: string[];
+    /** Extra emails listed alongside the primary (kerberos) email. */
+    additionalEmails?: string[];
+    /** Contact number / office address — null when hidden. */
+    phone?: string | null;
+    phoneVisible?: boolean;
+    officeAddress?: string | null;
+    officeAddressVisible?: boolean;
+    /** Faculty-labelled external links — null when the faculty has hidden the
+     * section; the *Visible flag says whether it's shown. */
+    externalLinks?: ExternalLink[] | null;
+    externalLinksVisible?: boolean;
+}
+
+/** A faculty-defined link: free-text label + absolute http(s) URL. */
+export interface ExternalLink {
+    label: string;
+    url: string;
 }
 
 export interface DirectoryPagination {
@@ -397,6 +420,7 @@ export interface FacultyForQueryDepartment {
     faculty: {
         name: string;
         author_id: string;
+        kerberos?: string | null;
         paper_count: number;
         citation_count: number;
     }[];

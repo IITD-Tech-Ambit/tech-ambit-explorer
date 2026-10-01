@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
 import type { SelectedAuthor } from "./useExploreSearchState";
 
@@ -15,7 +16,7 @@ type UseExplorePeopleArgs = {
         total_matching_papers: number;
         departments: Array<{
           name: string;
-          faculty: Array<{ author_id: string; name: string; paper_count: number; citation_count?: number }>;
+          faculty: Array<{ author_id: string; kerberos?: string | null; name: string; paper_count: number; citation_count?: number }>;
         }>;
       }
     | undefined;
@@ -131,25 +132,39 @@ export function useExplorePeople({
 
   const isDeptExpanded = (dept: string) => expandedDepts[dept] !== false;
 
-  const openAggregatedFacultyProfile = async (scopusAuthorId: string, _fallbackName?: string) => {
+  // The tab must be opened synchronously inside the click; opening it after
+  // the await gets it blocked as a popup.
+  const openFacultyTabByScopus = useCallback(async (scopusAuthorId: string) => {
+    const tab = window.open("", "_blank");
     try {
       const full = await getFacultyByScopusId(scopusAuthorId);
       const k = kerberosFromEmail(full.email);
-      if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
+      if (!k) throw new Error("Faculty has no kerberos");
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = `/faculty/${k}`;
+      } else {
+        window.location.assign(`/faculty/${k}`);
+      }
     } catch {
-      /* ignore */
-    }
-  };
-
-  const handleAuthorClickByScopus = useCallback(async (scopusAuthorId: string, _authorName: string) => {
-    try {
-      const full = await getFacultyByScopusId(scopusAuthorId);
-      const k = kerberosFromEmail(full.email);
-      if (k) window.open(`/faculty/${k}`, "_blank", "noopener");
-    } catch {
-      /* ignore */
+      tab?.close();
+      toast.error("Faculty profile not found");
     }
   }, []);
+
+  // Sidebar author_id is the Faculty expert_id, not a Scopus id, so prefer kerberos.
+  const openAggregatedFacultyProfile = (author: { author_id: string; kerberos?: string | null }) => {
+    if (author.kerberos) {
+      window.open(`/faculty/${author.kerberos}`, "_blank", "noopener");
+      return;
+    }
+    void openFacultyTabByScopus(author.author_id);
+  };
+
+  const handleAuthorClickByScopus = useCallback(
+    (scopusAuthorId: string, _authorName: string) => openFacultyTabByScopus(scopusAuthorId),
+    [openFacultyTabByScopus],
+  );
 
   return {
     PEOPLE_PER_PAGE,
