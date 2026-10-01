@@ -18,6 +18,7 @@ import { ExploreDocumentModal } from "@/components/explore/ExploreDocumentModal"
 import { ExplorePaperList } from "@/components/explore/ExplorePaperList";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { SearchModeSwitch, SEARCH_MODE_LABEL } from "@/components/explore/SearchModeSwitch";
+import { NestedSearchHint } from "@/components/explore/NestedSearchHints";
 import { useExploreSearchState } from "@/hooks/explore/useExploreSearchState";
 import { useExplorePeople } from "@/hooks/explore/useExplorePeople";
 import { useExploreResults } from "@/hooks/explore/useExploreResults";
@@ -77,7 +78,7 @@ const Explore = () => {
       
       <section className="gradient-subtle pt-[4.75rem] sm:pt-20 pb-6 sm:pb-10 section-bg">
         <div className="container mx-auto px-4">
-          <div className="-mt-1 sm:-mt-2 mb-1.5 sm:mb-2">
+          <div className="-mt-1 sm:-mt-2 mb-4 sm:mb-6">
             <ExploreModeSwitch active="papers" />
           </div>
 
@@ -229,7 +230,10 @@ const Explore = () => {
               </div>
             </div>
 
-            
+            {!selectedAuthor && (
+              <NestedSearchHint currentTerm={hasSearched ? refinementChain[refinementChain.length - 1] : undefined} />
+            )}
+
             {!hasSearched && searchHistory.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
@@ -471,7 +475,7 @@ const Explore = () => {
                       setSelectedAuthor(null);
                       setAuthorScopedPage(1);
                     }}
-                    onViewProfile={() => void handleAuthorClickByScopus(selectedAuthor.author_id, selectedAuthor.name)}
+                    onViewProfile={() => openAggregatedFacultyProfile(selectedAuthor)}
                   />
                 </PeopleListContainer>
               </div>
@@ -539,10 +543,10 @@ const Explore = () => {
                               paperCount={refinementChain.length > 1 ? undefined : faculty.paper_count}
                               isSelected={isSelected}
                               onSelect={() => {
-                                setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id });
+                                setSelectedAuthor(isSelected ? null : { name: faculty.name, author_id: faculty.author_id, kerberos: faculty.kerberos });
                                 setAuthorScopedPage(1);
                               }}
-                              onViewProfile={() => void openAggregatedFacultyProfile(faculty.author_id, faculty.name)}
+                              onViewProfile={() => openAggregatedFacultyProfile(faculty)}
                             />
                           );
                         })}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
     User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
     FileText, TrendingUp, FileBadge2, Pencil, Camera, X, Plus, GraduationCap,
+    Trophy, Phone, MapPin, Link2,
 } from "lucide-react";
 import { useState, useRef, useEffect, type ElementType, type ChangeEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,6 +28,10 @@ const BACKGROUND_MIN = 100;
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
+
+// The server validates + stores only absolute http(s) links; this is a
+// defence-in-depth guard so a bad value can never become a javascript: href.
+const isHttpUrl = (url: string) => /^https?:\/\//i.test(url);
 
 const FacultyProfile = () => {
     const { kerberos: urlKerberos } = useParams<{ kerberos: string }>();
@@ -61,7 +66,6 @@ const FacultyProfile = () => {
     // redacted server-side, so `faculty.metricVisibility` is the source of truth).
     const serverVis: MetricVisibility = { ...ALL_VISIBLE, ...(faculty?.metricVisibility ?? {}) };
     const [visFlags, setVisFlags] = useState<MetricVisibility>(ALL_VISIBLE);
-    const [savingVis, setSavingVis] = useState(false);
     useEffect(() => {
         if (faculty?.metricVisibility) setVisFlags({ ...ALL_VISIBLE, ...faculty.metricVisibility });
     }, [faculty?.metricVisibility]);
@@ -76,25 +80,45 @@ const FacultyProfile = () => {
     const [extrasError, setExtrasError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!editMode || !isOwner || extras || extrasLoading) return;
+        // Don't refetch after a failure (extrasError) — that would loop; closeEdit
+        // clears the error so reopening the editor retries once.
+        if (!editMode || !isOwner || extras || extrasLoading || extrasError) return;
         setExtrasLoading(true);
         getFacultyProfileExtras(kerberos)
             .then((e) => setExtras(e))
             .catch((err) => setExtrasError(err instanceof Error ? err.message : "Failed to load sections."))
             .finally(() => setExtrasLoading(false));
-    }, [editMode, isOwner, kerberos, extras, extrasLoading]);
+    }, [editMode, isOwner, kerberos, extras, extrasLoading, extrasError]);
 
     const closeEdit = () => {
         setEditMode(false);
         setUploadError(null);
         setExtrasError(null);
         setExtras(null); // drop unsaved draft so the next open reloads server state
+        setVisFlags(serverVis); // ...and unsaved metric toggles, too
     };
 
-    const handleSaveExtras = async () => {
+    // Metric toggles are saved by the same "Save changes" button as the sections.
+    const visChanged = (Object.keys(visFlags) as (keyof MetricVisibility)[]).some(
+        (k) => visFlags[k] !== serverVis[k],
+    );
+
+    const handleSave = async () => {
         if (!extras) return;
         const background = extras.background;
         const qualifications = extras.qualifications.map((q) => q.trim()).filter(Boolean);
+        const awards = extras.awards.map((a) => a.trim()).filter(Boolean);
+        const customResearchAreas = extras.customResearchAreas.map((a) => a.trim()).filter(Boolean);
+        const additionalEmails = extras.additionalEmails.map((e) => e.trim()).filter(Boolean);
+        const phone = extras.phone.trim();
+        const officeAddress = extras.officeAddress.trim();
+        // Blank rows (no URL) are simply dropped; the server validates the rest.
+        const externalLinks = extras.externalLinks
+            .map((l) => ({ label: l.label.trim(), url: l.url.trim() }))
+            .filter((l) => l.url);
+
+        // Mirror the backend "only enforce when shown" validation so the owner
+        // gets an inline message instead of a round-trip 400.
         if (extras.backgroundVisible && background.trim().length < BACKGROUND_MIN) {
             setExtrasError(`Background must be at least ${BACKGROUND_MIN} characters to show it.`);
             return;
@@ -103,36 +127,59 @@ const FacultyProfile = () => {
             setExtrasError("Add at least one qualification to show this section.");
             return;
         }
+        if (extras.awardsVisible && awards.length === 0) {
+            setExtrasError("Add at least one award to show this section.");
+            return;
+        }
+        if (extras.phoneVisible && !phone) {
+            setExtrasError("Add a contact number to show it.");
+            return;
+        }
+        if (extras.officeAddressVisible && !officeAddress) {
+            setExtrasError("Add an office address to show it.");
+            return;
+        }
+        if (extras.externalLinksVisible && externalLinks.length === 0) {
+            setExtrasError("Add at least one link to show this section.");
+            return;
+        }
         setSavingExtras(true);
         setExtrasError(null);
+        let sectionsSaved = false;
         try {
             const saved = await updateFacultyProfileExtras(kerberos, {
                 background,
                 qualifications,
                 background_visible: extras.backgroundVisible,
                 qualifications_visible: extras.qualificationsVisible,
+                awards,
+                awards_visible: extras.awardsVisible,
+                custom_research_areas: customResearchAreas,
+                additional_emails: additionalEmails,
+                phone,
+                phone_visible: extras.phoneVisible,
+                office_address: officeAddress,
+                office_address_visible: extras.officeAddressVisible,
+                external_links: externalLinks,
+                external_links_visible: extras.externalLinksVisible,
             });
             setExtras(saved);
+            sectionsSaved = true;
+            if (visChanged) await updateFacultyVisibility(kerberos, visFlags);
             await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
             setEditMode(false);
         } catch (err) {
-            setExtrasError(err instanceof Error ? err.message : "Failed to save.");
+            const msg = err instanceof Error ? err.message : "Failed to save.";
+            if (sectionsSaved) {
+                // Sections went through but the metric toggles didn't: refresh what did
+                // save and say so, rather than implying nothing was saved.
+                await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
+                setExtrasError(`Your profile details were saved, but the metric visibility was not: ${msg}`);
+            } else {
+                setExtrasError(msg);
+            }
         } finally {
             setSavingExtras(false);
-        }
-    };
-
-    const handleSaveVisibility = async () => {
-        setSavingVis(true);
-        setUploadError(null);
-        try {
-            await updateFacultyVisibility(kerberos, visFlags);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
-            setEditMode(false);
-        } catch (err) {
-            setUploadError(err instanceof Error ? err.message : "Failed to save visibility.");
-        } finally {
-            setSavingVis(false);
         }
     };
 
@@ -208,6 +255,10 @@ const FacultyProfile = () => {
 
     const scopusId = summaryData?.scopusId || faculty.scopusId;
     const googleScholarId = faculty.googleScholarId;
+
+    // Faculty-labelled external links. The server returns null while the section
+    // is hidden, so an empty list here means "nothing to show".
+    const externalLinks = (faculty.externalLinks ?? []).filter((l) => isHttpUrl(l.url));
     const patents = patentsData?.results ?? [];
     const totalPatents = patentsData?.pagination?.total ?? 0;
     // While the patents fetch is still in flight we don't yet know whether there'll be a second
@@ -421,6 +472,16 @@ const FacultyProfile = () => {
                                         {faculty.email}
                                     </a>
                                 )}
+                                {faculty.additionalEmails?.map((em) => (
+                                    <a
+                                        key={em}
+                                        href={`mailto:${em}`}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-background/70 backdrop-blur border border-border/60 px-3 py-2 shadow-sm text-sm text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors"
+                                    >
+                                        <Mail className="w-3.5 h-3.5" />
+                                        {em}
+                                    </a>
+                                ))}
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl">
@@ -438,7 +499,7 @@ const FacultyProfile = () => {
                                 <div className="mt-5 rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-4 max-w-md">
                                     <p className="text-sm font-semibold mb-1">Show on your public profile</p>
                                     <p className="text-xs text-muted-foreground mb-3">
-                                        Hidden metrics disappear everywhere (profile, directory, search) but are kept and can be shown again anytime.
+                                        Hidden metrics disappear everywhere (profile, directory, search) but are kept and can be shown again anytime. Applied when you press Save changes.
                                     </p>
                                     <div className="space-y-2.5">
                                         {([["h_index", "H-Index"], ["citations", "Citations"], ["papers", "Papers"], ["patents", "Patents"]] as const).map(([key, label]) => (
@@ -451,10 +512,6 @@ const FacultyProfile = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <Button size="sm" className="mt-4" onClick={handleSaveVisibility} disabled={savingVis}>
-                                        {savingVis && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
-                                        Save visibility
-                                    </Button>
                                 </div>
                             )}
                         </div>
@@ -468,10 +525,11 @@ const FacultyProfile = () => {
 
                     {/* Left Sidebar — a slim fixed-width rail on lg+ so the timelines get most of the width */}
                     <div className="lg:w-72 lg:flex-shrink-0 space-y-6">
-                        {faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
+                        {((faculty.dominant_domains && faculty.dominant_domains.length > 0) ||
+                            (faculty.customResearchAreas && faculty.customResearchAreas.length > 0)) && (
                             <SectionCard icon={TrendingUp} title="Research Areas">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {faculty.dominant_domains.map((area) => (
+                                    {faculty.dominant_domains?.map((area) => (
                                         <Link
                                             key={area.slug}
                                             to={`/research-areas?domain=${encodeURIComponent(area.slug)}&experts=1`}
@@ -479,6 +537,16 @@ const FacultyProfile = () => {
                                         >
                                             {area.name}
                                         </Link>
+                                    ))}
+                                    {/* Faculty-added areas: same look as the linked ones above, but plain
+                                        text — not clickable and no hover effect (no taxonomy slug). */}
+                                    {faculty.customResearchAreas?.map((area, i) => (
+                                        <span
+                                            key={`custom-${i}`}
+                                            className="text-[11px] px-2.5 py-1 rounded-lg bg-primary/8 text-primary border border-primary/15 cursor-default"
+                                        >
+                                            {area}
+                                        </span>
                                     ))}
                                 </div>
                             </SectionCard>
@@ -498,7 +566,41 @@ const FacultyProfile = () => {
                             </SectionCard>
                         )}
 
-                        {(scopusId || googleScholarId) && (
+                        {/* Awards & Honors (public display) */}
+                        {!editMode && faculty.awardsVisible && faculty.awards && faculty.awards.length > 0 && (
+                            <SectionCard icon={Trophy} title="Awards & Honors">
+                                <ul className="space-y-2">
+                                    {faculty.awards.map((a, i) => (
+                                        <li key={i} className="text-sm text-foreground/90 flex gap-2">
+                                            <span className="text-primary mt-0.5 shrink-0">•</span>
+                                            <span>{a}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </SectionCard>
+                        )}
+
+                        {/* Contact (public display) — phone / office are null unless shown */}
+                        {!editMode && (faculty.phone || faculty.officeAddress) && (
+                            <SectionCard icon={Phone} title="Contact">
+                                <div className="space-y-3 text-sm">
+                                    {faculty.phone && (
+                                        <a href={`tel:${faculty.phone.replace(/\s+/g, "")}`} className="flex items-center gap-2 text-foreground/90 hover:text-primary transition-colors">
+                                            <Phone className="w-3.5 h-3.5 shrink-0 text-primary" />
+                                            <span>{faculty.phone}</span>
+                                        </a>
+                                    )}
+                                    {faculty.officeAddress && (
+                                        <div className="flex items-start gap-2 text-foreground/90">
+                                            <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
+                                            <span className="whitespace-pre-line">{faculty.officeAddress}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </SectionCard>
+                        )}
+
+                        {(scopusId || googleScholarId || externalLinks.length > 0) && (
                             <div className="space-y-2">
                                 {scopusId && (
                                     <a
@@ -528,6 +630,21 @@ const FacultyProfile = () => {
                                         <ExternalLink className="w-5 h-5 text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex-shrink-0" />
                                     </a>
                                 )}
+                                {externalLinks.map(({ label, url }, i) => (
+                                    <a
+                                        key={`${url}-${i}`}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-between w-full rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <Link2 className="w-4 h-4 text-primary shrink-0" />
+                                            <p className="text-sm font-semibold text-foreground truncate">{label || url}</p>
+                                        </div>
+                                        <ExternalLink className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                                    </a>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -542,16 +659,22 @@ const FacultyProfile = () => {
                         {isOwner && editMode && (
                             <div className="mb-6 rounded-2xl border border-border/60 bg-card/80 backdrop-blur shadow-sm overflow-hidden">
                                 <div className="px-5 py-4 border-b border-border/50 bg-muted/20">
-                                    <h2 className="text-sm font-semibold text-foreground tracking-wide">Background &amp; Qualifications</h2>
+                                    <h2 className="text-sm font-semibold text-foreground tracking-wide">Edit profile details</h2>
                                     <p className="text-xs text-muted-foreground mt-1">
                                         Optional profile sections. Turn one on to show it publicly; your text is kept even while hidden.
                                     </p>
                                 </div>
                                 <div className="p-5 space-y-6">
-                                    {extrasLoading || !extras ? (
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                                            <Loader2 className="w-4 h-4 animate-spin" /> Loading your sections…
-                                        </div>
+                                    {!extras ? (
+                                        extrasError && !extrasLoading ? (
+                                            <p className="text-sm text-destructive">
+                                                {extrasError} Cancel and try again.
+                                            </p>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" /> Loading your sections…
+                                            </div>
+                                        )
                                     ) : (
                                         <>
                                             {/* Background */}
@@ -630,10 +753,284 @@ const FacultyProfile = () => {
                                                 )}
                                             </div>
 
+                                            {/* Awards & Honors */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Awards &amp; Honors</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.awardsVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, awardsVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {extras.awards.map((a, i) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <input
+                                                                value={a}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.awards];
+                                                                    arr[i] = e.target.value;
+                                                                    return { ...x, awards: arr };
+                                                                })}
+                                                                placeholder="e.g. Fellow, Indian National Academy of Engineering (2021)"
+                                                                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                                onClick={() => setExtras((x) => (x ? { ...x, awards: x.awards.filter((_, j) => j !== i) } : x))}
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setExtras((x) => (x ? { ...x, awards: [...x.awards, ""] } : x))}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-1.5" />
+                                                        Add award
+                                                    </Button>
+                                                </div>
+                                                {extras.awardsVisible && extras.awards.filter((a) => a.trim()).length === 0 && (
+                                                    <p className="mt-1 text-xs text-destructive">Add at least one award to show this section.</p>
+                                                )}
+                                            </div>
+
+                                            {/* Research areas — computed ones are read-only; faculty may add extras */}
+                                            <div>
+                                                <label className="text-sm font-semibold text-foreground">Research areas</label>
+                                                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                                                    Your auto-generated areas can&apos;t be changed. Add your own below — these show as plain text (not clickable).
+                                                </p>
+                                                {faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                                        {faculty.dominant_domains.map((area) => (
+                                                            <span
+                                                                key={area.slug}
+                                                                className="text-[11px] px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border"
+                                                                title="Auto-generated — can't be edited"
+                                                            >
+                                                                {area.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <div className="space-y-2">
+                                                    {extras.customResearchAreas.map((a, i) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <input
+                                                                value={a}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.customResearchAreas];
+                                                                    arr[i] = e.target.value;
+                                                                    return { ...x, customResearchAreas: arr };
+                                                                })}
+                                                                placeholder="e.g. Process Systems Engineering"
+                                                                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                                onClick={() => setExtras((x) => (x ? { ...x, customResearchAreas: x.customResearchAreas.filter((_, j) => j !== i) } : x))}
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setExtras((x) => (x ? { ...x, customResearchAreas: [...x.customResearchAreas, ""] } : x))}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-1.5" />
+                                                        Add research area
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Emails — primary (kerberos) is read-only and can't be removed */}
+                                            <div>
+                                                <label className="text-sm font-semibold text-foreground">Emails</label>
+                                                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                                                    Your primary email can&apos;t be removed. Add more contact emails if you like.
+                                                </p>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <input
+                                                        value={extras.primaryEmail}
+                                                        disabled
+                                                        className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
+                                                    />
+                                                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold shrink-0 w-16 text-center">Primary</span>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {extras.additionalEmails.map((em, i) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <input
+                                                                type="email"
+                                                                value={em}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.additionalEmails];
+                                                                    arr[i] = e.target.value;
+                                                                    return { ...x, additionalEmails: arr };
+                                                                })}
+                                                                placeholder="e.g. name@example.com"
+                                                                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                                onClick={() => setExtras((x) => (x ? { ...x, additionalEmails: x.additionalEmails.filter((_, j) => j !== i) } : x))}
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setExtras((x) => (x ? { ...x, additionalEmails: [...x.additionalEmails, ""] } : x))}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-1.5" />
+                                                        Add email
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Contact number */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Contact number</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.phoneVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, phoneVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    value={extras.phone}
+                                                    onChange={(e) => setExtras((x) => (x ? { ...x, phone: e.target.value } : x))}
+                                                    placeholder="e.g. +91 11 2659 1234"
+                                                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                />
+                                                {extras.phoneVisible && !extras.phone.trim() && (
+                                                    <p className="mt-1 text-xs text-destructive">Add a contact number to show it.</p>
+                                                )}
+                                            </div>
+
+                                            {/* Office address */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Office address</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.officeAddressVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, officeAddressVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <textarea
+                                                    value={extras.officeAddress}
+                                                    onChange={(e) => setExtras((x) => (x ? { ...x, officeAddress: e.target.value } : x))}
+                                                    rows={2}
+                                                    placeholder="e.g. Block II, Room 123, Dept. of ..., IIT Delhi, Hauz Khas"
+                                                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                />
+                                                {extras.officeAddressVisible && !extras.officeAddress.trim() && (
+                                                    <p className="mt-1 text-xs text-destructive">Add an office address to show it.</p>
+                                                )}
+                                            </div>
+
+                                            {/* External links — faculty-labelled, with show/hide toggle */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">External links</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                        <Switch
+                                                            checked={extras.externalLinksVisible}
+                                                            onCheckedChange={(v) => setExtras((e) => (e ? { ...e, externalLinksVisible: v } : e))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mb-2">
+                                                    Add any links you like (personal site, lab, LinkedIn, ORCID…) and name each one. Shown alongside your Scopus / Google Scholar links.
+                                                </p>
+                                                <div className="space-y-2">
+                                                    {extras.externalLinks.map((link, i) => (
+                                                        <div key={i} className="flex items-center gap-2">
+                                                            <input
+                                                                value={link.label}
+                                                                maxLength={60}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.externalLinks];
+                                                                    arr[i] = { ...arr[i], label: e.target.value };
+                                                                    return { ...x, externalLinks: arr };
+                                                                })}
+                                                                placeholder="Label (e.g. My Lab)"
+                                                                className="w-2/5 min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <input
+                                                                value={link.url}
+                                                                onChange={(e) => setExtras((x) => {
+                                                                    if (!x) return x;
+                                                                    const arr = [...x.externalLinks];
+                                                                    arr[i] = { ...arr[i], url: e.target.value };
+                                                                    return { ...x, externalLinks: arr };
+                                                                })}
+                                                                placeholder="https://…"
+                                                                className="flex-1 min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                                onClick={() => setExtras((x) => (x ? { ...x, externalLinks: x.externalLinks.filter((_, j) => j !== i) } : x))}
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setExtras((x) => (x ? { ...x, externalLinks: [...x.externalLinks, { label: "", url: "" }] } : x))}
+                                                    >
+                                                        <Plus className="w-4 h-4 mr-1.5" />
+                                                        Add link
+                                                    </Button>
+                                                </div>
+                                                {extras.externalLinksVisible && extras.externalLinks.filter((l) => l.url.trim()).length === 0 && (
+                                                    <p className="mt-1 text-xs text-destructive">Add at least one link to show this section.</p>
+                                                )}
+                                            </div>
+
                                             {extrasError && <p className="text-sm text-destructive">{extrasError}</p>}
-                                            <Button size="sm" onClick={handleSaveExtras} disabled={savingExtras}>
+                                            <Button size="sm" onClick={handleSave} disabled={savingExtras}>
                                                 {savingExtras && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
-                                                Save background &amp; qualifications
+                                                Save changes
                                             </Button>
                                         </>
                                     )}

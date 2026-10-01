@@ -9,7 +9,21 @@ interface ApiEnvelope<T> {
 
 /** Unwrap the { success, data, message } envelope every endpoint here returns. */
 async function unwrap<T>(request: Promise<{ data: ApiEnvelope<T> }>, fallbackError: string): Promise<T> {
-    const { data } = await request;
+    let data: ApiEnvelope<T>;
+    try {
+        ({ data } = await request);
+    } catch (err) {
+        // The backend explains validation failures ("Add at least one award…",
+        // "…is not a valid web link…") in the response body, but axios' own message
+        // is just "Request failed with status code 400". Surface the server's
+        // reason instead. Only the message is replaced — status/response stay on
+        // the error for any caller that inspects them.
+        const serverMessage = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+        if (typeof serverMessage === 'string' && serverMessage && err instanceof Error) {
+            err.message = serverMessage;
+        }
+        throw err;
+    }
     if (!data.success) throw new Error(data.message || fallbackError);
     return data.data;
 }
@@ -45,28 +59,60 @@ export const updateFacultyVisibility = async (
     return result.metricVisibility;
 };
 
+export type ExternalLink = { label: string; url: string };
+
 export type FacultyProfileExtras = {
     background: string;
     qualifications: string[];
     backgroundVisible: boolean;
     qualificationsVisible: boolean;
+    awards: string[];
+    awardsVisible: boolean;
+    customResearchAreas: string[];
+    additionalEmails: string[];
+    phone: string;
+    phoneVisible: boolean;
+    officeAddress: string;
+    officeAddressVisible: boolean;
+    externalLinks: ExternalLink[];
+    externalLinksVisible: boolean;
+    /** Read-only: the primary (kerberos) email, shown as non-removable in the editor. */
+    primaryEmail: string;
 };
 
-/** Faculty self-service: load one's OWN Background / Qualifications for editing.
- * Owner-only; returns the full content even when a section is hidden (unlike the
- * public profile read, which redacts hidden sections). */
+/** The subset the owner can write. Mirrors the backend PATCH body (snake_case). */
+export type FacultyProfileExtrasUpdate = {
+    background: string;
+    qualifications: string[];
+    background_visible: boolean;
+    qualifications_visible: boolean;
+    awards: string[];
+    awards_visible: boolean;
+    custom_research_areas: string[];
+    additional_emails: string[];
+    phone: string;
+    phone_visible: boolean;
+    office_address: string;
+    office_address_visible: boolean;
+    external_links: ExternalLink[];
+    external_links_visible: boolean;
+};
+
+/** Faculty self-service: load one's OWN editable profile sections. Owner-only;
+ * returns the full content even when a section is hidden (unlike the public
+ * profile read, which redacts hidden sections). */
 export const getFacultyProfileExtras = (kerberos: string): Promise<FacultyProfileExtras> =>
     unwrap<FacultyProfileExtras>(
         apiClient.get(`/directory/faculty/${encodeURIComponent(kerberos)}/profile-extras`),
         'Failed to load profile sections',
     );
 
-/** Faculty self-service: save Background / Qualifications + their visibility.
+/** Faculty self-service: save the editable profile sections + their visibility.
  * Owner-only. Content is kept even when hidden. Validation is enforced only when
- * a section is shown (background >= 100 chars, >= 1 qualification). */
+ * a section is shown (e.g. background >= 100 chars, >= 1 qualification/award). */
 export const updateFacultyProfileExtras = (
     kerberos: string,
-    extras: { background: string; qualifications: string[]; background_visible: boolean; qualifications_visible: boolean },
+    extras: FacultyProfileExtrasUpdate,
 ): Promise<FacultyProfileExtras> =>
     unwrap<FacultyProfileExtras>(
         apiClient.patch(`/directory/faculty/${encodeURIComponent(kerberos)}/profile-extras`, extras),
