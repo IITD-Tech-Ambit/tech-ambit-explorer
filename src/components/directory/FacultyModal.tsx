@@ -37,6 +37,8 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
     const hIndex = summaryData?.hIndex ?? faculty.hIndex;
     const citations = summaryData?.citationCount ?? faculty.citationCount;
     const totalPapers = summaryData?.stats?.totalPapers ?? 0;
+    const primaryScopusId = summaryData?.scopusId || faculty.scopusId;
+    const scopusIds = primaryScopusId ? [primaryScopusId] : [];
 
     const handleNavigateAuthor = async (authorId: string, matchedProfile: string | null, _name: string) => {
         if (matchedProfile) {
@@ -182,17 +184,23 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
                                     />
                                 )}
 
-                                {(summaryData?.scopusId || faculty.scopusId) && (
-                                    <div className="pt-4 border-t">
-                                        <a
-                                            href={`https://www.scopus.com/authid/detail.uri?authorId=${summaryData?.scopusId || faculty.scopusId}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                            View Scopus Profile
-                                        </a>
+                                {scopusIds.length > 0 && (
+                                    <div className="pt-4 border-t flex flex-col gap-2">
+                                        {scopusIds.map((id) => (
+                                            <a
+                                                key={id}
+                                                href={`https://www.scopus.com/authid/detail.uri?authorId=${id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                                            >
+                                                <ExternalLink className="w-4 h-4" />
+                                                View Scopus Profile
+                                                {scopusIds.length > 1 && (
+                                                    <span className="text-xs text-muted-foreground tabular-nums">({id})</span>
+                                                )}
+                                            </a>
+                                        ))}
                                     </div>
                                 )}
                             </>

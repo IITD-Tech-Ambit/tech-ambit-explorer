@@ -5,6 +5,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
+import { NestedSearchHint } from "@/components/explore/NestedSearchHints";
 import { SearchModeSwitch } from "@/components/explore/SearchModeSwitch";
 import { IPPaperList } from "@/components/exploreIP/IPPaperList";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
@@ -162,6 +163,10 @@ const ExploreIP = () => {
                 )}
               </div>
             </div>
+
+            {!isBrowse && (
+              <NestedSearchHint currentTerm={hasSearched ? refinementChain[refinementChain.length - 1] : undefined} />
+            )}
 
             {hasSearched && isBrowse && (
               <div className="flex flex-wrap items-center gap-1.5 w-full animate-fade-in">

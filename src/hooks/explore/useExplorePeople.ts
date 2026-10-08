@@ -1,13 +1,37 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getFacultyByScopusId } from "@/lib/api/services/directoryService";
+import { getFacultyByScopusId, searchFaculties } from "@/lib/api/services/directoryService";
+import { normalizeName } from "@/components/explore/exploreAuthorUtils";
 import type { SelectedAuthor } from "./useExploreSearchState";
 
 const PEOPLE_PER_PAGE = 20;
 
 const kerberosFromEmail = (email?: string) =>
   email ? email.split("@")[0]?.toLowerCase() : "";
+
+async function kerberosByScopusId(scopusAuthorId: string): Promise<string | null> {
+  try {
+    const faculty = await getFacultyByScopusId(scopusAuthorId);
+    return kerberosFromEmail(faculty.email) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function kerberosByName(name: string, department?: string): Promise<string | null> {
+  const target = normalizeName(name);
+  if (target.length < 2) return null;
+  try {
+    const { faculties } = await searchFaculties(name, 20);
+    const sameName = faculties.filter((f) => normalizeName(f.name) === target);
+    const sameDept = department ? sameName.filter((f) => f.department?.name === department) : [];
+    const pick = sameDept.length === 1 ? sameDept[0] : sameName.length === 1 ? sameName[0] : null;
+    return pick ? kerberosFromEmail(pick.email) || null : null;
+  } catch {
+    return null;
+  }
+}
 
 type UseExplorePeopleArgs = {
   allFacultyData:
@@ -134,12 +158,11 @@ export function useExplorePeople({
 
   // The tab must be opened synchronously inside the click; opening it after
   // the await gets it blocked as a popup.
-  const openFacultyTabByScopus = useCallback(async (scopusAuthorId: string) => {
+  const openFacultyTab = useCallback(async (resolveKerberos: () => Promise<string | null>) => {
     const tab = window.open("", "_blank");
     try {
-      const full = await getFacultyByScopusId(scopusAuthorId);
-      const k = kerberosFromEmail(full.email);
-      if (!k) throw new Error("Faculty has no kerberos");
+      const k = await resolveKerberos();
+      if (!k) throw new Error("Faculty profile not found");
       if (tab) {
         tab.opener = null;
         tab.location.href = `/faculty/${k}`;
@@ -152,18 +175,29 @@ export function useExplorePeople({
     }
   }, []);
 
-  // Sidebar author_id is the Faculty expert_id, not a Scopus id, so prefer kerberos.
-  const openAggregatedFacultyProfile = (author: { author_id: string; kerberos?: string | null }) => {
+  // People sidebar author_id is the Faculty expert_id (not a Scopus id) and no API
+  // resolves expert_id, so look the person up by name, disambiguated by department.
+  const openAggregatedFacultyProfile = (author: {
+    author_id: string;
+    name: string;
+    department?: string;
+    kerberos?: string | null;
+  }) => {
     if (author.kerberos) {
       window.open(`/faculty/${author.kerberos}`, "_blank", "noopener");
       return;
     }
-    void openFacultyTabByScopus(author.author_id);
+    void openFacultyTab(async () =>
+      (await kerberosByName(author.name, author.department)) ?? (await kerberosByScopusId(author.author_id)),
+    );
   };
 
   const handleAuthorClickByScopus = useCallback(
-    (scopusAuthorId: string, _authorName: string) => openFacultyTabByScopus(scopusAuthorId),
-    [openFacultyTabByScopus],
+    (scopusAuthorId: string, authorName: string) =>
+      openFacultyTab(async () =>
+        (await kerberosByScopusId(scopusAuthorId)) ?? (await kerberosByName(authorName)),
+      ),
+    [openFacultyTab],
   );
 
   return {

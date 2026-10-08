@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, X } from "lucide-react";
-import type { SearchDocument } from "@/lib/api";
+import { useSearchDocument, type SearchDocument } from "@/lib/api";
 import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
 import { getPaperExternalUrl } from "@/lib/paperLink";
+import { getSourceTitle, getSourceTypeLabel } from "@/lib/paperSource";
 import { getExploreModalAuthorRows } from "@/components/explore/exploreAuthorUtils";
 
 type Props = {
@@ -25,6 +26,14 @@ export function ExploreDocumentModal({
 }: Props) {
   const paperLink = getPaperExternalUrl(selectedDocument);
   const authorRows = getExploreModalAuthorRows(selectedDocument.authors, selectedAuthor);
+  const { data: fullDocument } = useSearchDocument(selectedDocument._id, { enabled: !selectedDocument.source });
+  const source = selectedDocument.source ?? fullDocument?.source;
+  const sourceTitle = getSourceTitle(source);
+  const sourceMeta = [
+    getSourceTypeLabel(source),
+    source?.publisher?.trim(),
+    source?.issn?.trim() ? `ISSN ${source.issn.trim()}` : "",
+  ].filter(Boolean);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,7 +98,7 @@ export function ExploreDocumentModal({
           {authorRows && authorRows.length > 0 && (
             <div onClick={(e) => e.stopPropagation()} className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Author(s)
+                Corresponding Author(s)
               </h3>
               <div className="flex flex-wrap gap-3">
                 {authorRows.map((row, idx) => (
@@ -117,6 +126,18 @@ export function ExploreDocumentModal({
                     )}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {sourceTitle && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Source Title</h3>
+              <div className="p-4 rounded-xl bg-card border border-border shadow-sm">
+                <div className="text-sm font-semibold text-foreground leading-snug">{sourceTitle}</div>
+                {sourceMeta.length > 0 && (
+                  <div className="text-xs text-muted-foreground mt-1">{sourceMeta.join(" · ")}</div>
+                )}
               </div>
             </div>
           )}

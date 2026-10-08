@@ -415,7 +415,7 @@ const Contributors = () => {
             <div className="flex flex-wrap items-center justify-center gap-8 mt-12">
               {[
                 { label: "Team Members", value: `${3 + phaseContributors.length}+` },
-                { label: "Research Areas", value: "10+" },
+                { label: "Research Areas", value: "9+" },
                 { label: "Publications", value: "50+" },
               ].map((stat) => (
                 <div key={stat.label} className="text-center">
