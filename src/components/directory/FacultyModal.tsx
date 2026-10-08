@@ -38,7 +38,7 @@ const FacultyModal = ({ faculty, open, onClose }: FacultyModalProps) => {
     const citations = summaryData?.citationCount ?? faculty.citationCount;
     const totalPapers = summaryData?.stats?.totalPapers ?? 0;
     const primaryScopusId = summaryData?.scopusId || faculty.scopusId;
-    const scopusIds = primaryScopusId ? [primaryScopusId] : [];
+    const scopusIds = faculty.scopusIds?.length ? faculty.scopusIds : primaryScopusId ? [primaryScopusId] : [];
 
     const handleNavigateAuthor = async (authorId: string, matchedProfile: string | null, _name: string) => {
         if (matchedProfile) {
