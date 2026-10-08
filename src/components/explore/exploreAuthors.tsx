@@ -21,7 +21,7 @@ export function ExploreCardAuthorsLine({
       onKeyDown={(e) => e.stopPropagation()}
       role="presentation"
     >
-      <span className="font-semibold text-primary/80 mr-1">Corresponding Authors:</span>
+      <span className="font-semibold text-primary/80 mr-1">Author(s):</span>
       {shown.map((entry, i) => (
         <span key={`${entry.author_id}-${i}`}>
           {i > 0 && ", "}

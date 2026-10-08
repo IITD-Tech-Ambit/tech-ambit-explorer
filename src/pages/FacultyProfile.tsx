@@ -254,7 +254,7 @@ const FacultyProfile = () => {
     const totalPapers = summaryData?.stats?.totalPapers ?? 0;
 
     const primaryScopusId = summaryData?.scopusId || faculty.scopusId;
-    const scopusIds = primaryScopusId ? [primaryScopusId] : [];
+    const scopusIds = faculty.scopusIds?.length ? faculty.scopusIds : primaryScopusId ? [primaryScopusId] : [];
     const googleScholarId = faculty.googleScholarId;
 
     // Faculty-labelled external links. The server returns null while the section
