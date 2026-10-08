@@ -253,7 +253,8 @@ const FacultyProfile = () => {
     const citations = summaryData?.citationCount ?? faculty.citationCount ?? 0;
     const totalPapers = summaryData?.stats?.totalPapers ?? 0;
 
-    const scopusId = summaryData?.scopusId || faculty.scopusId;
+    const primaryScopusId = summaryData?.scopusId || faculty.scopusId;
+    const scopusIds = primaryScopusId ? [primaryScopusId] : [];
     const googleScholarId = faculty.googleScholarId;
 
     // Faculty-labelled external links. The server returns null while the section
@@ -600,22 +601,26 @@ const FacultyProfile = () => {
                             </SectionCard>
                         )}
 
-                        {(scopusId || googleScholarId || externalLinks.length > 0) && (
+                        {(scopusIds.length > 0 || googleScholarId || externalLinks.length > 0) && (
                             <div className="space-y-2">
-                                {scopusId && (
+                                {scopusIds.map((id) => (
                                     <a
-                                        href={`https://www.scopus.com/authid/detail.uri?authorId=${scopusId}`}
+                                        key={id}
+                                        href={`https://www.scopus.com/authid/detail.uri?authorId=${id}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-between w-full rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
                                     >
-                                        <div>
+                                        <div className="min-w-0">
                                             <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
                                             <p className="text-sm font-semibold text-primary">View on Scopus</p>
+                                            {scopusIds.length > 1 && (
+                                                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">Author ID {id}</p>
+                                            )}
                                         </div>
                                         <ExternalLink className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
                                     </a>
-                                )}
+                                ))}
                                 {googleScholarId && (
                                     <a
                                         href={`https://scholar.google.com/citations?user=${googleScholarId}`}

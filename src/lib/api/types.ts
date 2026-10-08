@@ -107,6 +107,15 @@ export interface SearchDocument {
     document_eid?: string;
     open_search_id?: string;
     rerank_score?: number;
+    source?: PaperSource;
+}
+
+/** Publication venue from Scopus. source_type: j journal, p conference proceeding, k book series, b book, d trade journal, r report. */
+export interface PaperSource {
+    title?: string;
+    publisher?: string;
+    source_type?: string;
+    issn?: string;
 }
 
 export interface SearchFacets {
@@ -243,6 +252,8 @@ export interface DirectoryFaculty {
     dominant_domains?: DominantDomain[];
     orcId?: string;
     scopusId?: string;
+    /** Every Scopus author id on the Faculty record; scopusId is the first of these. */
+    scopusIds?: string[];
     googleScholarId?: string;
     department: DirectoryDepartment | null;
     affiliations?: DirectoryDepartment[];
@@ -315,6 +326,7 @@ export interface GroupedDepartmentFaculty {
     research_areas: string[];
     orcId?: string;
     scopusId?: string;
+    scopusIds?: string[];
     googleScholarId?: string;
     profileImageUrl?: string | null;
     designation?: string | null;
