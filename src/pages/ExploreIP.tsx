@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { NestedSearchHint } from "@/components/explore/NestedSearchHints";
+import { SearchModeSwitch } from "@/components/explore/SearchModeSwitch";
 import { IPPaperList } from "@/components/exploreIP/IPPaperList";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
 import { IPFilterPanel } from "@/components/exploreIP/IPFilterPanel";
@@ -124,26 +125,7 @@ const ExploreIP = () => {
               </div>
 
               <div className="flex items-center shrink-0 w-full sm:w-auto">
-                <div className="flex bg-muted rounded-xl p-1 shadow-sm border border-border h-14 items-center w-full sm:w-auto">
-                  <button
-                    onClick={() => changeMode("basic")}
-                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      mode === "basic" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    title="BM25 Keyword matching only"
-                  >
-                    Basic
-                  </button>
-                  <button
-                    onClick={() => changeMode("advanced")}
-                    className={`flex-1 sm:flex-none px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                      mode === "advanced" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    title="Hybrid Keyword + AI Semantic matching"
-                  >
-                    Advanced
-                  </button>
-                </div>
+                <SearchModeSwitch mode={mode} onChange={changeMode} />
               </div>
 
               <div className="relative w-full sm:w-auto">
@@ -325,7 +307,7 @@ const ExploreIP = () => {
             <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
             {mode === 'basic' && (
               <>
-                <p className="text-sm text-muted-foreground mt-1">Basic mode only matches exact keywords — Advanced mode also understands meaning and related terms.</p>
+                <p className="text-sm text-muted-foreground mt-1">Exact only matches the words you typed — Nearest also finds related work that uses different wording.</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -333,7 +315,7 @@ const ExploreIP = () => {
                   onClick={() => changeMode("advanced")}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  Try Advanced mode
+                  Try Nearest
                 </Button>
               </>
             )}
