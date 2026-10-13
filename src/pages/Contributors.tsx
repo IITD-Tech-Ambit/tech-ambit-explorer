@@ -16,6 +16,7 @@ import nabiHasanAvatar from "@/assets/contributors/nabi-hasan.png";
 import manuTrAvatar from "@/assets/contributors/manu-tr.png";
 import mohitGargAvatar from "@/assets/contributors/mohit-garg.png";
 import satbirChauhanAvatar from "@/assets/contributors/satbir-chauhan.png";
+import sunilJhaAvatar from "@/assets/contributors/sunil-jha.png";
 
 /* ───────── Data ───────── */
 
@@ -60,6 +61,14 @@ const dean: TeamMember = {
   avatar: deanAvatar,
   linkedin: "https://textile.iitd.ac.in/faculty-profile/7",
   email: "mailto:ashwini@textile.iitd.ac.in",
+};
+
+const associateDean: TeamMember = {
+  name: "Prof. Sunil Jha",
+  role: "Associate Dean, Research and Development",
+  avatar: sunilJhaAvatar,
+  linkedin: "/faculty/suniljha",
+  email: "mailto:assocdeanrnd@admin.iitd.ac.in",
 };
 
 const mentors: TeamMember[] = [
@@ -438,13 +447,12 @@ const Contributors = () => {
           <SectionHeading subtitle="Leading the vision for research excellence">
             <span className="flex items-center justify-center gap-3">
               <Award className="w-9 h-9 text-primary" />
-              Dean in Charge
+              Deans in Charge
             </span>
           </SectionHeading>
-          <div className="flex justify-center animate-slide-up">
-            <div className="w-full max-w-md">
-              <MemberCard member={dean} large />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto animate-slide-up">
+            <MemberCard member={dean} large />
+            <MemberCard member={associateDean} large />
           </div>
         </div>
       </section>
