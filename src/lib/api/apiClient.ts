@@ -24,6 +24,10 @@ export function createApiClient(baseURL: string): AxiosInstance {
 
     client.interceptors.request.use(
         (config: InternalAxiosRequestConfig) => {
+            if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+                config.headers.delete('Content-Type');
+            }
+
             if (import.meta.env.DEV) {
                 console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data);
             }
@@ -47,7 +51,7 @@ export function createApiClient(baseURL: string): AxiosInstance {
         (error: AxiosError) => {
             if (error.response) {
                 const status = error.response.status;
-                const message = (error.response.data as any)?.message || error.message;
+                const message = (error.response.data as { message?: string } | undefined)?.message || error.message;
 
                 console.error(`[API Error ${status}]`, message);
 
@@ -88,20 +92,5 @@ export const searchApiClient: AxiosInstance = createApiClient(SEARCH_API_BASE_UR
 export const kgApiClient: AxiosInstance = createApiClient(KG_BASE_URL);
 
 export const ipSearchApiClient: AxiosInstance = createApiClient(IP_SEARCH_API_BASE_URL);
-
-export const retryRequest = async <T>(
-    fn: () => Promise<T>,
-    retries: number = 3,
-    delay: number = 1000
-): Promise<T> => {
-    try {
-        return await fn();
-    } catch (error) {
-        if (retries <= 0) throw error;
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return retryRequest(fn, retries - 1, delay * 2);
-    }
-};
 
 export default apiClient;

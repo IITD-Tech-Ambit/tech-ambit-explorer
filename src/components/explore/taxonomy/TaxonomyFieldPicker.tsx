@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ErrorState";
 import { useTaxonomyThemes, useTaxonomyDomains, useTaxonomyFaculty } from "@/lib/api/hooks/useTaxonomy";
 import { rankByPaperCount, type TaxonomyNode } from "@/lib/api/services/taxonomyService";
 
@@ -91,6 +92,14 @@ const TaxonomyFieldPicker = ({
                     <FieldPill label={themeNode.name} onRemove={onClearTheme} />
                 ) : themesQuery.isLoading ? (
                     <OptionsSkeleton />
+                ) : themesQuery.isError ? (
+                    <ErrorState
+                        size="compact"
+                        error={themesQuery.error}
+                        title="Couldn't load thematic areas"
+                        onRetry={() => void themesQuery.refetch()}
+                        retrying={themesQuery.isFetching}
+                    />
                 ) : (
                     <div className="flex flex-wrap gap-3">
                         {themes?.map((t) => (
@@ -109,6 +118,14 @@ const TaxonomyFieldPicker = ({
                         <FieldPill label={domainNode.name} onRemove={onClearDomain} />
                     ) : domainsQuery.isLoading ? (
                         <OptionsSkeleton />
+                    ) : domainsQuery.isError ? (
+                        <ErrorState
+                            size="compact"
+                            error={domainsQuery.error}
+                            title="Couldn't load domains"
+                            onRetry={() => void domainsQuery.refetch()}
+                            retrying={domainsQuery.isFetching}
+                        />
                     ) : (
                         <div className="flex flex-wrap gap-3">
                             {domains?.map((d) => (

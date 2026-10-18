@@ -1,12 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2, FileText } from "lucide-react";
+import { Filter, Lightbulb, Loader2, X, ChevronDown, ChevronRight, Sparkles, Building2, FileText, Undo2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
+import { ErrorState } from "@/components/ErrorState";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
-import { NestedSearchHint } from "@/components/explore/NestedSearchHints";
-import { SearchModeSwitch } from "@/components/explore/SearchModeSwitch";
+import { HoverSlideText } from "@/components/explore/HoverSlideText";
+import { ExploreSearchField } from "@/components/explore/ExploreSearchField";
+import { SearchScopeActions } from "@/components/explore/SearchScopeActions";
+import { SearchWithinButton } from "@/components/explore/SearchWithinButton";
+import { SearchModeSwitch, SEARCH_MODE_LABEL } from "@/components/explore/SearchModeSwitch";
 import { IPPaperList } from "@/components/exploreIP/IPPaperList";
 import { IPDocumentModal } from "@/components/exploreIP/IPDocumentModal";
 import { IPFilterPanel } from "@/components/exploreIP/IPFilterPanel";
@@ -14,11 +17,14 @@ import { IPPagination } from "@/components/exploreIP/IPPagination";
 import { IPInventorsSidebar } from "@/components/exploreIP/IPInventorsSidebar";
 import { IPSearchSuggestions } from "@/components/exploreIP/IPSearchSuggestions";
 import { useIPExploreState } from "@/hooks/explore/useIPExploreState";
-import { useState } from "react";
+import { useRefineNudge } from "@/hooks/explore/useRefineNudge";
+import { useRef, useState } from "react";
 
 const EXAMPLE_IP_SEARCHES = ["microgrid", "battery storage", "solar cell", "biodegradable materials", "wireless sensor", "machine learning"];
 
 /** "Browse by department" chips: query text + exact department_name.keyword filter pin. */
+const NUDGE_MIN_RESULTS = 50;
+
 const IP_DEPARTMENT_SHORTCUTS = [
   { label: "Electrical Engineering", department: "Electrical Engineering" },
   { label: "Chemical Engineering", department: "Chemical Engineering" },
@@ -31,7 +37,7 @@ const IP_DEPARTMENT_SHORTCUTS = [
 const ExploreIP = () => {
   const {
     searchQuery, setSearchQuery, refinementChain, baseQuery, activeQuery, currentPage,
-    mode, showFilters, setShowFilters,
+    nestedSearch, setNestedSearch, mode, showFilters, setShowFilters,
     yearFrom, setYearFrom, yearTo, setYearTo,
     typeOfIp, setTypeOfIp, department, setDepartment,
     country, setCountry,
@@ -42,8 +48,50 @@ const ExploreIP = () => {
     showSuggestions, setShowSuggestions, suggestionsRef, searchBoxRef,
     suggestData, isSuggestFetching, selectInventorSuggestion, selectDocumentSuggestion,
     performSearch, startFreshSearch, startDepartmentBrowse, isBrowse, handleSearchKeyDown, goToPage, changeMode,
-    applyFilters, clearFilters, activeFilterCount, goToChainLevel, removeRefinementTerm, clearAll,
+    applyFilters, clearFilters, removeFilter, isFetching, activeFilterCount, goToChainLevel, removeRefinementTerm, clearAll,
+    searchError, retrySearch,
   } = useIPExploreState();
+  const searchRetrying = isFetching || isInventorScopedFetching;
+  const searchFailed = hasSearched && !isLoading && !searchRetrying && Boolean(searchError);
+
+  const isNesting = nestedSearch && hasSearched && !isBrowse;
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const startSearchWithin = () => {
+    setNestedSearch(true);
+    searchInputRef.current?.focus();
+  };
+
+  const scopeActions = hasSearched && !isBrowse && searchQuery.trim() ? (
+    <SearchScopeActions
+      query={searchQuery.trim()}
+      currentTerm={activeQuery}
+      resultCount={selectedInventor ? inventorScopedData?.pagination?.total : pagination?.total}
+      withinByDefault={nestedSearch}
+      allLabel="all patents"
+      onSearchAll={() => { setShowSuggestions(false); performSearch(1, false); }}
+      onSearchWithin={() => { setShowSuggestions(false); performSearch(1, true); }}
+    />
+  ) : undefined;
+
+  const nudge = useRefineNudge({
+    searchKey: JSON.stringify([refinementChain, mode, yearFrom, yearTo, typeOfIp, department, country]),
+    eligible:
+      refinementChain.length === 1 && !isBrowse && !nestedSearch && !selectedInventor && !isFetching &&
+      (pagination?.total ?? 0) >= NUDGE_MIN_RESULTS,
+    engaged: selectedDocument !== null,
+    page: currentPage,
+  });
+
+  const activeFilterChips = [
+    (yearFrom || yearTo) && {
+      key: "year" as const,
+      label: yearFrom && yearTo ? `${yearFrom} – ${yearTo}` : yearFrom ? `From ${yearFrom}` : `Until ${yearTo}`,
+    },
+    typeOfIp && { key: "typeOfIp" as const, label: typeOfIp },
+    department && !isBrowse && { key: "department" as const, label: department },
+    country && { key: "country" as const, label: country },
+  ].filter((chip): chip is { key: "year" | "typeOfIp" | "department" | "country"; label: string } => !!chip);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -75,38 +123,23 @@ const ExploreIP = () => {
           <div className="flex flex-col gap-3 items-start animate-slide-up max-w-[800px]">
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               <div className="relative flex-1 w-full" ref={searchBoxRef}>
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                  <Search className="w-5 h-5 text-foreground/60" />
-                </div>
-                <Input
-                  type="text"
-                  placeholder="Search by title, abstract, inventor, or classification..."
-                  className="pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
+                <ExploreSearchField
+                  ref={searchInputRef}
                   value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                  onChange={(v) => { setSearchQuery(v); setShowSuggestions(true); }}
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={handleSearchKeyDown}
-                  autoComplete="off"
-                  role="combobox"
-                  aria-expanded={showSuggestions}
+                  onSubmit={() => { setShowSuggestions(false); performSearch(1); }}
+                  placeholder={
+                    isNesting
+                      ? pagination ? `Narrow these ${pagination.total.toLocaleString()} results...` : "Narrow these results..."
+                      : "Search titles, inventors, or keywords"
+                  }
+                  isLoading={isLoading}
+                  expanded={showSuggestions}
+                  scopeTerm={isNesting ? activeQuery : null}
+                  onClearScope={() => setNestedSearch(false)}
                 />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
-                    aria-label="Clear input"
-                  >
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                )}
-                <Button
-                  onClick={() => { setShowSuggestions(false); performSearch(1); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  disabled={isLoading}
-                  size="icon"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                </Button>
 
                 {showSuggestions && (
                   <div className="absolute left-0 right-0 top-full mt-2 z-50">
@@ -119,6 +152,7 @@ const ExploreIP = () => {
                       onSelectDocument={selectDocumentSuggestion}
                       onSelectDepartment={(d) => { setShowSuggestions(false); startDepartmentBrowse(d.name); }}
                       onClose={() => setShowSuggestions(false)}
+                      footer={scopeActions}
                     />
                   </div>
                 )}
@@ -164,18 +198,14 @@ const ExploreIP = () => {
               </div>
             </div>
 
-            {!isBrowse && (
-              <NestedSearchHint currentTerm={hasSearched ? refinementChain[refinementChain.length - 1] : undefined} />
-            )}
-
             {hasSearched && isBrowse && (
               <div className="flex flex-wrap items-center gap-1.5 w-full animate-fade-in">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
                   Browsing:
                 </span>
-                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md text-sm font-medium shadow-sm bg-accent/60 text-accent-foreground border border-accent">
+                <span className="group/slide inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md text-sm font-medium shadow-sm bg-accent/60 text-accent-foreground border border-accent">
                   <Building2 className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                  <span className="truncate max-w-[260px]">{department || activeQuery}</span>
+                  <HoverSlideText text={department || activeQuery} className="max-w-[260px]" />
                   <button
                     type="button"
                     onClick={clearAll}
@@ -190,7 +220,8 @@ const ExploreIP = () => {
             )}
 
             {hasSearched && !isBrowse && (
-              <div className="flex flex-wrap items-center gap-1.5 w-full">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 w-full">
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
                   {refinementChain.length > 1 ? "Narrowing:" : "Searching:"}
                 </span>
@@ -201,23 +232,23 @@ const ExploreIP = () => {
                       <div key={`${term}-${i}`} className="flex items-center gap-1.5 animate-fade-in">
                         {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium shadow-sm transition-colors ${
+                          className={`group/slide inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium shadow-sm transition-colors ${
                             isNewest
                               ? "bg-primary text-primary-foreground"
                               : "bg-secondary text-secondary-foreground hover:bg-secondary/70 cursor-pointer"
                           }`}
                         >
                           {isNewest ? (
-                            <span className="truncate max-w-[220px]">{term}</span>
+                            <HoverSlideText text={term} className="max-w-[220px]" />
                           ) : (
                             <button
                               type="button"
                               onClick={() => goToChainLevel(i)}
                               title={`Back to results for "${term}"`}
                               aria-label={`Go back to step ${i + 1}: ${term}`}
-                              className="truncate max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                              className="max-w-[220px] min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                             >
-                              {term}
+                              <HoverSlideText text={term} />
                             </button>
                           )}
                           <button
@@ -244,8 +275,33 @@ const ExploreIP = () => {
                   Clear all
                 </button>
               </div>
+                {!isNesting && !searchFailed && (
+                  <SearchWithinButton onClick={startSearchWithin} hint={nudge.visible} onDismissHint={nudge.dismiss} />
+                )}
+              </div>
             )}
 
+            {activeFilterChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground mr-0.5">Active filters:</span>
+                {activeFilterChips.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary text-secondary-foreground border border-border capitalize"
+                  >
+                    {chip.label}
+                    <button
+                      type="button"
+                      onClick={() => removeFilter(chip.key)}
+                      aria-label={`Remove filter ${chip.label}`}
+                      className="hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -298,14 +354,38 @@ const ExploreIP = () => {
           </div>
         )}
 
-        {hasSearched && !isLoading && !selectedInventor && results.length === 0 && (
+        {searchFailed && (
+          <ErrorState
+            error={searchError}
+            title="Patent search is unavailable right now"
+            onRetry={() => void retrySearch()}
+            retrying={searchRetrying}
+          />
+        )}
+
+        {hasSearched && !isLoading && !searchFailed && !selectedInventor && results.length === 0 && (
           <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
             <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
               <Lightbulb className="h-7 w-7 text-muted-foreground/60" />
             </div>
             <h3 className="text-lg font-semibold mb-1.5">No Results Found</h3>
-            <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
-            {mode === 'basic' && (
+            <p className="text-sm text-muted-foreground">
+              {refinementChain.length > 1 && !isBrowse
+                ? <>Nothing in the results for "{refinementChain[refinementChain.length - 2]}" also matches "{activeQuery}".</>
+                : "Try different keywords or adjust your filters"}
+            </p>
+            {refinementChain.length > 1 && !isBrowse && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 gap-1.5"
+                onClick={() => removeRefinementTerm(refinementChain.length - 1)}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                Remove "{activeQuery}"
+              </Button>
+            )}
+            {mode === 'basic' && refinementChain.length === 1 && (
               <>
                 <p className="text-sm text-muted-foreground mt-1">Exact only matches the words you typed — Nearest also finds related work that uses different wording.</p>
                 <Button
@@ -322,7 +402,7 @@ const ExploreIP = () => {
           </div>
         )}
 
-        {hasSearched && !isLoading && (selectedInventor || results.length > 0) && (
+        {hasSearched && !isLoading && !searchFailed && (selectedInventor || results.length > 0) && (
           <div className="flex flex-col xl:flex-row items-start gap-4">
             <div
               className={`relative shrink-0 flex items-stretch transition-all duration-300 ease-in-out w-full ${
@@ -358,9 +438,9 @@ const ExploreIP = () => {
                   <div className="flex-1">
                     <p className="text-sm font-medium text-foreground">
                       {refinementChain.length > 1 ? (
-                        <>Showing <span className="font-semibold text-primary">{selectedInventor.name}</span>'s patents matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({mode} mode)</span></>
+                        <>Showing <span className="font-semibold text-primary">{selectedInventor.name}</span>'s patents matching "<span className="text-primary">{activeQuery}</span>" within "<span className="text-primary">{baseQuery}</span>" <span className="text-muted-foreground ml-1">({SEARCH_MODE_LABEL[mode]})</span></>
                       ) : (
-                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedInventor.name}</span>'s filings <span className="text-muted-foreground ml-1">({mode} mode)</span></>
+                        <>Showing results for "<span className="text-primary">{baseQuery}</span>" matched with <span className="font-semibold text-primary">{selectedInventor.name}</span>'s filings <span className="text-muted-foreground ml-1">({SEARCH_MODE_LABEL[mode]})</span></>
                       )}
                     </p>
                     {inventorScopedData && (

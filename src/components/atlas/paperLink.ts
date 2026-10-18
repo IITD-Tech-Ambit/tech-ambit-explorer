@@ -1,1 +1,1 @@
-export { getPaperExternalUrl, resolvePaperHref, type PaperLinkFields } from "@/lib/paperLink";
+export { getPaperExternalUrl } from "@/lib/paperLink";

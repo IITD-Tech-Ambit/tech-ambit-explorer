@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { FileText, Loader2, Search, UserCircle, Award, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { IPSuggestResponse, SuggestIPInventor, SuggestIPDocument, SuggestIPDepartment, IPSuggestIntent } from "@/lib/api/types";
@@ -22,6 +22,8 @@ interface IPSearchSuggestionsProps {
   onSelectDepartment: (department: SuggestIPDepartment) => void;
   onClose: () => void;
   className?: string;
+  /** Replaces the default "Press Enter" hint at the bottom of the dropdown. */
+  footer?: ReactNode;
 }
 
 const INTENT_HINT: Record<IPSuggestIntent, string> = {
@@ -55,7 +57,7 @@ function highlightPrefix(text: string, query: string) {
 
 export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearchSuggestionsProps>(
   function IPSearchSuggestions(
-    { query, data, isLoading, onSelectInventor, onSelectDocument, onSelectDepartment, onClose, className },
+    { query, data, isLoading, onSelectInventor, onSelectDocument, onSelectDepartment, onClose, className, footer },
     ref
   ) {
     const [activeIndex, setActiveIndex] = useState(-1);
@@ -138,8 +140,9 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
     const hasContent = inventors.length > 0 || documents.length > 0 || departments.length > 0;
     if (!isLoading && !hasContent) {
       return (
-        <div className={cn("rounded-xl border border-border bg-popover shadow-xl p-4 text-sm text-muted-foreground", className)}>
-          No matches for “{trimmed}”. Press Enter to search anyway.
+        <div className={cn("rounded-xl border border-border bg-popover shadow-xl overflow-hidden text-sm text-muted-foreground", className)}>
+          <p className="p-4">No suggestions for “{trimmed}”.{footer ? "" : " Press Enter to search anyway."}</p>
+          {footer}
         </div>
       );
     }
@@ -290,10 +293,12 @@ export const IPSearchSuggestions = forwardRef<IPSearchSuggestionsHandle, IPSearc
             {inventorsBlock}
           </>
         )}
-        <div className="flex items-center gap-1.5 px-3 py-2 mt-1 border-t border-border text-[11px] text-muted-foreground">
-          <Search className="h-3 w-3" />
-          Press Enter to search “{trimmed}”
-        </div>
+        {footer ?? (
+          <div className="flex items-center gap-1.5 px-3 py-2 mt-1 border-t border-border text-[11px] text-muted-foreground">
+            <Search className="h-3 w-3" />
+            Press Enter to search “{trimmed}”
+          </div>
+        )}
       </div>
     );
   }

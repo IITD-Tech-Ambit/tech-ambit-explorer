@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/hooks/useTaxonomy";
 import type { TaxonomyBrowseFilters } from "@/lib/api/services/taxonomyService";
 import type { DirectoryFaculty } from "@/lib/api/types";
+import { ErrorState } from "@/components/ErrorState";
 
 interface TaxonomyFacultySectionProps {
     filters: TaxonomyBrowseFilters;
@@ -158,6 +159,13 @@ const TaxonomyFacultySection = ({ filters, page, onPageChange }: TaxonomyFaculty
 
             {isLoading ? (
                 <CardsSkeleton />
+            ) : facultyQuery.isError ? (
+                <ErrorState
+                    error={facultyQuery.error}
+                    title="Couldn't load faculty for this area"
+                    onRetry={() => void facultyQuery.refetch()}
+                    retrying={facultyQuery.isFetching}
+                />
             ) : total === 0 ? (
                 <div className="text-center py-16">
                     <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">

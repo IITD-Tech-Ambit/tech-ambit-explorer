@@ -1,10 +1,12 @@
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ErrorState";
+import { classifyError } from "@/lib/errors";
 import {
     User, Mail, BookOpen, Award, ExternalLink, Building2, ArrowLeft, Loader2,
     FileText, TrendingUp, FileBadge2, Pencil, Camera, X, Plus, GraduationCap,
-    Trophy, Phone, MapPin, Link2,
+    Trophy, Phone, MapPin, Link2, ShieldCheck,
 } from "lucide-react";
 import { useState, useRef, useEffect, type ElementType, type ChangeEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,13 +51,14 @@ const FacultyProfile = () => {
         else navigate("/directory");
     };
 
-    const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError } = useFacultyByKerberos(kerberos);
+    const { data: faculty, isLoading: isFacultyLoading, isError: isFacultyError, error: facultyError, refetch: refetchFaculty, isFetching: isFacultyFetching } = useFacultyByKerberos(kerberos);
     const { data: summaryData, isLoading: isSummaryLoading } = useFacultyResearchSummary(kerberos);
     const { data: patentsData, isLoading: isPatentsLoading } = useFacultyPatents(kerberos, faculty?.name ?? "");
 
-    // A faculty member may edit ONLY their own profile (their kerberos === this page's).
-    const { user } = useAuth();
-    const isOwner = !!user && user.kerberos?.toLowerCase() === kerberos;
+    // A faculty member may edit only their own profile; a superadmin may edit any.
+    const { user, isSuperAdmin } = useAuth();
+    const isOwner = !!user && !!user.kerberos && user.kerberos.toLowerCase() === kerberos;
+    const canEdit = isOwner || isSuperAdmin;
     const queryClient = useQueryClient();
     const [editMode, setEditMode] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -82,13 +85,13 @@ const FacultyProfile = () => {
     useEffect(() => {
         // Don't refetch after a failure (extrasError) — that would loop; closeEdit
         // clears the error so reopening the editor retries once.
-        if (!editMode || !isOwner || extras || extrasLoading || extrasError) return;
+        if (!editMode || !canEdit || extras || extrasLoading || extrasError) return;
         setExtrasLoading(true);
         getFacultyProfileExtras(kerberos)
             .then((e) => setExtras(e))
             .catch((err) => setExtrasError(err instanceof Error ? err.message : "Failed to load sections."))
             .finally(() => setExtrasLoading(false));
-    }, [editMode, isOwner, kerberos, extras, extrasLoading, extrasError]);
+    }, [editMode, canEdit, kerberos, extras, extrasLoading, extrasError]);
 
     const closeEdit = () => {
         setEditMode(false);
@@ -220,6 +223,29 @@ const FacultyProfile = () => {
         );
     }
 
+    if (isFacultyError && classifyError(facultyError) !== "notFound") {
+        return (
+            <div className="min-h-screen page-bg">
+                <Navigation />
+                <div className="container mx-auto px-4 pt-24">
+                    <ErrorState
+                        size="page"
+                        error={facultyError}
+                        title="Couldn't load this profile"
+                        onRetry={() => void refetchFaculty()}
+                        retrying={isFacultyFetching}
+                    >
+                        <Button variant="outline" size="sm" className="gap-1.5 rounded-full px-4" onClick={goBack}>
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            Back
+                        </Button>
+                    </ErrorState>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
+
     if (isFacultyError || !faculty) {
         return (
             <div className="min-h-screen page-bg">
@@ -317,7 +343,7 @@ const FacultyProfile = () => {
                             <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-0.5" />
                             Back
                         </Button>
-                        {isOwner && (
+                        {canEdit && (
                             editMode ? (
                                 <Button
                                     variant="ghost"
@@ -337,6 +363,15 @@ const FacultyProfile = () => {
                         )}
                     </div>
 
+                    {isSuperAdmin && !isOwner && editMode && (
+                        <div className="mb-6 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>
+                                You're editing {faculty.name}'s profile as superadmin. Changes go live immediately and are logged.
+                            </span>
+                        </div>
+                    )}
+
                     <div className="flex flex-col lg:flex-row items-start gap-8">
                         <div className="flex-shrink-0">
                             <div className="relative">
@@ -353,7 +388,7 @@ const FacultyProfile = () => {
                                         {initials}
                                     </div>
                                 )}
-                                {isOwner && editMode && (
+                                {canEdit && editMode && (
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
@@ -377,7 +412,7 @@ const FacultyProfile = () => {
                                     </Badge>
                                 )}
                             </div>
-                            {isOwner && (
+                            {canEdit && (
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -496,7 +531,7 @@ const FacultyProfile = () => {
                                 )}
                             </div>
 
-                            {isOwner && editMode && (
+                            {canEdit && editMode && (
                                 <div className="mt-5 rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-4 max-w-md">
                                     <p className="text-sm font-semibold mb-1">Show on your public profile</p>
                                     <p className="text-xs text-muted-foreground mb-3">
@@ -614,9 +649,7 @@ const FacultyProfile = () => {
                                         <div className="min-w-0">
                                             <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
                                             <p className="text-sm font-semibold text-primary">View on Scopus</p>
-                                            {scopusIds.length > 1 && (
-                                                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">Author ID {id}</p>
-                                            )}
+                                            <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">Author ID {id}</p>
                                         </div>
                                         <ExternalLink className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
                                     </a>
@@ -631,6 +664,7 @@ const FacultyProfile = () => {
                                         <div>
                                             <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">External Profile</p>
                                             <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">View on Google Scholar</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">Scholar ID {googleScholarId}</p>
                                         </div>
                                         <ExternalLink className="w-5 h-5 text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex-shrink-0" />
                                     </a>
@@ -661,7 +695,7 @@ const FacultyProfile = () => {
                     <div className="flex-1 min-w-0">
                         {/* Background & Qualifications editor (owner, edit mode). Roomy card
                             here rather than the cramped hero; loads full content incl. hidden. */}
-                        {isOwner && editMode && (
+                        {canEdit && editMode && (
                             <div className="mb-6 rounded-2xl border border-border/60 bg-card/80 backdrop-blur shadow-sm overflow-hidden">
                                 <div className="px-5 py-4 border-b border-border/50 bg-muted/20">
                                     <h2 className="text-sm font-semibold text-foreground tracking-wide">Edit profile details</h2>

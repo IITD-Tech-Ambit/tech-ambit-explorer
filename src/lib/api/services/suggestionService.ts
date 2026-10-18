@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import apiClient from '../apiClient';
 
 export interface SuggestionPayload {
@@ -29,15 +30,15 @@ export const submitSuggestion = async (
     if (screenshot) formData.append('screenshot', screenshot);
 
     try {
-        // Do NOT set Content-Type header — axios/browser sets it automatically
-        // with the multipart boundary for FormData bodies.
         const { data } = await apiClient.post('/suggestions', formData);
         if (!data.success) {
             throw new Error(data.errors?.[0]?.message || data.message || 'Submission failed.');
         }
-    } catch (err: any) {
-        if (err?.response) {
-            const data = err.response.data;
+    } catch (err) {
+        if (isAxiosError(err) && err.response) {
+            const data = err.response.data as
+                | { message?: string; errors?: { message?: string }[] }
+                | undefined;
             throw new Error(data?.errors?.[0]?.message || data?.message || 'Submission failed.');
         }
         throw err;

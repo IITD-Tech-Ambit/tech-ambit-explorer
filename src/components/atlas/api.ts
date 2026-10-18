@@ -1,5 +1,4 @@
 import { kgApiClient } from "@/lib/api/apiClient";
-import { KG_BASE_URL } from "@/lib/api/endpoints";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -42,8 +41,6 @@ async function kgFetch<T>(path: string): Promise<T> {
   inflight.set(path, request);
   return request;
 }
-
-export const KG_API = KG_BASE_URL;
 
 /**
  * Full 3D atlas payload — deliberately bypasses the cache/envelope handling

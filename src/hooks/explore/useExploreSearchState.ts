@@ -18,13 +18,14 @@ export type SelectedAuthor = { name: string; author_id: string; kerberos?: strin
 /**
  * URL + refinement chain + search/filter state for Explore.
  * Multi-step refinement: newest term drives ranking; prior terms narrow via refine_chain.
+ * A submitted query only extends the chain when `nestedSearch` is on; otherwise it starts fresh.
  * URL shape: ?q=<base>&refine=<r1>&refine=<r2>...
  */
 export function useExploreSearchState() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Input stays empty even if a topic is already active — so the user can immediately
-  // type a deep-search query against it.
+  // type the next query (fresh, or nested when nestedSearch is on).
   const [searchQuery, setSearchQuery] = useState("");
   // Multi-step refinement chain (oldest -> newest). chain[0] is the base topic.
   const [refinementChain, setRefinementChain] = useState<string[]>(() => {
@@ -36,6 +37,7 @@ export function useExploreSearchState() {
     const page = searchParams.get("page");
     return page ? parseInt(page, 10) : 1;
   });
+  const [nestedSearch, setNestedSearch] = useState(false);
 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<SearchSuggestionsHandle>(null);
@@ -202,7 +204,13 @@ export function useExploreSearchState() {
     };
   }, [refinementChain, currentPage, perPage, sortBy, searchFilters, searchIn, searchMode]);
 
-  const { data: searchData, isLoading, isFetching } = useSearchResearch(searchRequest);
+  const {
+    data: searchData,
+    isLoading,
+    isFetching,
+    error: searchError,
+    refetch: refetchSearch,
+  } = useSearchResearch(searchRequest);
 
   const authorScopedRequest = useMemo<AuthorScopedSearchRequest | null>(() => {
     const active = refinementChain[refinementChain.length - 1] ?? "";
@@ -225,6 +233,8 @@ export function useExploreSearchState() {
     data: authorScopedData,
     isLoading: isAuthorScopedLoading,
     isFetching: isAuthorScopedFetching,
+    error: authorScopedError,
+    refetch: refetchAuthorScoped,
   } = useAuthorScopedSearch(authorScopedRequest);
 
   useEffect(() => {
@@ -238,6 +248,8 @@ export function useExploreSearchState() {
     data: allFacultyData,
     isLoading: isAllFacultyLoadingRaw,
     isFetching: isAllFacultyFetching,
+    error: allFacultyError,
+    refetch: refetchAllFaculty,
   } = useAllFacultyForQuery(
     activeQuery,
     searchMode,
@@ -265,6 +277,7 @@ export function useExploreSearchState() {
     setSearchIn([]);
     setCurrentPage(1);
     setAuthorScopedPage(1);
+    setNestedSearch(false);
     skipUrlEffect.current = true;
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
@@ -310,12 +323,11 @@ export function useExploreSearchState() {
     }
   };
 
-  // First submission sets base topic; subsequent submissions append a narrowing step.
-  const performSearch = (page: number = 1) => {
+  const performSearch = (page: number = 1, nest: boolean = nestedSearch) => {
     const query = searchQuery.trim();
     if (!query) return;
 
-    if (refinementChain.length > 0) {
+    if (nest && refinementChain.length > 0) {
       const next = [...refinementChain, query];
       setRefinementChain(next);
       setSearchQuery("");
@@ -332,18 +344,21 @@ export function useExploreSearchState() {
     }
 
     const next = [query];
+    const nextSearchIn: SearchInField[] = [];
     setRefinementChain(next);
     setCurrentPage(page);
     setSelectedAuthor(null);
     setAuthorScopedPage(1);
+    setSearchIn(nextSearchIn);
+    setNestedSearch(false);
 
     addSearchLog({
       query,
       mode: searchMode,
-      searchIn: searchIn,
+      searchIn: nextSearchIn,
     });
 
-    writeUrl(next, { page });
+    writeUrl(next, { page, searchIn: nextSearchIn });
     setSearchQuery("");
   };
 
@@ -351,7 +366,7 @@ export function useExploreSearchState() {
     if (showSuggestions && suggestionsRef.current?.handleKeyDown(e)) return;
     if (e.key === "Enter") {
       setShowSuggestions(false);
-      performSearch(1);
+      performSearch(1, e.shiftKey ? !nestedSearch : nestedSearch);
     }
   };
 
@@ -374,6 +389,7 @@ export function useExploreSearchState() {
       setCurrentPage(1);
       setSelectedAuthor(null);
       setAuthorScopedPage(1);
+      setNestedSearch(false);
       addSearchLog({ query: name, mode: searchMode, searchIn: nextSearchIn });
       writeUrl([name], { page: 1, searchIn: nextSearchIn });
     },
@@ -384,14 +400,14 @@ export function useExploreSearchState() {
     (author: SuggestAuthor) => {
       setShowSuggestions(false);
       setSearchQuery("");
-      if (hasSearched && author.scopus_id) {
+      if (nestedSearch && hasSearched && author.scopus_id) {
         setSelectedAuthor({ name: author.name, author_id: author.scopus_id });
         setAuthorScopedPage(1);
         return;
       }
       runAuthorNameSearch(author.name);
     },
-    [hasSearched, runAuthorNameSearch]
+    [nestedSearch, hasSearched, runAuthorNameSearch]
   );
 
   const startFreshSearch = useCallback(
@@ -404,6 +420,7 @@ export function useExploreSearchState() {
       setCurrentPage(1);
       setSelectedAuthor(null);
       setAuthorScopedPage(1);
+      setNestedSearch(false);
       addSearchLog({ query: trimmed, mode: searchMode, searchIn });
       writeUrl([trimmed], { page: 1 });
     },
@@ -442,6 +459,7 @@ export function useExploreSearchState() {
     }
   };
 
+
   const toggleSearchIn = (field: SearchInField) => {
     setSearchIn((prev) => {
       if (prev.includes(field)) {
@@ -463,6 +481,7 @@ export function useExploreSearchState() {
       setAuthorScopedPage(1);
       setSearchMode(entry.mode);
       setSearchIn(nextSearchIn);
+      setNestedSearch(false);
       writeUrl([entry.query], { page: 1, mode: entry.mode, searchIn: nextSearchIn });
       addSearchLog({
         query: entry.query,
@@ -479,6 +498,8 @@ export function useExploreSearchState() {
     refinementChain,
     currentPage,
     setCurrentPage,
+    nestedSearch,
+    setNestedSearch,
     showSuggestions,
     setShowSuggestions,
     suggestionsRef,
@@ -523,7 +544,11 @@ export function useExploreSearchState() {
     authorScopedData,
     isAuthorScopedLoading,
     isAuthorScopedFetching,
+    searchError: selectedAuthor ? authorScopedError : searchError,
+    retrySearch: selectedAuthor ? refetchAuthorScoped : () => Promise.all([refetchSearch(), refetchAllFaculty()]),
     allFacultyData,
+    allFacultyError,
+    retryAllFaculty: refetchAllFaculty,
     isAllFacultyLoading,
     results,
     pagination,

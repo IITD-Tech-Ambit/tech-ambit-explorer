@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Calendar, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import magazineCover from "@/assets/magazine-cover-1.jpg";
 import { useNavigate } from "react-router-dom";
-import { usePaginatedMagazines, BASE_URL, type Magazine } from "@/lib/api";
-
-
-const API_BASE_URL = BASE_URL.replace('/api', ''); // Remove /api suffix for image URLs
+import { usePaginatedMagazines, type Magazine } from "@/lib/api";
 
 const MAGAZINES_PER_PAGE = 9;
 
@@ -18,7 +16,7 @@ const Magazines = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data, isLoading, error } = usePaginatedMagazines(
+  const { data, isLoading, error, refetch, isFetching } = usePaginatedMagazines(
     currentPage,
     MAGAZINES_PER_PAGE,
     'online'
@@ -28,12 +26,6 @@ const Magazines = () => {
   const pagination = data?.pagination;
   const totalPages = pagination?.totalPages || 1;
   const totalCount = pagination?.totalCount || 0;
-
-  const getImageUrl = (imageUrl: string) => {
-    if (!imageUrl) return magazineCover;
-    if (imageUrl.startsWith('http')) return imageUrl;
-    return imageUrl;
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -85,10 +77,12 @@ const Magazines = () => {
 
         
         {error && (
-          <div className="text-center py-16 sm:py-20 px-4">
-            <p className="text-destructive text-base sm:text-lg mb-3 sm:mb-4">Failed to load magazines</p>
-            <p className="text-muted-foreground text-sm sm:text-base">Please check your connection and try again.</p>
-          </div>
+          <ErrorState
+            error={error}
+            title="Couldn't load magazines"
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+          />
         )}
 
         

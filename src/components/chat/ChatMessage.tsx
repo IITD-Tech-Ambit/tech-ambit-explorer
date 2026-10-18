@@ -123,9 +123,6 @@ const ExploreButton = ({ link }: { link: ExploreLink }) => {
 
 export interface ChatMessageProps {
   message: ChatMessageData;
-  onRetry?: () => void;
-  onEdit?: (text: string) => void;
-  isLast?: boolean;
   /** Opens the shared IP/patent detail modal for a clicked patent source card. */
   onOpenIPSource?: (source: ChatSource) => void;
 }
@@ -692,14 +689,10 @@ const AssistantActions = ({
   content,
   hasChart,
   chartRef,
-  onRetry,
-  canRetry,
 }: {
   content: string;
   hasChart: boolean;
   chartRef: React.RefObject<HTMLDivElement | null>;
-  onRetry?: () => void;
-  canRetry?: boolean;
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedChart, setCopiedChart] = useState(false);
@@ -774,7 +767,7 @@ const AssistantActions = ({
 };
 
 
-const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatMessageProps) => {
+const ChatMessage = ({ message, onOpenIPSource }: ChatMessageProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   if (message.role === "user") {
@@ -864,8 +857,6 @@ const ChatMessage = ({ message, onRetry, onEdit, isLast, onOpenIPSource }: ChatM
           content={message.content}
           hasChart={!!message.chart}
           chartRef={chartRef}
-          onRetry={onRetry}
-          canRetry={isLast}
         />
       )}
     </div>

@@ -122,20 +122,6 @@ All colors MUST be HSL.
     background: linear-gradient(135deg, hsl(222 15% 8%) 0%, hsl(222 12% 10%) 50%, hsl(220 14% 12%) 100%);
   }
   
-  /* Legacy home-bg for backwards compatibility */
-  .home-bg {
-    background: linear-gradient(120deg, hsl(222 80% 96%) 0%, hsl(178 70% 98%) 100%);
-    min-height: 100vh;
-  }
-  
-  .dark .home-bg {
-    background: linear-gradient(135deg, hsl(222 15% 8%) 0%, hsl(222 12% 10%) 100%);
-  }
-  
-  .gradient-primary {
-    background: var(--gradient-primary);
-  }
-  
   .gradient-subtle {
     background: var(--gradient-subtle);
   }
@@ -158,17 +144,9 @@ All colors MUST be HSL.
     text-decoration: none;
     transition: color 160ms ease, transform 200ms ease;
   }
-  a:hover {
+  a:where(:hover) {
     color: hsl(var(--primary-hover));
     transform: translateY(-1px);
-  }
-
-  .btn-soft {
-    background: color-mix(in srgb, hsl(var(--primary)) 14%, white 86%);
-    color: hsl(var(--primary-foreground));
-    border-radius: var(--radius);
-    padding: 0.5rem 1rem;
-    box-shadow: var(--shadow-card);
   }
 
   /* Smooth custom scrollbar */
@@ -194,16 +172,6 @@ All colors MUST be HSL.
   }
 
   /* Magazine page utilities */
-  .magazine-hero {
-    border-radius: 1.25rem;
-    background: linear-gradient(135deg, color-mix(in srgb, hsl(var(--primary)) 12%, white 88%), color-mix(in srgb, hsl(var(--accent)) 6%, white 94%));
-    padding: 2rem;
-    display: flex;
-    gap: 1.25rem;
-    align-items: center;
-    box-shadow: var(--shadow-card);
-  }
-
   .magazine-cover {
     width: 160px;
     height: 220px;
@@ -235,17 +203,10 @@ All colors MUST be HSL.
 
   .mag-button-primary {
     background: var(--gradient-primary);
-    color: var(--primary-foreground);
+    color: hsl(var(--primary-foreground));
     border-radius: 0.75rem;
     padding: 0.5rem 0.9rem;
     box-shadow: var(--shadow-card);
-  }
-
-  .mag-button-ghost {
-    border: 1px solid hsl(var(--border));
-    background: transparent;
-    padding: 0.45rem 0.8rem;
-    border-radius: 0.75rem;
   }
 
   /* Logo styling: transparent-friendly and beautiful */
@@ -511,25 +472,6 @@ All colors MUST be HSL.
     color: hsl(var(--primary-foreground));
     font-weight: 700;
     box-shadow: var(--shadow-card);
-  }
-
-  /* Search input polish for light/dark modes */
-  input.search-input {
-    background: color-mix(in srgb, hsl(var(--background)) 88%, hsl(var(--primary)) 6%);
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--foreground));
-    padding-left: 0.75rem;
-    box-shadow: 0 4px 18px -8px hsl(222 78% 48% / 0.06);
-  }
-  input.search-input::placeholder {
-    color: hsl(var(--muted-foreground));
-    opacity: 0.95;
-  }
-
-  .dark input.search-input {
-    background: color-mix(in srgb, hsl(var(--card)) 86%, black 8%);
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--card-foreground));
   }
 
   /* Page background utility for Explore & Directory */
@@ -853,86 +795,6 @@ All colors MUST be HSL.
   }
 }
 
-/* ===== Explore search loader: research constellation ===== */
-@keyframes constellation-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes constellation-spin-reverse {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-
-@keyframes core-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45), 0 0 26px 4px hsl(var(--primary) / 0.35);
-  }
-  50% {
-    transform: scale(1.08);
-    box-shadow: 0 0 0 14px hsl(var(--primary) / 0), 0 0 40px 8px hsl(var(--primary) / 0.5);
-  }
-}
-
-@keyframes orbit-ring-breathe {
-  0%, 100% { opacity: 0.25; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(1.03); }
-}
-
-@keyframes node-twinkle {
-  0%, 100% { opacity: 0.65; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.15); }
-}
-
-@keyframes skeleton-shimmer {
-  0% { background-position: -480px 0; }
-  100% { background-position: 480px 0; }
-}
-
-@keyframes edge-pulse {
-  from { stroke-dashoffset: 140; }
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes particle-float {
-  0% { opacity: 0; transform: translateY(8px) scale(0.6); }
-  20% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateY(-46px) scale(1.1); }
-}
-
-@keyframes graph-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.035); }
-}
-
-@keyframes scan-beam {
-  0% { transform: translateY(-20%); opacity: 0; }
-  15% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { transform: translateY(420%); opacity: 0; }
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 0%,
-    hsl(var(--muted-foreground) / 0.12) 20%,
-    hsl(var(--muted)) 40%,
-    hsl(var(--muted)) 100%
-  );
-  background-size: 960px 100%;
-  animation: skeleton-shimmer 1.6s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer,
-  [class*="constellation"],
-  [style*="constellation"] {
-    animation: none !important;
-  }
-}
-
 /* Home — campus research video (Pioneering Research section) */
 .campus-video-wrap {
   position: relative;
@@ -1017,21 +879,6 @@ All colors MUST be HSL.
 }
 
 /* Home — brand + feature overview */
-.home-brand-mark {
-  font-family: "Fraunces", "Times New Roman", serif;
-  font-optical-sizing: auto;
-  font-weight: 600;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  color: #fff;
-  text-shadow: 0 8px 40px hsl(222 78% 20% / 0.35);
-}
-
-.home-hero-copy {
-  animation: home-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
 .home-qs-panel {
   position: absolute;
   top: 5.5rem;
@@ -1348,7 +1195,6 @@ All colors MUST be HSL.
     animation: none;
   }
 
-  .home-hero-copy,
   .home-section-intro,
   .home-feature-card-wrap,
   .home-cta-band {

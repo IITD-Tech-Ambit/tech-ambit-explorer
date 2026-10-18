@@ -10,6 +10,8 @@ interface AuthContextValue {
    * (i.e. they are IITD faculty, not a student). Decided from the DB, not the
    * OAuth category claim. */
   isFaculty: boolean;
+  /** Kerberos is listed in SUPERADMIN_KERBEROS: may edit any faculty profile. */
+  isSuperAdmin: boolean;
   login: () => void;
   logout: () => Promise<void>;
   /** Re-check the session (e.g. after a 401 from an API call). */
@@ -69,7 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isFaculty, login, logout, refresh }}>
+    <AuthContext.Provider
+      value={{ user, loading, isFaculty, isSuperAdmin: user?.role === "superadmin", login, logout, refresh }}
+    >
       {children}
     </AuthContext.Provider>
   );

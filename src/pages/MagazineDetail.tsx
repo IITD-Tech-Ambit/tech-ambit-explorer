@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type HTMLAttributes } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ErrorState";
+import { apiErrorMessage, classifyError } from "@/lib/errors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +37,7 @@ const MagazineDetail = () => {
     const [comments, setComments] = useState<Comment[]>([]);
     const [showScrollTop, setShowScrollTop] = useState(false);
 
-    const { data: magazine, isLoading, error } = useMagazine(id!);
+    const { data: magazine, isLoading, error, refetch, isFetching } = useMagazine(id!);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -66,10 +68,10 @@ const MagazineDetail = () => {
                 description: "You liked this magazine.",
             });
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: "Error",
-                description: error.response?.data?.message || "Failed to like. You may have already liked this.",
+                description: apiErrorMessage(error, "Failed to like. You may have already liked this."),
                 variant: "destructive",
             });
         },
@@ -85,10 +87,10 @@ const MagazineDetail = () => {
                 description: "You removed your like.",
             });
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: "Error",
-                description: error.response?.data?.message || "Failed to remove like.",
+                description: apiErrorMessage(error, "Failed to remove like."),
                 variant: "destructive",
             });
         },
@@ -103,10 +105,10 @@ const MagazineDetail = () => {
                 description: "Your comment has been posted.",
             });
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: "Error",
-                description: error.response?.data?.message || "Failed to add comment. You may have already commented.",
+                description: apiErrorMessage(error, "Failed to add comment. You may have already commented."),
                 variant: "destructive",
             });
         },
@@ -151,6 +153,29 @@ const MagazineDetail = () => {
                 <div className="flex justify-center items-center py-40">
                     <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <span className="ml-4 text-xl">Loading magazine...</span>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
+
+    if (error && classifyError(error) !== "notFound") {
+        return (
+            <div className="min-h-screen">
+                <Navigation />
+                <div className="container mx-auto px-4 pt-28 pb-16">
+                    <ErrorState
+                        size="page"
+                        error={error}
+                        title="Couldn't load this magazine"
+                        onRetry={() => void refetch()}
+                        retrying={isFetching}
+                    >
+                        <Button variant="outline" size="sm" className="gap-1.5 rounded-full px-4" onClick={() => navigate('/magazines')}>
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            Back to Magazines
+                        </Button>
+                    </ErrorState>
                 </div>
                 <Footer />
             </div>
@@ -290,7 +315,7 @@ const MagazineDetail = () => {
                                                     <table {...props} className="min-w-full divide-y divide-gray-300 dark:divide-gray-700" />
                                                 </div>
                                             ),
-                                            code: ({ node, inline, className, children, ...props }: any) => (
+                                            code: ({ node, inline, className, children, ...props }: HTMLAttributes<HTMLElement> & { node?: unknown; inline?: boolean }) => (
                                                 inline ? (
                                                     <code {...props} className="bg-muted px-1 sm:px-1.5 py-0.5 rounded text-xs sm:text-sm">
                                                         {children}

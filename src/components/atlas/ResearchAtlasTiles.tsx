@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
-  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, Loader2, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
+  Building2, Calendar, ChevronDown, ChevronRight, ExternalLink, Eye, Loader2, MonitorX, MousePointer2, RotateCcw, Search, Tag, User, Users, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { describeError } from "@/lib/errors";
+import { ErrorState } from "@/components/ErrorState";
 import {
   fetchAtlasTree, fetchAtlasDict, fetchAtlasPointCoords, searchAtlasIndices,
   tileObjectId, type AtlasTree, type AtlasDict, type AtlasPointCoord, type DecodedTile,
@@ -125,7 +127,7 @@ function FilterCombobox({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          "flex h-11 w-full items-center gap-2 rounded-lg border bg-slate-950/80 pl-3 pr-2.5 text-sm outline-none transition-colors",
+          "flex h-10 w-full items-center gap-2 rounded-lg sm:h-11 border bg-slate-950/80 pl-3 pr-2.5 text-sm outline-none transition-colors",
           open ? "border-blue-500" : "border-slate-700 hover:border-slate-600",
         )}
       >
@@ -253,6 +255,36 @@ type DomainLabelEntry = {
   theme: string;
   domain: string;
 };
+
+const LABEL_GAP_PX = 3;
+
+/** Labels have a fixed pixel size, so dense or narrow views collide; push later ones down until clear. */
+function declutterLabels(roots: Iterable<HTMLElement>) {
+  const items: Array<{ el: HTMLElement; r: DOMRect }> = [];
+  for (const el of roots) {
+    el.style.translate = "";
+    if (el.style.display !== "none") items.push({ el, r: el.getBoundingClientRect() });
+  }
+  items.sort((a, b) => a.r.top - b.r.top);
+  const placed: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+  for (const { el, r } of items) {
+    if (r.width === 0) continue;
+    let top = r.top;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const p of placed) {
+        if (r.left < p.right + LABEL_GAP_PX && r.right > p.left - LABEL_GAP_PX
+          && top < p.bottom + LABEL_GAP_PX && top + r.height > p.top - LABEL_GAP_PX) {
+          top = p.bottom + LABEL_GAP_PX;
+          moved = true;
+        }
+      }
+    }
+    if (top !== r.top) el.style.translate = `0 ${Math.round(top - r.top)}px`;
+    placed.push({ left: r.left, right: r.right, top, bottom: top + r.height });
+  }
+}
 
 type DomainCluster = {
   domain: string;
@@ -444,6 +476,12 @@ function themeOverviewCameraZ(layout: ThemeSphereLayout | null): number {
     extent = Math.max(extent, cloud, label);
   }
   return Math.max(DEFAULT_CAMERA_Z, (extent + 1.1) * 2.45);
+}
+
+/** The framing distances above fit height; portrait viewports clip width first. */
+function fitToAspect(z: number, aspect: number): number {
+  if (!(aspect > 0) || aspect >= 1) return z;
+  return Math.min(z / aspect, 34);
 }
 
 type ThemeFilterCluster = {
@@ -704,12 +742,14 @@ function mergeFacultyIntoBreakdown(
 }
 
 function ThemeClusterPanel({
-  theme, query, breakdown, loading, themeColor, onClose, onPaperClick, domain,
+  theme, query, breakdown, loading, error, onRetry, themeColor, onClose, onPaperClick, domain,
 }: {
   theme: string;
   query: string;
   breakdown: KgAtlasClusterBreakdown | null;
   loading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   themeColor: string;
   onClose: () => void;
   onPaperClick: (paper: PickedPaper) => void;
@@ -776,6 +816,10 @@ function ThemeClusterPanel({
           <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading departments…
           </div>
+        )}
+
+        {!loading && Boolean(error) && (
+          <ErrorState size="compact" tone="dark" error={error} title="Couldn't load departments" onRetry={onRetry} />
         )}
 
         {!loading && breakdown && depts.length === 0 && (
@@ -1026,6 +1070,7 @@ export default function ResearchAtlasTiles({
 } = {}) {
   const [searchParams] = useSearchParams();
   const containerRef = useRef<HTMLDivElement>(null);
+  const chromeRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const engineRef = useRef<{
@@ -1065,7 +1110,9 @@ export default function ResearchAtlasTiles({
   const domainCountPointsRef = useRef<AtlasPointCoord[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
@@ -1093,6 +1140,7 @@ export default function ResearchAtlasTiles({
   /** When the cluster sidebar is scoped to a focused domain (vs a whole theme). */
   const [clusterDomain, setClusterDomain] = useState<string | null>(null);
   const [clusterLoading, setClusterLoading] = useState(false);
+  const [clusterError, setClusterError] = useState<unknown>(null);
   const [drillTheme, setDrillTheme] = useState<string | null>(null);
   const [focusedDomain, setFocusedDomain] = useState<string | null>(null);
   const [filterThemeCounts, setFilterThemeCounts] = useState<{ theme: string; count: number; color: string }[]>([]);
@@ -1179,7 +1227,7 @@ export default function ResearchAtlasTiles({
     if (!e) return;
     // Bias the look-target slightly down so the ring sits under the header chips.
     e.controls.target.set(0, -0.2, 0);
-    e.camera.position.set(0, -0.2, drillOverviewCameraZ(drillLayoutRef.current));
+    e.camera.position.set(0, -0.2, fitToAspect(drillOverviewCameraZ(drillLayoutRef.current), e.camera.aspect));
     e.controls.update();
     e.dirty = true;
     streamNow();
@@ -1190,7 +1238,7 @@ export default function ResearchAtlasTiles({
     const e = engineRef.current;
     if (!e) return;
     e.controls.target.set(0, -0.15, 0);
-    e.camera.position.set(0.55, 0.35, themeFilterCameraZ(themeFilterLayoutRef.current));
+    e.camera.position.set(0.55, 0.35, fitToAspect(themeFilterCameraZ(themeFilterLayoutRef.current), e.camera.aspect));
     e.controls.update();
     e.dirty = true;
     streamNow();
@@ -1471,6 +1519,7 @@ export default function ResearchAtlasTiles({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     Promise.all([fetchAtlasTree(), fetchAtlasDict()])
       .then(([tree, dict]) => {
         if (cancelled) return;
@@ -1481,10 +1530,10 @@ export default function ResearchAtlasTiles({
           dict.themeAnchors,
         );
       })
-      .catch((err) => { if (!cancelled) setError(String(err?.message || err)); })
+      .catch((err) => { if (!cancelled) setError(err ?? new Error("Failed to load IITD-VERSE")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     const theme = searchParams.get("theme")?.trim();
@@ -1570,7 +1619,7 @@ export default function ResearchAtlasTiles({
         else if (!drillTheme && themeFilterLayoutRef.current) frameThemeFilterOverview();
       } catch (err) {
         if (!cancelled) {
-          toast.error(err instanceof Error ? err.message : "Could not apply filters");
+          toast.error("Couldn't apply filters", { description: describeError(err).message });
         }
       } finally {
         if (!cancelled) setSearchLoading(false);
@@ -1601,7 +1650,7 @@ export default function ResearchAtlasTiles({
     setSearchLoading(true);
     (async () => {
       try {
-        const textIdx = await searchAtlasIndices(q, OVERLAY_CAP).catch(() => []);
+        const textIdx = await searchAtlasIndices(q, OVERLAY_CAP);
         if (cancelled) return;
 
         const indices = textIdx.slice(0, OVERLAY_CAP);
@@ -1636,6 +1685,12 @@ export default function ResearchAtlasTiles({
         } else if (!drillThemeRef.current && themeFilterLayoutRef.current) {
           frameThemeFilterOverview();
         }
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(drillThemeRef.current ? "Couldn't open this theme" : "Search failed", {
+            description: describeError(err).message,
+          });
+        }
       } finally {
         if (!cancelled) setSearchLoading(false);
       }
@@ -1667,7 +1722,14 @@ export default function ResearchAtlasTiles({
       ?? createThemeSphereLayout(dict.themes, dict.themeAnchors);
     themeSphereLayoutRef.current = themeSphereLayout;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    } catch (err) {
+      console.error("[IITD-VERSE] WebGL unavailable", err);
+      setWebglUnavailable(true);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.setClearColor(BG, 1);
@@ -1676,7 +1738,7 @@ export default function ResearchAtlasTiles({
     scene.fog = new THREE.FogExp2(BG, 0.018);
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 120);
-    const startZ = themeOverviewCameraZ(themeSphereLayout);
+    const startZ = fitToAspect(themeOverviewCameraZ(themeSphereLayout), width / height);
     camera.position.set(0, 0.35, startZ);
 
     const controls = new OrbitControls(camera, canvas);
@@ -2207,12 +2269,17 @@ export default function ResearchAtlasTiles({
       const w = container.clientWidth;
       const h = container.clientHeight;
       camera.aspect = w / h;
+      const inset = chromeRef.current?.offsetHeight ?? 0;
+      camera.setViewOffset(w, h, 0, -Math.round(inset / 2), w, h);
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
       labelRenderer.setSize(w, h);
       if (engineRef.current) engineRef.current.dirty = true;
     };
+    onResize();
     window.addEventListener("resize", onResize);
+    const chromeObserver = new ResizeObserver(onResize);
+    if (chromeRef.current) chromeObserver.observe(chromeRef.current);
 
     // Same recovery as ResearchAtlas.tsx: a lost WebGL context otherwise
     // leaves the canvas frozen with no way to recover short of a reload.
@@ -2250,6 +2317,10 @@ export default function ResearchAtlasTiles({
         }
         renderer.render(scene, camera);
         labelRenderer.render(scene, camera);
+        declutterLabels([
+          ...Array.from(e.labelByTheme.values(), (l) => l.root),
+          ...Array.from(e.labelByDomain.values()).flat().map((l) => l.root),
+        ]);
         e.dirty = false;
       }
     };
@@ -2266,6 +2337,7 @@ export default function ResearchAtlasTiles({
       canvas.removeEventListener("webglcontextlost", onContextLost);
       canvas.removeEventListener("webglcontextrestored", onContextRestored);
       window.removeEventListener("resize", onResize);
+      chromeObserver.disconnect();
       for (const obj of labelObjs) scene.remove(obj);
       for (const extra of labelExtras) {
         scene.remove(extra);
@@ -2323,7 +2395,7 @@ export default function ResearchAtlasTiles({
       frameDrillOverview();
       return;
     }
-    e.camera.position.set(0, 0.35, themeOverviewCameraZ(themeSphereLayoutRef.current));
+    e.camera.position.set(0, 0.35, fitToAspect(themeOverviewCameraZ(themeSphereLayoutRef.current), e.camera.aspect));
     e.controls.target.set(0, 0, 0);
     e.controls.update();
     e.dirty = true;
@@ -2344,6 +2416,7 @@ export default function ResearchAtlasTiles({
     setSelected(null);
     setClusterTheme(theme);
     setClusterLoading(true);
+    setClusterError(null);
 
     // Overlay set is authoritative under faculty/dept refines; show it immediately,
     // then merge department→faculty nesting from the server breakdown.
@@ -2362,9 +2435,13 @@ export default function ResearchAtlasTiles({
       } else {
         setClusterBreakdown(data);
       }
-    } catch {
-      if (local.totalPapers > 0) setClusterBreakdown(local);
-      else setClusterBreakdown({ theme, query: q, totalPapers: 0, departments: [] });
+    } catch (err) {
+      if (local.totalPapers > 0) {
+        setClusterBreakdown(local);
+      } else {
+        setClusterBreakdown(null);
+        setClusterError(err);
+      }
     } finally {
       setClusterLoading(false);
     }
@@ -2458,7 +2535,7 @@ export default function ResearchAtlasTiles({
     const c = next ? layout.centers.find((x) => x.domain === next) : null;
     if (c) {
       e.controls.target.set(c.cx, c.cy, c.cz);
-      e.camera.position.set(c.cx, c.cy, c.cz + Math.max(0.55, c.blobR * 3.2));
+      e.camera.position.set(c.cx, c.cy, c.cz + fitToAspect(Math.max(0.55, c.blobR * 3.2), e.camera.aspect));
       e.controls.update();
       e.dirty = true;
       streamNow();
@@ -2551,7 +2628,7 @@ export default function ResearchAtlasTiles({
     // Back to the whole-cloud framing (the drill camera sits much further out).
     const e = engineRef.current;
     if (e) {
-      e.camera.position.set(0, 0.35, themeOverviewCameraZ(themeSphereLayoutRef.current));
+      e.camera.position.set(0, 0.35, fitToAspect(themeOverviewCameraZ(themeSphereLayoutRef.current), e.camera.aspect));
       e.controls.target.set(0, 0, 0);
       e.controls.update();
       e.dirty = true;
@@ -2610,66 +2687,74 @@ export default function ResearchAtlasTiles({
       "relative flex flex-col flex-1 min-h-0 bg-black text-white",
       isViewMode && "ring-1 ring-white/10",
     )}>
-      <div className="absolute top-4 right-4 z-30 flex flex-wrap items-center justify-end gap-2">
-        {isExploreMode && (
-          <>
-            <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1 / 1.3)}
-              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800" aria-label="Zoom in">
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1.3)}
-              className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800" aria-label="Zoom out">
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={resetView}
-              className="rounded-full border-slate-600 bg-slate-900/60 text-slate-200 hover:bg-slate-800">
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset view
-            </Button>
-          </>
+      <div
+        ref={chromeRef}
+        className={cn(
+          "absolute top-0 inset-x-0 z-30 flex flex-col gap-2 px-3 pt-3 pointer-events-none sm:px-6 sm:pt-4 lg:flex-row-reverse lg:items-start lg:gap-4",
+          (webglUnavailable || (error && !loading)) && "hidden",
         )}
-        <div
-          className={cn(
-            "inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg",
-            isViewMode && "ring-1 ring-white/10",
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
+          {isExploreMode && (
+            <div className="flex items-center gap-2 pointer-events-auto">
+              <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1 / 1.3)}
+                className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/80 text-slate-200 backdrop-blur-sm hover:bg-slate-800" aria-label="Zoom in">
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="outline" size="icon" onClick={() => zoomBy(1.3)}
+                className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/80 text-slate-200 backdrop-blur-sm hover:bg-slate-800" aria-label="Zoom out">
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={resetView}
+                className="h-9 w-9 rounded-full border-slate-600 bg-slate-900/80 p-0 text-slate-200 backdrop-blur-sm hover:bg-slate-800 sm:w-auto sm:px-3"
+                aria-label="Reset view" title="Reset view">
+                <RotateCcw className="h-3.5 w-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Reset view</span>
+              </Button>
+            </div>
           )}
-          role="group"
-          aria-label="IITD-VERSE display mode"
-        >
-          <button
-            type="button"
-            onClick={enterViewMode}
+          <div
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-              isViewMode
-                ? "bg-white text-black shadow-sm"
-                : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+              "ml-auto inline-flex rounded-full border border-slate-600 bg-slate-900/90 p-1 backdrop-blur-sm shadow-lg pointer-events-auto sm:ml-0",
+              isViewMode && "ring-1 ring-white/10",
             )}
-            aria-pressed={isViewMode}
+            role="group"
+            aria-label="IITD-VERSE display mode"
           >
-            <Eye className="h-3.5 w-3.5" />
-            View
-          </button>
-          <button
-            type="button"
-            onClick={enterInteractiveMode}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-              isExploreMode
-                ? "bg-white text-black shadow-sm"
-                : "text-slate-300 hover:text-white hover:bg-slate-800/80",
-            )}
-            aria-pressed={isExploreMode}
-          >
-            <MousePointer2 className="h-3.5 w-3.5" />
-            Explore
-          </button>
+            <button
+              type="button"
+              onClick={enterViewMode}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                isViewMode
+                  ? "bg-white text-black shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+              )}
+              aria-pressed={isViewMode}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              View
+            </button>
+            <button
+              type="button"
+              onClick={enterInteractiveMode}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                isExploreMode
+                  ? "bg-white text-black shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-slate-800/80",
+              )}
+              aria-pressed={isExploreMode}
+            >
+              <MousePointer2 className="h-3.5 w-3.5" />
+              Explore
+            </button>
+          </div>
         </div>
-      </div>
 
-      <header className="absolute top-0 inset-x-0 z-20 pointer-events-none">
-        <div className="flex items-start gap-4 px-4 sm:px-6 pt-4 pb-2 pr-44 sm:pr-64 lg:pr-72">
-          <div className="flex-1 max-w-3xl mx-auto relative pointer-events-none">
-            <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-700/70 bg-slate-900/90 p-2 shadow-lg backdrop-blur-md pointer-events-auto sm:grid-cols-3">
+        <header className="min-w-0 flex-1 pointer-events-none">
+          <div className="w-full max-w-3xl mx-auto relative pointer-events-none">
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-700/70 bg-slate-900/90 p-1.5 shadow-lg backdrop-blur-md pointer-events-auto sm:grid-cols-3 sm:gap-2 sm:p-2">
               <FilterCombobox
                 icon={<Building2 className="h-4 w-4 text-emerald-400" />}
                 placeholder="All departments"
@@ -2713,7 +2798,7 @@ export default function ResearchAtlasTiles({
                 }}
               />
 
-              <label className="relative min-w-0">
+              <label className="relative col-span-2 min-w-0 sm:col-span-1">
                 <span className="sr-only">Publication period</span>
                 <Calendar className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-sky-400" />
                 <select
@@ -2725,7 +2810,7 @@ export default function ResearchAtlasTiles({
                     setFocusedDomain(null);
                     closeThemeCluster();
                   }}
-                  className="h-11 w-full appearance-none truncate rounded-lg border border-slate-700 bg-slate-950/80 pl-10 pr-8 text-sm text-slate-100 outline-none transition-colors hover:border-slate-600 focus:border-blue-500"
+                  className="h-10 w-full appearance-none truncate rounded-lg sm:h-11 border border-slate-700 bg-slate-950/80 pl-10 pr-8 text-sm text-slate-100 outline-none transition-colors hover:border-slate-600 focus:border-blue-500"
                 >
                   <option value={0}>All publication years</option>
                   {[1, 2, 3, 4, 5].map((years) => (
@@ -2740,12 +2825,12 @@ export default function ResearchAtlasTiles({
 
             {Boolean(searchQuery.trim()) && (
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 pointer-events-auto">
-                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:inline">
                   {drillTheme ? "Exploring theme:" : "Searching:"}
                 </span>
                 <span
                   title={searchQuery.trim()}
-                  className="inline-flex max-w-[240px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
+                  className="inline-flex max-w-[170px] shrink-0 items-center sm:max-w-[240px] gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
                 >
                   <span className="truncate">{searchQuery.trim()}</span>
                   <button
@@ -2762,7 +2847,7 @@ export default function ResearchAtlasTiles({
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                     <span
                       title={focusedDomain}
-                      className="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
+                      className="inline-flex max-w-[170px] shrink-0 items-center sm:max-w-[220px] gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-sm"
                     >
                       <span className="truncate">{focusedDomain}</span>
                       <button
@@ -2800,7 +2885,7 @@ export default function ResearchAtlasTiles({
 
             {structuredFilterActive && (
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 pointer-events-auto">
-                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:inline">
                   Filtering:
                 </span>
                 {selectedDepartment && (
@@ -2869,14 +2954,14 @@ export default function ResearchAtlasTiles({
               </div>
             )}
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
       {isExploreMode && (searchQuery.trim() || structuredFilterActive) && (drillTheme
         ? drillDomainCounts.length > 0
         : filterThemeCounts.length > 0) && (
         <aside
-          className="absolute bottom-4 left-4 z-30 w-[min(100%-2rem,280px)] max-h-[min(42vh,320px)] flex flex-col rounded-xl border border-slate-700/70 bg-slate-950/90 shadow-2xl backdrop-blur-md overflow-hidden"
+          className="absolute bottom-3 left-3 right-20 z-30 flex flex-col sm:bottom-4 sm:left-4 sm:right-auto sm:w-[280px] sm:max-h-[min(42vh,320px)] rounded-xl border border-slate-700/70 bg-slate-950/90 shadow-2xl backdrop-blur-md overflow-hidden"
           aria-label={drillTheme ? "Domains in theme" : "Matched themes"}
         >
           <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-700/60">
@@ -2887,7 +2972,7 @@ export default function ResearchAtlasTiles({
               {formatCount(matchCount)} papers
             </p>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-1">
+          <div className="min-h-0 flex-1 flex gap-1 overflow-x-auto overscroll-contain p-1.5 sm:block sm:space-y-1 sm:overflow-x-hidden sm:overflow-y-auto sm:p-2">
             {drillTheme
               ? drillDomainCounts.map(({ domain, count, hue }) => {
                   const color = `hsl(${hue}, 70%, 62%)`;
@@ -2899,7 +2984,7 @@ export default function ResearchAtlasTiles({
                       onClick={() => openDomainCluster(domain)}
                       title={`Show departments in ${domain}`}
                       className={cn(
-                        "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70",
+                        "flex w-[160px] shrink-0 items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70 sm:w-full",
                         active
                           ? "border-slate-500 bg-slate-800/60"
                           : "border-transparent hover:border-slate-600",
@@ -2927,7 +3012,7 @@ export default function ResearchAtlasTiles({
                     onClick={() => void openThemeCluster(theme)}
                     title={`Open departments in ${theme}`}
                     className={cn(
-                      "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70",
+                      "flex w-[160px] shrink-0 items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-slate-800/70 sm:w-full",
                       clusterTheme === theme
                         ? "border-slate-500 bg-slate-800/60"
                         : "border-transparent hover:border-slate-600",
@@ -2963,9 +3048,40 @@ export default function ResearchAtlasTiles({
           </div>
         </div>
       )}
-      {error && !loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-          <div className="max-w-md rounded-xl border border-red-500/30 bg-red-950/40 p-4 text-sm text-red-200">{error}</div>
+      {(webglUnavailable || (error && !loading)) && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black p-6">
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[min(80vw,520px)] w-[min(80vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.10),transparent_65%)]"
+            aria-hidden
+          />
+          {webglUnavailable ? (
+            <ErrorState
+              tone="dark"
+              kind="unknown"
+              icon={MonitorX}
+              title="3D view isn't supported here"
+              message="IITD-VERSE needs WebGL, which this browser or device has turned off. Try enabling hardware acceleration or opening it in another browser."
+              onRetry={() => window.location.reload()}
+              retryLabel="Reload page"
+              className="relative"
+            >
+              <Button asChild variant="outline" size="sm" className="rounded-full border-slate-600 bg-transparent px-4 text-slate-200 hover:bg-slate-800 hover:text-white">
+                <Link to="/research-areas">Browse research areas</Link>
+              </Button>
+            </ErrorState>
+          ) : (
+            <ErrorState
+              tone="dark"
+              error={error}
+              title="Couldn't load IITD-VERSE"
+              onRetry={() => setLoadAttempt((n) => n + 1)}
+              className="relative"
+            >
+              <Button asChild variant="outline" size="sm" className="rounded-full border-slate-600 bg-transparent px-4 text-slate-200 hover:bg-slate-800 hover:text-white">
+                <Link to="/research-areas">Browse research areas</Link>
+              </Button>
+            </ErrorState>
+          )}
         </div>
       )}
 
@@ -2989,6 +3105,8 @@ export default function ResearchAtlasTiles({
           query={searchQuery.trim()}
           breakdown={clusterBreakdown}
           loading={clusterLoading}
+          error={clusterError}
+          onRetry={() => void openThemeCluster(clusterTheme)}
           themeColor={clusterThemeColor}
           onClose={closeThemeCluster}
           onPaperClick={handleClusterPaperClick}

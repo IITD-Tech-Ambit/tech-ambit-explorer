@@ -11,6 +11,8 @@ export interface AuthUser {
     kerberos: string;
     department: string;
     category: string;
+    /** "superadmin" when the kerberos is in auth-service SUPERADMIN_KERBEROS. */
+    role?: 'superadmin';
 }
 
 const AUTH_BASE = `${BASE_URL}/auth`;

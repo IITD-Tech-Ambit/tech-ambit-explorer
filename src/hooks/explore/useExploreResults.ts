@@ -9,7 +9,6 @@ type UseExploreResultsArgs = {
   clientSort: "relevance" | "citations";
   selectedAuthor: SelectedAuthor | null;
   authorScopedData: AuthorScopedSearchResponse | undefined;
-  refinementChain: string[];
 };
 
 export function useExploreResults({
@@ -18,7 +17,6 @@ export function useExploreResults({
   clientSort,
   selectedAuthor,
   authorScopedData,
-  refinementChain,
 }: UseExploreResultsArgs) {
   const [selectedDocument, setSelectedDocument] = useState<SearchDocument | null>(null);
 
