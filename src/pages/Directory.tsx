@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ErrorState";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2, Building2, School, FlaskConical, GraduationCap, Search, X } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -46,25 +47,32 @@ const Directory = () => {
     const debouncedSearch = useDebounce(searchQuery, 300);
     const isSearching = debouncedSearch.length >= 2;
 
-    const { data: searchData, isLoading: isSearchLoading } = useDirectorySearch(
+    const { data: searchData, isLoading: isSearchLoading, error: searchError, refetch: refetchSearch, isFetching: isSearchFetching } = useDirectorySearch(
         debouncedSearch,
         15,
         { enabled: isSearching }
     );
 
     // Use paginated query for "all", grouped query for specific categories
-    const { data: paginatedData, isLoading: isPaginatedLoading, isError: isPaginatedError } = useFaculties(
+    const { data: paginatedData, isLoading: isPaginatedLoading, error: paginatedError, refetch: refetchPaginated, isFetching: isPaginatedFetching } = useFaculties(
         page, 9, 'hIndex', 'desc',
         { enabled: activeCategory === 'all' && !isSearching }
     );
 
-    const { data: groupedData, isLoading: isGroupedLoading, isError: isGroupedError } = useDepartmentGroupsSummary(
+    const { data: groupedData, isLoading: isGroupedLoading, error: groupedError, refetch: refetchGrouped, isFetching: isGroupedFetching } = useDepartmentGroupsSummary(
         activeCategory,
         { enabled: activeCategory !== 'all' && !isSearching }
     );
 
     const isLoading = isSearching ? isSearchLoading : (activeCategory === 'all' ? isPaginatedLoading : isGroupedLoading);
-    const isError = !isSearching && (activeCategory === 'all' ? isPaginatedError : isGroupedError);
+    const loadError = isSearching ? searchError : (activeCategory === 'all' ? paginatedError : groupedError);
+    const isError = Boolean(loadError);
+    const isRetrying = isSearching ? isSearchFetching : (activeCategory === 'all' ? isPaginatedFetching : isGroupedFetching);
+    const retryLoad = () => {
+        if (isSearching) void refetchSearch();
+        else if (activeCategory === 'all') void refetchPaginated();
+        else void refetchGrouped();
+    };
 
     const activeCategoryIcon = categoryConfig.find(c => c.key === activeCategory)?.icon ?? GraduationCap;
 
@@ -216,16 +224,12 @@ const Directory = () => {
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
                 ) : isError ? (
-                    <div className="text-center py-20">
-                        <p className="text-muted-foreground">Failed to load faculty data. Please try again.</p>
-                        <Button
-                            variant="outline"
-                            className="mt-4"
-                            onClick={() => window.location.reload()}
-                        >
-                            Retry
-                        </Button>
-                    </div>
+                    <ErrorState
+                        error={loadError}
+                        title={isSearching ? "Couldn't search the directory" : "Couldn't load the faculty directory"}
+                        onRetry={retryLoad}
+                        retrying={isRetrying}
+                    />
                 ) : isSearching ? (
                     // Search results view
                     searchData && searchData.faculties.length > 0 ? (

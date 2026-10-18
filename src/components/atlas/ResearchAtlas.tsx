@@ -871,7 +871,6 @@ export default function ResearchAtlas({
   const [searchFilterSet, setSearchFilterSet] = useState<Set<number> | null>(null);
   const [comboOpen, setComboOpen] = useState(false);
   const [searchMatchCount, setSearchMatchCount] = useState(0);
-  const [matchedTerms, setMatchedTerms] = useState<TaxonomyEntry[]>([]);
   const [matchedFaculty, setMatchedFaculty] = useState<KgAtlasFacultyMatch[]>([]);
   const [matchedDepartments, setMatchedDepartments] = useState<KgAtlasDepartmentMatch[]>([]);
   const [facultyList, setFacultyList] = useState<KgFacultyItem[]>([]);
@@ -995,16 +994,6 @@ export default function ResearchAtlas({
   );
 
   const domainClusterLabels = expandedDomainLayout?.labels ?? [];
-
-  const domainSizeRatios = useMemo(() => {
-    const map = new Map<string, number>();
-    if (!domainClusterLabels.length) return map;
-    const max = domainClusterLabels[0]?.count ?? 1;
-    for (const d of domainClusterLabels) {
-      map.set(d.domain, d.count / max);
-    }
-    return map;
-  }, [domainClusterLabels]);
 
   const expandedDomainColorMap = useMemo(() => {
     if (!expandedThemeDomains) return new Map<string, THREE.Color>();
@@ -1180,7 +1169,6 @@ export default function ResearchAtlas({
         searchFilterRef.current = null;
         setSearchFilterSet(null);
         setSearchMatchCount(0);
-        setMatchedTerms([]);
         setMatchedFaculty([]);
         setMatchedDepartments([]);
         setSearchLoading(false);
@@ -1208,7 +1196,6 @@ export default function ResearchAtlas({
               : [],
           );
           setMatchedDepartments([]);
-          setMatchedTerms([]);
         } else if (searchDepartmentOnly) {
           const result = await fetchKgDepartmentAtlasIndices([searchDepartmentOnly]);
           if (cancelled) return;
@@ -1228,12 +1215,10 @@ export default function ResearchAtlas({
                 }],
           );
           setMatchedFaculty([]);
-          setMatchedTerms([]);
         } else {
           const textResolved = resolveSearchMatchLevels(searchQuery, papers, clusterIndex);
           if (cancelled) return;
           for (const idx of textResolved.visible) visible.add(idx);
-          setMatchedTerms(textResolved.matchedTerms);
 
           try {
             const facResult = await fetchKgAtlasFacultySearch(searchQuery);
@@ -1295,7 +1280,6 @@ export default function ResearchAtlas({
       activeThemeCluster: string | null,
       expandedTheme: string | null,
       activeDomain: string | null,
-      domainSizeRatios: Map<string, number>,
       visibleDomainSet: Set<string> | null,
     ) => {
       const scene = sceneRef.current;
@@ -1448,7 +1432,6 @@ export default function ResearchAtlas({
       selectedThemeCluster,
       expandedThemeDomains,
       activeDomainFilter,
-      domainSizeRatios,
       visibleDomainSet,
     );
   }, [
@@ -1465,7 +1448,6 @@ export default function ResearchAtlas({
     selectedThemeCluster,
     expandedThemeDomains,
     activeDomainFilter,
-    domainSizeRatios,
     visibleDomainSet,
   ]);
 

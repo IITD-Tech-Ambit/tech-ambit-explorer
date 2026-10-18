@@ -1,6 +1,5 @@
-// The chatbot is a separate microservice. Defaults to the local dev port; in
-// production it is served behind nginx at /chat-api/api/v1.
-const CHAT_API_BASE_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:3003/api/v1';
+// Gateway path only: direct calls are rejected without the verified session identity.
+const CHAT_API_BASE_URL = import.meta.env.VITE_CHAT_API_URL || '/chat-api/api/v1';
 
 export interface ChatHistoryMessage {
   role: 'user' | 'assistant';

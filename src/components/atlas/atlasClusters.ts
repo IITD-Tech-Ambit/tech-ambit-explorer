@@ -434,13 +434,6 @@ export function computeExpandedDomainLayout(
 }
 
 /** @deprecated Use computeExpandedDomainLayout for spread sub-clusters. */
-export function computeDomainClusterLabels(
-  papers: KgAtlasPaper[],
-  theme: string,
-): DomainClusterLabel[] {
-  return computeExpandedDomainLayout(papers, theme).labels;
-}
-
 /** Build domain → color map for papers within one theme. */
 export function buildDomainColorMapForTheme(
   papers: KgAtlasPaper[],
@@ -726,16 +719,6 @@ export function resolveLockedClusterLevels(
   return { visible, levelByIndex, matchedTerms };
 }
 
-/** Match search query to full taxonomy clusters + free-text paper search. */
-export function resolveSearchHighlights(
-  query: string,
-  papers: KgAtlasPaper[],
-  index: AtlasClusterIndex,
-): { indices: Set<number>; matchedTerms: TaxonomyEntry[] } {
-  const { visible, matchedTerms } = resolveSearchMatchLevels(query, papers, index);
-  return { indices: visible, matchedTerms };
-}
-
 /** Build theme → department paper breakdown on the client (fallback when API unavailable). */
 export function buildThemeClusterBreakdownClient(
   papers: KgAtlasPaper[],
@@ -882,14 +865,6 @@ export function typeBadge(type: ClusterLevel): string {
   if (type === "domain") return "Domain";
   if (type === "subdomain") return "Sub-domain";
   return "Topic";
-}
-
-export function matchLevelLabel(level: MatchLevel): string {
-  if (level === "theme") return "Broad theme";
-  if (level === "domain") return "Domain";
-  if (level === "subdomain") return "Sub-domain";
-  if (level === "topic") return "Topic / keyword";
-  return "Paper title";
 }
 
 export function matchLevelColor(level: MatchLevel): string {

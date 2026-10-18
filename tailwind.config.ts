@@ -1,4 +1,6 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 export default {
   darkMode: ["class"],
@@ -95,14 +97,19 @@ export default {
             transform: "translateY(0)"
           }
         },
+        "placeholder-slide": {
+          "0%, 12%": { transform: "translateX(0)" },
+          "55%, 100%": { transform: "translateX(var(--slide))" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.6s ease-out",
         "slide-up": "slide-up 0.6s ease-out",
+        "placeholder-slide": "placeholder-slide 2.4s ease-in-out forwards",
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [tailwindcssAnimate, typography],
 } satisfies Config;

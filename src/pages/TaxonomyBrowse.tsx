@@ -151,7 +151,7 @@ const TaxonomyBrowse = () => {
                         </Select>
                         {departmentsQuery.isError && (
                             <p className="text-xs text-muted-foreground">
-                                Department filters are temporarily unavailable. Browsing by area still works.
+                                Department filters are temporarily unavailable.
                             </p>
                         )}
                     </div>

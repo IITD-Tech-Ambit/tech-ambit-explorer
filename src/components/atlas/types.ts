@@ -53,13 +53,6 @@ export interface KgAtlasClusterBreakdown {
   departments: KgAtlasDepartmentBreakdown[];
 }
 
-export interface KgAtlasData {
-  version: number;
-  count: number;
-  themes: string[];
-  papers: KgAtlasPaper[];
-}
-
 export interface KgAtlasFacultyMatch {
   facultyId: string;
   name: string;

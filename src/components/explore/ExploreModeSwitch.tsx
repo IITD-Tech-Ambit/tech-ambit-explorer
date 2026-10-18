@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, Check, Lightbulb, type LucideIcon } from "lucide-react";
+import { HoverSlideText } from "@/components/explore/HoverSlideText";
 import { cn } from "@/lib/utils";
 
 type Mode = "papers" | "ip";
@@ -46,7 +47,7 @@ export function ExploreModeSwitch({ active }: { active: Mode }) {
               role="tab"
               aria-selected={isActive}
               className={cn(
-                "group relative flex items-center gap-3 rounded-xl border-2 p-3 sm:p-4 text-left transition-all duration-200",
+                "group group/slide relative flex items-center gap-3 rounded-xl border-2 p-3 sm:p-4 text-left transition-all duration-200",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                 isActive
                   ? "border-primary bg-primary text-primary-foreground shadow-md"
@@ -68,21 +69,20 @@ export function ExploreModeSwitch({ active }: { active: Mode }) {
                     <span
                       className={cn(
                         "inline-flex items-center rounded-full px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-wide leading-normal",
-                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-accent/20 text-accent",
+                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-accent/15 text-teal-700 dark:bg-accent/20 dark:text-accent",
                       )}
                     >
                       New
                     </span>
                   )}
                 </div>
-                <p
+                <HoverSlideText
+                  text={description}
                   className={cn(
-                    "hidden sm:block text-xs mt-0.5 truncate",
-                    isActive ? "text-primary-foreground/80" : "text-muted-foreground",
+                    "hidden sm:block text-xs mt-0.5",
+                    isActive ? "text-primary-foreground/90" : "text-muted-foreground",
                   )}
-                >
-                  {description}
-                </p>
+                />
               </div>
               {isActive ? (
                 <Check className="hidden sm:block h-5 w-5 shrink-0" aria-hidden />

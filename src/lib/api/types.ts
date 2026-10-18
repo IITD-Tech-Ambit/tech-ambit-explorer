@@ -108,6 +108,7 @@ export interface SearchDocument {
     open_search_id?: string;
     rerank_score?: number;
     source?: PaperSource;
+    source_relationship?: PaperSourceRelationship;
 }
 
 /** Publication venue from Scopus. source_type: j journal, p conference proceeding, k book series, b book, d trade journal, r report. */
@@ -116,6 +117,16 @@ export interface PaperSource {
     publisher?: string;
     source_type?: string;
     issn?: string;
+    isbn?: string;
+    sourceTitleAbbreviation?: string;
+}
+
+/** Where the paper sits inside its source (Scopus `sourceRelationship`). */
+export interface PaperSourceRelationship {
+    volume?: string;
+    issue?: string;
+    pages?: Array<{ pageFirst?: string; pageLast?: string }>;
+    articleNumber?: string;
 }
 
 export interface SearchFacets {

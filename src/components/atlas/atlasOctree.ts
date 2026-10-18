@@ -1,20 +1,14 @@
 /**
- * Octree LOD selection + streaming tile manager for the Research Atlas.
+ * Streaming tile manager for the Research Atlas.
  *
- * selectVisibleNodes walks the headers-only tree, keeping every node that
- * intersects the camera frustum (additive LOD: a node plus its loaded ancestors
- * make up full density), and descends into children only while a node's
- * projected screen-space error is too large.
- *
- * TileManager streams the binary tiles for the selected nodes into pooled
- * Three.js Points buffers, bounds concurrency, and evicts least-recently-used
- * off-screen tiles once a point budget is exceeded.
+ * TileManager streams the binary octree tiles into pooled Three.js Points
+ * buffers, bounds concurrency, and evicts least-recently-used off-screen tiles
+ * once a point budget is exceeded.
  */
 import * as THREE from "three";
 import {
   AtlasTree,
   DecodedTile,
-  childKeys,
   fetchAtlasTile,
 } from "./atlasTiles";
 import {
@@ -36,44 +30,6 @@ export function themeColorHex(themeId: number): string {
 /** All node keys — the octree stores each point once, so this is the full cloud. */
 export function allNodeKeys(tree: AtlasTree): string[] {
   return Object.keys(tree.nodes);
-}
-
-export function selectVisibleNodes(
-  tree: AtlasTree,
-  camera: THREE.PerspectiveCamera,
-  viewportHeight: number,
-  sseThreshold: number,
-  maxNodes: number,
-): string[] {
-  const projScreen = new THREE.Matrix4().multiplyMatrices(
-    camera.projectionMatrix,
-    camera.matrixWorldInverse,
-  );
-  const frustum = new THREE.Frustum().setFromProjectionMatrix(projScreen);
-  const slope = Math.tan((camera.fov * Math.PI) / 180 / 2);
-  const box = new THREE.Box3();
-  const sphere = new THREE.Sphere();
-  const camPos = camera.position;
-
-  const result: string[] = [];
-  const stack: string[] = [tree.root];
-  while (stack.length && result.length < maxNodes) {
-    const key = stack.pop()!;
-    const node = tree.nodes[key];
-    if (!node) continue;
-    box.min.fromArray(node.bounds.min);
-    box.max.fromArray(node.bounds.max);
-    if (!frustum.intersectsBox(box)) continue;
-    result.push(key);
-    if (!node.childMask) continue;
-    box.getBoundingSphere(sphere);
-    const dist = Math.max(sphere.center.distanceTo(camPos) - sphere.radius, 1e-3);
-    const projectedPx = (sphere.radius / dist) * (viewportHeight / (2 * slope));
-    if (projectedPx > sseThreshold) {
-      for (const c of childKeys(key, node.childMask)) stack.push(c);
-    }
-  }
-  return result;
 }
 
 interface MountedTile {

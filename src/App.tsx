@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,10 +20,16 @@ import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import SuggestionModal from "./components/SuggestionModal";
 import ChatbotWidget from "./components/chat/ChatbotWidget";
+import ChatbotComingSoon from "./components/chat/ChatbotComingSoon";
 import SitePreloader from "./components/SitePreloader";
 import { ThemeProvider } from "./components/theme-provider";
 import { AuthProvider } from "./contexts/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { shouldRetryQuery } from "./lib/errors";
+
+// The chatbot ships disabled; set VITE_CHATBOT_ENABLED=true to launch it.
+const CHATBOT_ENABLED = import.meta.env.VITE_CHATBOT_ENABLED === "true";
 
 /** Preserve query string when moving legacy /explore/browse → /research-areas. */
 function RedirectExploreBrowse() {
@@ -37,12 +43,18 @@ function RedirectAtlas() {
   return <Navigate to={`/iitd-verse${search}`} replace />;
 }
 
+function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
-      retry: 2,
+      retry: shouldRetryQuery,
+      retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 4000),
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
     },
@@ -85,6 +97,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
+          <RouteErrorBoundary>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
@@ -102,6 +115,7 @@ const App = () => {
             <Route path="/terms-of-service" element={<TermsOfService />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </RouteErrorBoundary>
         </BrowserRouter>
         <button
           onClick={() => setSuggestionOpen(true)}
@@ -113,11 +127,15 @@ const App = () => {
           <Lightbulb className="w-4 h-4 flex-shrink-0" />
         </button>
 
-        <SuggestionModal
-          open={suggestionOpen}
-          onClose={() => setSuggestionOpen(false)}
-        />
-        <ChatbotWidget />
+        <ErrorBoundary fallback={null}>
+          <SuggestionModal
+            open={suggestionOpen}
+            onClose={() => setSuggestionOpen(false)}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={null}>
+          {CHATBOT_ENABLED ? <ChatbotWidget /> : <ChatbotComingSoon />}
+        </ErrorBoundary>
       </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
