@@ -14,6 +14,7 @@ export type SelectedInventor = { name: string; kerberos: string };
 /**
  * URL + refinement chain + search/filter state for IP/Patents Explore.
  * Multi-step refinement: newest term drives ranking; prior terms narrow via refine_chain.
+ * A submitted query only extends the chain when `nestedSearch` is on; otherwise it starts fresh.
  * Inventor drill-down uses POST /ip/search/inventor-scope (mirrors papers' author-scope) so
  * a selected inventor gets the same "N total patents · M relevant" ranked, paginated view.
  * URL shape: ?q=<base>&refine=<r1>&refine=<r2>...
@@ -32,6 +33,7 @@ export function useIPExploreState() {
     const page = searchParams.get("page");
     return page ? parseInt(page, 10) : 1;
   });
+  const [nestedSearch, setNestedSearch] = useState(false);
   const [mode, setMode] = useState<IPMode>(() => (searchParams.get("mode") === "advanced" ? "advanced" : "basic"));
   const [sort, setSort] = useState<IPSort>(() => {
     const s = searchParams.get("sort");
@@ -170,7 +172,7 @@ export function useIPExploreState() {
     };
   }, [isBrowse, activeQuery, priorChain, currentPage, perPage, sort, mode, filters]);
 
-  const { data: searchData, isLoading, isFetching, error } = useIPSearch(searchRequest);
+  const { data: searchData, isLoading, isFetching, error, refetch: refetchSearch } = useIPSearch(searchRequest);
 
   // Same contract as POST /ip/search: main `query` is the newest chain term, `refine_chain` is
   // the prior chain — so refining while an inventor is selected narrows within their patents.
@@ -195,6 +197,8 @@ export function useIPExploreState() {
     data: inventorScopedData,
     isLoading: isInventorScopedLoading,
     isFetching: isInventorScopedFetching,
+    error: inventorScopedError,
+    refetch: refetchInventorScoped,
   } = useInventorScopedSearch(inventorScopedRequest);
 
   useEffect(() => {
@@ -212,6 +216,7 @@ export function useIPExploreState() {
     data: allFacultyData,
     isLoading: isAllFacultyLoadingRaw,
     isFetching: isAllFacultyFetching,
+    refetch: refetchAllFaculty,
   } = useAllIPFacultyForQuery(
     isBrowse ? "" : activeQuery,
     mode,
@@ -232,16 +237,15 @@ export function useIPExploreState() {
   const relatedFaculty = searchData?.related_faculty ?? [];
   const facets = searchData?.facets ?? {};
 
-  // First submission sets base topic; subsequent submissions append a narrowing step.
   // A prior browse-by-department chain (isBrowse) has a facet label as its only term, not real
   // query text — appending onto it via refine_chain would wrongly text-match that label, so a
   // new real query starts a fresh chain instead (the department filter itself stays pinned).
   const performSearch = useCallback(
-    (page: number = 1) => {
+    (page: number = 1, nest: boolean = nestedSearch) => {
       const q = searchQuery.trim();
       if (!q) return;
 
-      if (refinementChain.length > 0 && !isBrowse) {
+      if (nest && refinementChain.length > 0 && !isBrowse) {
         const next = [...refinementChain, q];
         setRefinementChain(next);
         setSearchQuery("");
@@ -259,10 +263,11 @@ export function useIPExploreState() {
       setSelectedInventor(null);
       setInventorScopedPage(1);
       setIsBrowse(false);
+      setNestedSearch(false);
       writeUrl(next, { page });
       setSearchQuery("");
     },
-    [searchQuery, refinementChain, isBrowse, writeUrl]
+    [searchQuery, nestedSearch, refinementChain, isBrowse, writeUrl]
   );
 
   /** Fresh single-step search from a term (empty-state chips); optionally pins department. */
@@ -276,6 +281,7 @@ export function useIPExploreState() {
       setSelectedInventor(null);
       setInventorScopedPage(1);
       setIsBrowse(false);
+      setNestedSearch(false);
       if (opts?.department !== undefined) {
         setDepartment(opts.department);
       }
@@ -301,6 +307,7 @@ export function useIPExploreState() {
       setInventorScopedPage(1);
       setDepartment(trimmed);
       setIsBrowse(true);
+      setNestedSearch(false);
       writeUrl([trimmed], { page: 1 });
     },
     [writeUrl]
@@ -310,7 +317,7 @@ export function useIPExploreState() {
     if (showSuggestions && suggestionsRef.current?.handleKeyDown(e)) return;
     if (e.key === "Enter") {
       setShowSuggestions(false);
-      performSearch(1);
+      performSearch(1, e.shiftKey ? !nestedSearch : nestedSearch);
     }
   };
 
@@ -344,12 +351,12 @@ export function useIPExploreState() {
         startFreshSearch(inventor.name);
         return;
       }
-      if (!hasSearched) {
+      if (!hasSearched || !nestedSearch) {
         startFreshSearch(inventor.name);
       }
       selectInventor({ name: inventor.name, kerberos: inventor.kerberos });
     },
-    [hasSearched, startFreshSearch, selectInventor]
+    [hasSearched, nestedSearch, startFreshSearch, selectInventor]
   );
 
   const selectDocumentSuggestion = useCallback(
@@ -436,9 +443,27 @@ export function useIPExploreState() {
     setDepartment("");
     setCountry("");
     setIsBrowse(false);
+    setNestedSearch(false);
     skipUrlEffect.current = true;
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
+
+
+  const removeFilter = useCallback(
+    (key: "year" | "typeOfIp" | "department" | "country") => {
+      const overrides =
+        key === "year" ? { yearFrom: "", yearTo: "" } : { [key]: "" };
+      if (key === "year") {
+        setYearFrom("");
+        setYearTo("");
+      } else if (key === "typeOfIp") setTypeOfIp("");
+      else if (key === "department") setDepartment("");
+      else setCountry("");
+      setCurrentPage(1);
+      if (hasSearched) writeUrl(refinementChain, { page: 1, ...overrides });
+    },
+    [hasSearched, refinementChain, writeUrl]
+  );
 
   /** Remove a term at any index; empty chain clears the search. */
   const removeRefinementTerm = useCallback(
@@ -472,6 +497,8 @@ export function useIPExploreState() {
     activeQuery,
     priorChain,
     currentPage,
+    nestedSearch,
+    setNestedSearch,
     showSuggestions,
     setShowSuggestions,
     suggestionsRef,
@@ -510,7 +537,8 @@ export function useIPExploreState() {
     searchData,
     isLoading,
     isFetching,
-    error,
+    searchError: selectedInventor ? inventorScopedError : error,
+    retrySearch: selectedInventor ? refetchInventorScoped : () => Promise.all([refetchSearch(), refetchAllFaculty()]),
     results,
     pagination,
     relatedFaculty,
@@ -526,6 +554,7 @@ export function useIPExploreState() {
     changeMode,
     applyFilters,
     clearFilters,
+    removeFilter,
     clearAll,
     goToChainLevel,
     removeRefinementTerm,

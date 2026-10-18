@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Users, Building, ChevronDown, BookOpen } from "lucide-react";
-import { useSearchDocument, type SearchDocument } from "@/lib/api";
+import type { SearchDocument } from "@/lib/api";
 import { renderHighlightedText, renderHighlightedAbstract } from "@/lib/utils";
-import { getSourceTitle } from "@/lib/paperSource";
+import { getSourceTitle, getVolumeIssue } from "@/lib/paperSource";
 import { ExploreCardAuthorsLine } from "@/components/explore/exploreAuthors";
 
 type SelectedAuthor = { name: string; author_id: string } | null;
@@ -25,9 +25,8 @@ function ExplorePaperCard({
   onSelect,
   onAuthorClick,
 }: PaperCardProps) {
-  // Search results come without `source`; the full document endpoint has it.
-  const { data: fullDocument } = useSearchDocument(item._id, { enabled: !item.source });
-  const sourceTitle = getSourceTitle(item.source ?? fullDocument?.source);
+  const sourceTitle = getSourceTitle(item.source);
+  const volumeIssue = getVolumeIssue(item.source_relationship);
   return (
     <Card
       key={item._id || index}
@@ -52,12 +51,13 @@ function ExplorePaperCard({
           onAuthorClick={onAuthorClick}
         />
         {sourceTitle && (
-          <div className="flex items-start gap-1.5 text-sm text-muted-foreground mt-1" title={sourceTitle}>
-            <BookOpen className="h-4 w-4 mt-0.5 shrink-0 text-primary/70" />
-            <span className="line-clamp-1">
-              <span className="font-semibold text-primary/80 mr-1">Source Title:</span>
-              {sourceTitle}
-            </span>
+          <div
+            className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1 min-w-0"
+            title={volumeIssue ? `${sourceTitle}, ${volumeIssue}` : sourceTitle}
+          >
+            <BookOpen className="h-4 w-4 shrink-0 text-primary/70" />
+            <span className="truncate italic pr-0.5 text-foreground/80">{sourceTitle}</span>
+            {volumeIssue && <span className="shrink-0">· {volumeIssue}</span>}
           </div>
         )}
       </CardHeader>

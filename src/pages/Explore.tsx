@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, FileText, Users, Loader2, X, ChevronDown, ChevronRight, Building, Sparkles } from "lucide-react";
+import { useRef } from "react";
+import { Search, Filter, FileText, Loader2, X, ChevronDown, ChevronRight, Building, Sparkles, Undo2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { ResultListSkeleton } from "@/components/ResultCardSkeleton";
+import { ErrorState } from "@/components/ErrorState";
 import { SearchSuggestions } from "@/components/SearchSuggestions";
 import {
   PeopleSectionHeader,
@@ -18,15 +20,22 @@ import { ExploreDocumentModal } from "@/components/explore/ExploreDocumentModal"
 import { ExplorePaperList } from "@/components/explore/ExplorePaperList";
 import { ExploreModeSwitch } from "@/components/explore/ExploreModeSwitch";
 import { SearchModeSwitch, SEARCH_MODE_LABEL } from "@/components/explore/SearchModeSwitch";
-import { NestedSearchHint } from "@/components/explore/NestedSearchHints";
+import { HoverSlideText } from "@/components/explore/HoverSlideText";
+import { ExploreSearchField } from "@/components/explore/ExploreSearchField";
+import { SearchScopeActions } from "@/components/explore/SearchScopeActions";
+import { SearchWithinButton } from "@/components/explore/SearchWithinButton";
+import { useRefineNudge } from "@/hooks/explore/useRefineNudge";
 import { useExploreSearchState } from "@/hooks/explore/useExploreSearchState";
 import { useExplorePeople } from "@/hooks/explore/useExplorePeople";
 import { useExploreResults } from "@/hooks/explore/useExploreResults";
 
+const CURRENT_YEAR = new Date().getFullYear();
+const NUDGE_MIN_RESULTS = 50;
+
 const Explore = () => {
   const search = useExploreSearchState();
   const {
-    searchQuery, setSearchQuery, refinementChain, currentPage,
+    searchQuery, setSearchQuery, refinementChain, currentPage, nestedSearch, setNestedSearch,
     showSuggestions, setShowSuggestions, suggestionsRef, searchBoxRef,
     selectedAuthor, setSelectedAuthor, authorScopedPage, setAuthorScopedPage,
     activeFilter, setActiveFilter, showFilters, setShowFilters,
@@ -34,26 +43,27 @@ const Explore = () => {
     baseQuery, activeQuery, hasSearched,
     searchHistory, removeSearchLog, clearSearchLog,
     suggestData, isSuggestFetching, recentQueries,
-    yearFrom, setYearFrom, yearTo, setYearTo, perPage, setPerPage, searchIn,
+    yearFrom, setYearFrom, yearTo, setYearTo, perPage, setPerPage,
     searchData, isLoading, authorScopedData, isAuthorScopedLoading, isAuthorScopedFetching,
     allFacultyData, isAllFacultyLoading, results, pagination,
     clearAll, goToChainLevel, popRefinement, changeMode, goToPage, performSearch,
     handleSearchKeyDown, selectAuthorSuggestion, selectPaperSuggestion, selectRecentSuggestion,
-    applyFilters, clearFilters, replayRecentSearch,
+    applyFilters, clearFilters, replayRecentSearch, isFetching, searchError, retrySearch,
+    allFacultyError, retryAllFaculty,
   } = search;
+  const searchRetrying = isFetching || isAuthorScopedFetching;
+  const searchFailed = hasSearched && !isLoading && !searchRetrying && Boolean(searchError);
 
   const people = useExplorePeople({
     allFacultyData,
     isAllFacultyLoading,
     selectedAuthor,
-    setSelectedAuthor,
-    setAuthorScopedPage,
   });
   const {
     PEOPLE_PER_PAGE, groupByDepartment, setGroupByDepartment,
     isPeopleSidebarOpen, setIsPeopleSidebarOpen,
     isPeopleLoadingMore,
-    peoplePage, setPeoplePage, sidebarWidth, isResizingState,
+    peoplePage, sidebarWidth, isResizingState,
     leftColRef, containerRef, peopleSentinelRef, peopleHasMoreRef,
     startResizing, peopleTotalCount, toggleDepartment, isDeptExpanded,
     openAggregatedFacultyProfile,
@@ -67,9 +77,36 @@ const Explore = () => {
       clientSort,
       selectedAuthor,
       authorScopedData,
-      refinementChain,
     });
 
+  const isNesting = nestedSearch && hasSearched;
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const startSearchWithin = () => {
+    setNestedSearch(true);
+    searchInputRef.current?.focus();
+  };
+
+  const scopeActions = hasSearched && searchQuery.trim() ? (
+    <SearchScopeActions
+      query={searchQuery.trim()}
+      currentTerm={activeQuery}
+      resultCount={selectedAuthor ? authorScopedData?.pagination?.total : pagination?.total}
+      withinByDefault={nestedSearch}
+      allLabel="all papers"
+      onSearchAll={() => { setShowSuggestions(false); performSearch(1, false); }}
+      onSearchWithin={() => { setShowSuggestions(false); performSearch(1, true); }}
+    />
+  ) : undefined;
+
+  const nudge = useRefineNudge({
+    searchKey: JSON.stringify([refinementChain, searchMode, activeFilter, yearFrom, yearTo]),
+    eligible:
+      refinementChain.length === 1 && !nestedSearch && !selectedAuthor && !isFetching &&
+      (pagination?.total ?? 0) >= NUDGE_MIN_RESULTS,
+    engaged: selectedDocument !== null,
+    page: currentPage,
+  });
 
   return (
     <div className="min-h-screen page-bg flex flex-col">
@@ -95,48 +132,23 @@ const Explore = () => {
             <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
               
               <div className="relative flex-1 w-full" ref={searchBoxRef}>
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                  {searchIn.length === 1 && searchIn[0] === 'author'
-                    ? <Users className="w-5 h-5 text-primary/70" />
-                    : <Search className="w-5 h-5 text-foreground/60" />}
-                </div>
-                <Input
-                  type="text"
-                  placeholder={
-                    searchIn.length === 1 && searchIn[0] === 'author'
-                      ? "Search by author name..."
-                      : hasSearched
-                        ? `Narrow within "${activeQuery}"... (step ${refinementChain.length + 1})`
-                        : "Search by department, project, faculty, or keywords..."
-                  }
-                  className={`pl-12 pr-24 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm ${
-                    searchIn.length === 1 && searchIn[0] === 'author' ? 'border-primary/30' : ''
-                  }`}
+                <ExploreSearchField
+                  ref={searchInputRef}
                   value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                  onChange={(v) => { setSearchQuery(v); setShowSuggestions(true); }}
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={handleSearchKeyDown}
-                  autoComplete="off"
-                  role="combobox"
-                  aria-expanded={showSuggestions}
+                  onSubmit={() => { setShowSuggestions(false); performSearch(1); }}
+                  placeholder={
+                    isNesting
+                      ? pagination ? `Narrow these ${pagination.total.toLocaleString()} results...` : "Narrow these results..."
+                      : "Search faculty, topics, or keywords"
+                  }
+                  isLoading={isLoading}
+                  expanded={showSuggestions}
+                  scopeTerm={isNesting ? activeQuery : null}
+                  onClearScope={() => setNestedSearch(false)}
                 />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-16 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted transition-colors"
-                    aria-label="Clear input"
-                  >
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                )}
-                <Button
-                  onClick={() => { setShowSuggestions(false); performSearch(1); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  disabled={isLoading}
-                  size="icon"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                </Button>
 
                 
                 {showSuggestions && (
@@ -151,6 +163,7 @@ const Explore = () => {
                       onSelectPaper={selectPaperSuggestion}
                       onSelectRecent={selectRecentSuggestion}
                       onClose={() => setShowSuggestions(false)}
+                      footer={scopeActions}
                     />
                   </div>
                 )}
@@ -171,7 +184,7 @@ const Explore = () => {
                   <Filter className="h-5 w-5" />
                   <span className="font-medium text-base">Filters</span>
                   {(() => {
-                    const count = (yearFrom ? 1 : 0) + (yearTo ? 1 : 0) + (activeFilter !== 'All' ? 1 : 0) + (perPage !== 20 ? 1 : 0);
+                    const count = (yearFrom ? 1 : 0) + (yearTo ? 1 : 0) + (activeFilter !== 'All' ? 1 : 0);
                     return count > 0 ? (
                       <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">{count}</span>
                     ) : null;
@@ -191,7 +204,7 @@ const Explore = () => {
                           value={yearFrom}
                           onChange={(e) => setYearFrom(e.target.value)}
                           min="1900"
-                          max="2025"
+                          max={CURRENT_YEAR}
                           className="h-9"
                         />
                       </div>
@@ -203,7 +216,7 @@ const Explore = () => {
                           value={yearTo}
                           onChange={(e) => setYearTo(e.target.value)}
                           min="1900"
-                          max="2025"
+                          max={CURRENT_YEAR}
                           className="h-9"
                         />
                       </div>
@@ -230,10 +243,6 @@ const Explore = () => {
               </div>
             </div>
 
-            {!selectedAuthor && (
-              <NestedSearchHint currentTerm={hasSearched ? refinementChain[refinementChain.length - 1] : undefined} />
-            )}
-
             {!hasSearched && searchHistory.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0">
@@ -251,7 +260,7 @@ const Explore = () => {
                         replayRecentSearch(entry);
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer"
+                    className="group/slide inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer"
                     title={
                       entry.refineWithin
                         ? `Refined "${entry.refineWithin}" to match "${entry.query}"`
@@ -259,7 +268,7 @@ const Explore = () => {
                     }
                   >
                     <Search className="w-3 h-3 text-muted-foreground" />
-                    <span className="truncate max-w-[180px]">{entry.query}</span>
+                    <HoverSlideText text={entry.query} className="max-w-[180px]" />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -285,7 +294,8 @@ const Explore = () => {
 
             
             {hasSearched && (
-              <div className="flex flex-wrap items-center gap-1.5 w-full">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 w-full">
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                 <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground shrink-0 mr-0.5">
                   {refinementChain.length > 1 ? 'Narrowing:' : 'Searching:'}
                 </span>
@@ -296,23 +306,23 @@ const Explore = () => {
                       <div key={`${term}-${i}`} className="flex items-center gap-1.5 animate-fade-in">
                         {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium shadow-sm transition-colors ${
+                          className={`group/slide inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium shadow-sm transition-colors ${
                             isNewest
                               ? 'bg-primary text-primary-foreground'
                               : 'bg-secondary text-secondary-foreground hover:bg-secondary/70 cursor-pointer'
                           }`}
                         >
                           {isNewest ? (
-                            <span className="truncate max-w-[220px]">{term}</span>
+                            <HoverSlideText text={term} className="max-w-[220px]" />
                           ) : (
                             <button
                               type="button"
                               onClick={() => goToChainLevel(i)}
                               title={`Back to results for "${term}"`}
                               aria-label={`Go back to step ${i + 1}: ${term}`}
-                              className="truncate max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                              className="max-w-[220px] min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                             >
-                              {term}
+                              <HoverSlideText text={term} />
                             </button>
                           )}
                           {isNewest && refinementChain.length > 1 && (
@@ -338,9 +348,12 @@ const Explore = () => {
                   Clear all
                 </button>
               </div>
+                {!isNesting && !searchFailed && (
+                  <SearchWithinButton onClick={startSearchWithin} hint={nudge.visible} onDismissHint={nudge.dismiss} />
+                )}
+              </div>
             )}
 
-            
             {(activeFilter !== 'All' || yearFrom || yearTo) && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-muted-foreground mr-0.5">Active:</span>
@@ -361,33 +374,6 @@ const Explore = () => {
           </div>
         </div>
 
-        
-        {hasSearched && !isLoading && refinementChain.length > 1 && (() => {
-          const total = selectedAuthor && authorScopedData
-            ? (authorScopedData.pagination?.total ?? 0)
-            : (pagination?.total ?? 0);
-          return (
-            <div className="container mx-auto px-4 mt-6 max-w-[800px] animate-slide-up">
-              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
-                <p className="text-xs text-muted-foreground">
-                  Narrowed through <span className="font-semibold text-foreground">{refinementChain.length}</span> steps
-                  {selectedAuthor && <> within <span className="font-semibold text-primary">{selectedAuthor.name}</span>'s papers</>}
-                  {' — '}
-                  <span className="font-semibold text-foreground">{total}</span> result{total === 1 ? '' : 's'}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={popRefinement}
-                  className="ml-3 shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Undo last step
-                </Button>
-              </div>
-            </div>
-          );
-        })()}
       </section>
 
       
@@ -412,14 +398,33 @@ const Explore = () => {
         )}
 
         
-        {hasSearched && !isLoading && filteredResults.length === 0 && (
+        {searchFailed && (
+          <ErrorState
+            error={searchError}
+            title="Search is unavailable right now"
+            onRetry={() => void retrySearch()}
+            retrying={searchRetrying}
+          />
+        )}
+
+        {hasSearched && !isLoading && !searchFailed && filteredResults.length === 0 && (
           <div className="flex flex-col items-center justify-center text-center pt-10 pb-8 sm:pt-16 sm:pb-12">
             <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4 border border-border/40">
               <FileText className="h-7 w-7 text-muted-foreground/60" />
             </div>
             <h3 className="text-lg font-semibold mb-1.5">No Results Found</h3>
-            <p className="text-sm text-muted-foreground">Try different keywords or adjust your filters</p>
-            {searchMode === 'basic' && (
+            <p className="text-sm text-muted-foreground">
+              {refinementChain.length > 1
+                ? <>Nothing in the results for "{refinementChain[refinementChain.length - 2]}" also matches "{activeQuery}".</>
+                : 'Try different keywords or adjust your filters'}
+            </p>
+            {refinementChain.length > 1 && (
+              <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={popRefinement}>
+                <Undo2 className="h-3.5 w-3.5" />
+                Remove "{activeQuery}"
+              </Button>
+            )}
+            {searchMode === 'basic' && refinementChain.length === 1 && (
               <>
                 <p className="text-sm text-muted-foreground mt-1">Exact only matches the words you typed — Nearest also finds related work that uses different wording.</p>
                 <Button
@@ -437,7 +442,7 @@ const Explore = () => {
         )}
 
         
-        {hasSearched && !isLoading && (selectedAuthor || filteredResults.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
+        {hasSearched && !isLoading && !searchFailed && (selectedAuthor || filteredResults.length > 0 || (allFacultyData?.total_faculty ?? 0) > 0) && (
           <div 
             ref={containerRef}
             className={`flex flex-col xl:flex-row items-start ${isPeopleSidebarOpen ? 'gap-0' : 'gap-4'}`}
@@ -490,6 +495,17 @@ const Explore = () => {
               // patched again.
               if (isAllFacultyLoading) {
                 return <PeopleLoadingState />;
+              }
+
+              if (allFacultyError && !allFacultyData) {
+                return (
+                  <ErrorState
+                    size="compact"
+                    error={allFacultyError}
+                    title="Couldn't load people"
+                    onRetry={() => void retryAllFaculty()}
+                  />
+                );
               }
 
               if (!allFacultyData || allFacultyData.total_faculty === 0) {

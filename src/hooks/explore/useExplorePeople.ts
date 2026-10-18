@@ -46,16 +46,12 @@ type UseExplorePeopleArgs = {
     | undefined;
   isAllFacultyLoading: boolean;
   selectedAuthor: SelectedAuthor | null;
-  setSelectedAuthor: (author: SelectedAuthor | null) => void;
-  setAuthorScopedPage: (page: number | ((p: number) => number)) => void;
 };
 
 export function useExplorePeople({
   allFacultyData,
   isAllFacultyLoading,
   selectedAuthor,
-  setSelectedAuthor,
-  setAuthorScopedPage,
 }: UseExplorePeopleArgs) {
   const [searchParams] = useSearchParams();
   // A deep link (?groupdept=1 from the chatbot button) wins over the saved

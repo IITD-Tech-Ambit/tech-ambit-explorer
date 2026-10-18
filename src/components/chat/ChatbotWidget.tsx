@@ -461,33 +461,10 @@ const ChatbotWidget = () => {
             >
               {messages.map((m, i) => {
                 if (m.role === "assistant" && !m.content && !m.error && !m.chart) return null;
-                const isLastMsg = i === messages.length - 1;
-                const onEdit =
-                  m.role === "user" && !isStreaming
-                    ? (text: string) => {
-                        setInput(text);
-                        if (textareaRef.current) {
-                          textareaRef.current.style.height = "44px";
-                          textareaRef.current.style.height =
-                            Math.min(textareaRef.current.scrollHeight, 120) + "px";
-                          textareaRef.current.focus();
-                        }
-                      }
-                    : undefined;
-                const onRetry =
-                  m.role === "assistant" && isLastMsg && !isStreaming
-                    ? () => {
-                        const lastUser = [...messages].reverse().find((x) => x.role === "user");
-                        if (lastUser) sendMessage(lastUser.content);
-                      }
-                    : undefined;
                 return (
                   <ChatMessage
                     key={i}
                     message={m}
-                    onEdit={onEdit}
-                    onRetry={onRetry}
-                    isLast={isLastMsg}
                     onOpenIPSource={(source) => setSelectedIPSourceId(source.id)}
                   />
                 );

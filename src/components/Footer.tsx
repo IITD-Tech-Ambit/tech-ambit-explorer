@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, Phone, MapPin, Github, Twitter, Linkedin, ExternalLink, Facebook } from "lucide-react";
+import { Mail, MapPin, Twitter, Linkedin, ExternalLink, Facebook } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import siteLogo from "@/assets/IITD-LOGO-preview.png";
 import {

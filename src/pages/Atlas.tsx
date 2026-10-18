@@ -37,7 +37,7 @@ const Atlas = () => {
   }, []);
 
   return (
-    <div ref={rootRef} className="h-screen relative overflow-hidden bg-black">
+    <div ref={rootRef} className="h-screen relative overflow-hidden bg-background">
       <div
         className={cn(
           "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out",
@@ -52,7 +52,7 @@ const Atlas = () => {
 
       <main
         className={cn(
-          "absolute inset-x-0 bottom-0 flex flex-col overflow-hidden transition-[top] duration-500 ease-in-out",
+          "absolute inset-x-0 bottom-0 flex flex-col overflow-hidden bg-black transition-[top] duration-500 ease-in-out",
           isImmersive ? "top-0" : "top-20",
         )}
       >

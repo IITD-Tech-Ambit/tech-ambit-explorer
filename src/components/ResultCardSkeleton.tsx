@@ -7,7 +7,7 @@ const STAGGER_MS = 60;
 /**
  * Mirrors ExplorePaperCard / IPPaperCard chrome (Card/CardHeader/CardTitle/CardContent,
  * badges row, title, meta line, 3-line abstract, footer meta row) using the project's
- * own Skeleton primitive — same building block as TaxonomyNodeGrid's GridSkeleton.
+ * own Skeleton primitive.
  */
 function ResultCardSkeleton({ delayMs }: { delayMs: number }) {
   return (

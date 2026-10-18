@@ -19,7 +19,7 @@ export const useLikeMagazine = (
 
     return useMutation<Analytics, Error, string>({
         mutationFn: likeMagazine,
-        onSuccess: (data, contentId) => {
+        onSuccess: (_data, contentId) => {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.magazines.detail(contentId)
             });
@@ -35,7 +35,7 @@ export const useDislikeMagazine = (
 
     return useMutation<Analytics, Error, string>({
         mutationFn: dislikeMagazine,
-        onSuccess: (data, contentId) => {
+        onSuccess: (_data, contentId) => {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.magazines.detail(contentId)
             });
@@ -56,7 +56,7 @@ export const useAddComment = (
     
     return useMutation<Comment, Error, AddCommentVariables>({
         mutationFn: ({ contentId, body }) => addComment(contentId, body),
-        onSuccess: (data, variables) => {
+        onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.magazines.detail(variables.contentId)
             });
@@ -77,7 +77,7 @@ export const useDeleteComment = (
     
     return useMutation<void, Error, DeleteCommentVariables>({
         mutationFn: ({ contentId, commentId }) => deleteComment(contentId, commentId),
-        onSuccess: (data, variables) => {
+        onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.magazines.detail(variables.contentId)
             });
