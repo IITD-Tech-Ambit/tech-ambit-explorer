@@ -35,7 +35,7 @@ export function createApiClient(baseURL: string): AxiosInstance {
             return config;
         },
         (error: AxiosError) => {
-            console.error('[API Request Error]', error);
+            if (import.meta.env.DEV) console.error('[API Request Error]', error);
             return Promise.reject(error);
         }
     );
@@ -49,33 +49,18 @@ export function createApiClient(baseURL: string): AxiosInstance {
             return response;
         },
         (error: AxiosError) => {
-            if (error.response) {
-                const status = error.response.status;
-                const message = (error.response.data as { message?: string } | undefined)?.message || error.message;
-
-                console.error(`[API Error ${status}]`, message);
-
-                switch (status) {
-                    case 401:
-                        // Session cookie missing/expired — AuthContext owns
-                        // re-authentication (login is a full-page redirect).
-                        break;
-                    case 403:
-                        console.error('Access forbidden');
-                        break;
-                    case 404:
-                        console.error('Resource not found');
-                        break;
-                    case 500:
-                        console.error('Server error');
-                        break;
-                    default:
-                        console.error('An error occurred');
+            // Callers handle the rejection. Logging here only helps local debugging;
+            // a production visitor should not see request traces in the console.
+            if (import.meta.env.DEV) {
+                if (error.response) {
+                    const status = error.response.status;
+                    const message = (error.response.data as { message?: string } | undefined)?.message || error.message;
+                    console.error(`[API Error ${status}]`, message);
+                } else if (error.request) {
+                    console.error('[API Error] No response received', error.request);
+                } else {
+                    console.error('[API Error] Request setup failed', error.message);
                 }
-            } else if (error.request) {
-                console.error('[API Error] No response received', error.request);
-            } else {
-                console.error('[API Error] Request setup failed', error.message);
             }
 
             return Promise.reject(error);

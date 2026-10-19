@@ -3,12 +3,12 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 
-import deanAvatar from "@/assets/image(Dean).png";
-import mentor1Avatar from "@/assets/image(OM).png";
-import mentor2Avatar from "@/assets/image(Harun).png";
-import mentor3Avatar from "@/assets/image(Shilpi).png";
-import mentor4Avatar from "@/assets/archana.jpeg";
-import mentor5Avatar from "@/assets/contributors/jyoti.png";
+import ashwiniAgrawal from "@/assets/contributors/ashwini-agrawal.png";
+import omPrakash from "@/assets/contributors/om-prakash.png";
+import harunVenkatesan from "@/assets/contributors/harun-venkatesan.png";
+import shilpiSharma from "@/assets/contributors/shilpi-sharma.png";
+import archanaTrivedi from "@/assets/contributors/archana-trivedi.jpeg";
+import jyotiGrover from "@/assets/contributors/jyoti-grover.png";
 import irdLogo from "@/assets/contributors/ird.png";
 import cscLogo from "@/assets/contributors/csc.png";
 import fittLogo from "@/assets/contributors/fitt.png";
@@ -58,7 +58,7 @@ const collaborators: Collaborator[] = [
 const dean: TeamMember = {
   name: "Prof. Ashwini K Agrawal",
   role: "Dean, Research and Development",
-  avatar: deanAvatar,
+  avatar: ashwiniAgrawal,
   linkedin: "https://textile.iitd.ac.in/faculty-profile/7",
   email: "mailto:ashwini@textile.iitd.ac.in",
 };
@@ -75,34 +75,34 @@ const mentors: TeamMember[] = [
   {
     name: "Prof. Shilpi Sharma",
     role: "Mentor",
-    avatar: mentor3Avatar,
+    avatar: shilpiSharma,
     linkedin: "https://beb.iitd.ac.in/shilpi.html",
     email: "mailto:shilpi@dbeb.iitd.ac.in",
   },
   {
     name: "Prof. Harun Venkatesan",
     role: "Mentor",
-    avatar: mentor2Avatar,
+    avatar: harunVenkatesan,
     linkedin: "https://textile.iitd.ac.in/faculty-profile/22",
     email: "mailto:harun@textile.iitd.ac.in",
   },
   {
     name: "Prof. Om Prakash",
     role: "Mentor",
-    avatar: mentor1Avatar,
+    avatar: omPrakash,
     linkedin: "https://iprana-lab.github.io/",
     email: "mailto:omprakash@iitd.ac.in",
   },
   {
     name: "Dr. Archana Trivedi",
     role: "Mentor",
-    avatar: mentor4Avatar,
+    avatar: archanaTrivedi,
     linkedin: "https://www.linkedin.com/in/archana-trivedi-a1968115/?originalSubdomain=in",
   },
   {
     name: "Mrs. Jyoti Grover",
     role: "Mentor",
-    avatar: mentor5Avatar,
+    avatar: jyotiGrover,
     linkedin: "https://www.linkedin.com/in/jyoti-grover-2854413b6/",
   },
 ];

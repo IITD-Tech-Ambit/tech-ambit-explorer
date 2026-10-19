@@ -184,8 +184,6 @@ const FacultyProfile = () => {
         }
     };
 
-    // Refresh this profile + every directory listing so the new image
-    // appears here and in directory results at once.
     const handlePhotoUploaded = () => queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
 
     if (isFacultyLoading) {
@@ -702,6 +700,8 @@ const FacultyProfile = () => {
                                                     </div>
                                                 </div>
                                                 <textarea
+                                                    id="profile-background"
+                                                    name="background"
                                                     value={extras.background}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, background: e.target.value } : x))}
                                                     rows={5}
@@ -729,6 +729,7 @@ const FacultyProfile = () => {
                                                     {extras.qualifications.map((q, i) => (
                                                         <div key={i} className="flex items-center gap-2">
                                                             <input
+                                                                name={`qualification-${i}`}
                                                                 value={q}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
@@ -781,6 +782,7 @@ const FacultyProfile = () => {
                                                     {extras.awards.map((a, i) => (
                                                         <div key={i} className="flex items-center gap-2">
                                                             <input
+                                                                name={`award-${i}`}
                                                                 value={a}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
@@ -840,6 +842,7 @@ const FacultyProfile = () => {
                                                     {extras.customResearchAreas.map((a, i) => (
                                                         <div key={i} className="flex items-center gap-2">
                                                             <input
+                                                                name={`research-area-${i}`}
                                                                 value={a}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
@@ -881,6 +884,8 @@ const FacultyProfile = () => {
                                                 </p>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <input
+                                                        id="profile-primary-email"
+                                                        name="primaryEmail"
                                                         value={extras.primaryEmail}
                                                         disabled
                                                         className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
@@ -892,6 +897,7 @@ const FacultyProfile = () => {
                                                         <div key={i} className="flex items-center gap-2">
                                                             <input
                                                                 type="email"
+                                                                name={`email-${i}`}
                                                                 value={em}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
@@ -938,6 +944,8 @@ const FacultyProfile = () => {
                                                     </div>
                                                 </div>
                                                 <input
+                                                    id="profile-phone"
+                                                    name="phone"
                                                     value={extras.phone}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, phone: e.target.value } : x))}
                                                     placeholder="e.g. +91 11 2659 1234"
@@ -961,6 +969,8 @@ const FacultyProfile = () => {
                                                     </div>
                                                 </div>
                                                 <textarea
+                                                    id="profile-office"
+                                                    name="officeAddress"
                                                     value={extras.officeAddress}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, officeAddress: e.target.value } : x))}
                                                     rows={2}
@@ -991,6 +1001,7 @@ const FacultyProfile = () => {
                                                     {extras.externalLinks.map((link, i) => (
                                                         <div key={i} className="flex items-center gap-2">
                                                             <input
+                                                                name={`link-label-${i}`}
                                                                 value={link.label}
                                                                 maxLength={60}
                                                                 onChange={(e) => setExtras((x) => {
@@ -1003,6 +1014,7 @@ const FacultyProfile = () => {
                                                                 className="w-2/5 min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                                                             />
                                                             <input
+                                                                name={`link-url-${i}`}
                                                                 value={link.url}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;

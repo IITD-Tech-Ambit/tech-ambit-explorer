@@ -197,8 +197,10 @@ const Explore = () => {
                   <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] sm:w-[420px] bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-slide-up">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-muted-foreground">Year From</label>
+                        <label htmlFor="year-from" className="text-xs font-medium text-muted-foreground">Year From</label>
                         <Input
+                          id="year-from"
+                          name="yearFrom"
                           type="number"
                           placeholder="2020"
                           value={yearFrom}
@@ -209,8 +211,10 @@ const Explore = () => {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-muted-foreground">Year To</label>
+                        <label htmlFor="year-to" className="text-xs font-medium text-muted-foreground">Year To</label>
                         <Input
+                          id="year-to"
+                          name="yearTo"
                           type="number"
                           placeholder="2024"
                           value={yearTo}
@@ -221,8 +225,10 @@ const Explore = () => {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-muted-foreground">Per Page</label>
+                        <label htmlFor="per-page" className="text-xs font-medium text-muted-foreground">Per Page</label>
                         <select
+                          id="per-page"
+                          name="perPage"
                           className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
                           value={perPage}
                           onChange={(e) => setPerPage(parseInt(e.target.value))}
@@ -661,6 +667,9 @@ const Explore = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">Sort by:</span>
                       <select
+                        id="result-sort"
+                        name="sort"
+                        aria-label="Sort by"
                         value={clientSort}
                         onChange={(e) => setClientSort(e.target.value as 'relevance' | 'citations')}
                         className="h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"

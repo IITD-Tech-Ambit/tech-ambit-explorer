@@ -41,8 +41,10 @@ export function IPFilterPanel({
     <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] sm:w-[440px] bg-card border border-border rounded-xl shadow-xl p-5 space-y-4 animate-slide-up max-h-[75vh] overflow-y-auto">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Year From</label>
+          <label htmlFor="ip-year-from" className="text-xs font-medium text-muted-foreground">Year From</label>
           <Input
+            id="ip-year-from"
+            name="yearFrom"
             type="number"
             placeholder="2015"
             value={yearFrom}
@@ -53,8 +55,10 @@ export function IPFilterPanel({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Year To</label>
+          <label htmlFor="ip-year-to" className="text-xs font-medium text-muted-foreground">Year To</label>
           <Input
+            id="ip-year-to"
+            name="yearTo"
             type="number"
             placeholder="2025"
             value={yearTo}
@@ -68,8 +72,10 @@ export function IPFilterPanel({
 
       {typeOptions.length > 0 && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Type of IP</label>
+          <label htmlFor="ip-type" className="text-xs font-medium text-muted-foreground">Type of IP</label>
           <select
+            id="ip-type"
+            name="typeOfIp"
             className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background capitalize"
             value={typeOfIp}
             onChange={(e) => setTypeOfIp(e.target.value)}
@@ -86,8 +92,10 @@ export function IPFilterPanel({
 
       {departmentOptions.length > 0 && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Department</label>
+          <label htmlFor="ip-department" className="text-xs font-medium text-muted-foreground">Department</label>
           <select
+            id="ip-department"
+            name="department"
             className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
             value={department}
             onChange={(e) => setDepartment(e.target.value)}
@@ -104,8 +112,10 @@ export function IPFilterPanel({
 
       {countryOptions.length > 0 && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Country</label>
+          <label htmlFor="ip-country" className="text-xs font-medium text-muted-foreground">Country</label>
           <select
+            id="ip-country"
+            name="country"
             className="w-full px-3 py-2 h-9 text-sm border border-input rounded-md bg-background"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
