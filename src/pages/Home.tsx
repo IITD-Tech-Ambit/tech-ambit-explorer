@@ -14,12 +14,12 @@ import {
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import HeroSlideshow from "@/components/HeroSlideshow";
-import heroSlide1 from "@/assets/hero-slide-1.png";
-import heroSlide2 from "@/assets/hero-slide-2.png";
-import heroSlide3 from "@/assets/hero-slide-3.png";
-import heroSlide4 from "@/assets/hero-slide-4.png";
-import heroSlide5 from "@/assets/hero-slide-5.png";
-import researchCollage from "@/assets/iit-delhi-aerial.png";
+import heroSlide1 from "@/assets/home/campus-architecture.png";
+import heroSlide2 from "@/assets/home/aerial-solar.png";
+import heroSlide3 from "@/assets/home/main-building.png";
+import heroSlide4 from "@/assets/home/main-entrance.png";
+import heroSlide5 from "@/assets/home/academic-block.png";
+import campusAerial from "@/assets/home/campus-aerial.png";
 import { cn } from "@/lib/utils";
 
 const CAMPUS_VIDEO_SRC = "/videos/campus-research.mp4";
@@ -366,7 +366,7 @@ const Home = () => {
                 <video
                   className="campus-video-player"
                   src={CAMPUS_VIDEO_SRC}
-                  poster={researchCollage}
+                  poster={campusAerial}
                   autoPlay
                   muted
                   loop

@@ -98,6 +98,8 @@ npm run dev
 
 Dev server: http://localhost:5173. With `.env.example`, API calls go to the gateway at http://localhost:8080.
 
+Keep those URLs on localhost. `VITE_API_URL=https://researchambit.iitd.ac.in/api` (and the same host for search and chat) sends every save to production. A profile photo, visibility change, or profile-extras save is then a live edit, and the production backend emails that faculty member after the quiet period. `VITE_ENABLE_AUTH=false` skips only this client's session check. The API still enforces its own.
+
 ### Environment variables
 
 | Variable | Local value in `.env.example` | Role |

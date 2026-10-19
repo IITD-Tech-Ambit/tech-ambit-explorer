@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Calendar, Clock, User, Loader2, ThumbsUp, MessageCircle, Send, ChevronUp } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import magazineCover from "@/assets/magazine-cover-1.jpg";
+import magazineCover from "@/assets/magazines/cover.jpg";
 import {
     useMagazine,
     useLikeMagazine,

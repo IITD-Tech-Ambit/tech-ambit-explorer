@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, Calendar, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import magazineCover from "@/assets/magazine-cover-1.jpg";
+import magazineCover from "@/assets/magazines/cover.jpg";
 import { useNavigate } from "react-router-dom";
 import { usePaginatedMagazines, type Magazine } from "@/lib/api";
 

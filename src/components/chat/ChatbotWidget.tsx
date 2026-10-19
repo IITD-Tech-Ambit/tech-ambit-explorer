@@ -571,6 +571,9 @@ const ChatbotWidget = () => {
             }}
           >
             <textarea
+              id="chat-message"
+              name="message"
+              aria-label="Message"
               ref={(el) => {
                 (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
                 (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;

@@ -234,6 +234,8 @@ const ProfilePhotoDialog = ({
 
                 <input
                     ref={fileInputRef}
+                    id="profile-photo"
+                    name="photo"
                     type="file"
                     accept={ACCEPTED_TYPES.join(",")}
                     className="hidden"

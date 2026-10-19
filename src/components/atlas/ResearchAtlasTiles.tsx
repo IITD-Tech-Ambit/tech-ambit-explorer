@@ -158,6 +158,8 @@ function FilterCombobox({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             <input
               ref={inputRef}
+              name="filter"
+              aria-label={searchPlaceholder}
               value={filter}
               onChange={(ev) => setFilter(ev.target.value)}
               onKeyDown={(ev) => {
@@ -2802,6 +2804,8 @@ export default function ResearchAtlasTiles({
                 <span className="sr-only">Publication period</span>
                 <Calendar className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-sky-400" />
                 <select
+                  id="atlas-years"
+                  name="years"
                   value={selectedYears}
                   onChange={(event) => {
                     setSelectedYears(Number(event.target.value));

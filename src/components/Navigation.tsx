@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import instituteSeal from "@/assets/logo2-transparent.png";
+import instituteSeal from "@/assets/brand/institute-seal.png";
 import { Menu, X, Moon, Sun, LogIn, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
