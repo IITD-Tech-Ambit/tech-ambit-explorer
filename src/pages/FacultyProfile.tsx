@@ -8,7 +8,7 @@ import {
     FileText, TrendingUp, FileBadge2, Pencil, Camera, X, Plus, GraduationCap,
     Trophy, Phone, MapPin, Link2, ShieldCheck,
 } from "lucide-react";
-import { useState, useRef, useEffect, type ElementType, type ChangeEvent } from "react";
+import { useState, useEffect, type ElementType } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import Navigation from "@/components/Navigation";
@@ -17,10 +17,11 @@ import { useFacultyByKerberos, useFacultyResearchSummary } from "@/lib/api/hooks
 import { useFacultyPatents } from "@/lib/api/hooks/useIPSearch";
 import PublicationTimeline from "@/components/PublicationTimeline";
 import PatentTimeline from "@/components/PatentTimeline";
+import ProfilePhotoDialog from "@/components/directory/ProfilePhotoDialog";
 import { getDepartmentUrl } from "@/lib/deptUrls";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-    uploadFacultyImage, updateFacultyVisibility, getFacultyProfileExtras,
+    updateFacultyVisibility, getFacultyProfileExtras,
     updateFacultyProfileExtras, type MetricVisibility, type FacultyProfileExtras,
 } from "@/lib/api/services/directoryService";
 import { queryKeys } from "@/lib/api/hooks/queryKeys";
@@ -61,9 +62,7 @@ const FacultyProfile = () => {
     const canEdit = isOwner || isSuperAdmin;
     const queryClient = useQueryClient();
     const [editMode, setEditMode] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
 
     // Metric-visibility toggles (owner edits these; hidden metrics are already
     // redacted server-side, so `faculty.metricVisibility` is the source of truth).
@@ -95,7 +94,6 @@ const FacultyProfile = () => {
 
     const closeEdit = () => {
         setEditMode(false);
-        setUploadError(null);
         setExtrasError(null);
         setExtras(null); // drop unsaved draft so the next open reloads server state
         setVisFlags(serverVis); // ...and unsaved metric toggles, too
@@ -186,26 +184,9 @@ const FacultyProfile = () => {
         }
     };
 
-    const handleImageSelected = async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        e.target.value = ""; // let the same file be re-picked after an error
-        if (!file) return;
-        if (!file.type.startsWith("image/")) { setUploadError("Please choose an image file."); return; }
-        if (file.size > 5 * 1024 * 1024) { setUploadError("Image must be under 5 MB."); return; }
-        setUploadError(null);
-        setUploading(true);
-        try {
-            await uploadFacultyImage(kerberos, file);
-            // Refresh this profile + every directory listing so the new image
-            // appears here and in directory results at once.
-            await queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
-            setEditMode(false);
-        } catch (err) {
-            setUploadError(err instanceof Error ? err.message : "Upload failed.");
-        } finally {
-            setUploading(false);
-        }
-    };
+    // Refresh this profile + every directory listing so the new image
+    // appears here and in directory results at once.
+    const handlePhotoUploaded = () => queryClient.invalidateQueries({ queryKey: queryKeys.directory.all });
 
     if (isFacultyLoading) {
         return (
@@ -391,19 +372,12 @@ const FacultyProfile = () => {
                                 {canEdit && editMode && (
                                     <button
                                         type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={uploading}
+                                        onClick={() => setPhotoDialogOpen(true)}
                                         title="Change photo"
-                                        className="absolute inset-0 z-10 rounded-3xl bg-black/45 hover:bg-black/55 flex flex-col items-center justify-center gap-1 text-white text-xs font-medium cursor-pointer transition-colors disabled:cursor-wait"
+                                        className="absolute inset-0 z-10 rounded-3xl bg-black/45 hover:bg-black/55 flex flex-col items-center justify-center gap-1 text-white text-xs font-medium cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                     >
-                                        {uploading ? (
-                                            <Loader2 className="w-6 h-6 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <Camera className="w-6 h-6" />
-                                                <span>Change photo</span>
-                                            </>
-                                        )}
+                                        <Camera className="w-6 h-6" />
+                                        <span>Change photo</span>
                                     </button>
                                 )}
                                 {deptCode && (
@@ -413,16 +387,15 @@ const FacultyProfile = () => {
                                 )}
                             </div>
                             {canEdit && (
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleImageSelected}
+                                <ProfilePhotoDialog
+                                    open={photoDialogOpen}
+                                    onOpenChange={setPhotoDialogOpen}
+                                    kerberos={kerberos}
+                                    name={faculty.name}
+                                    initials={initials}
+                                    currentImageUrl={faculty.profileImageUrl}
+                                    onUploaded={handlePhotoUploaded}
                                 />
-                            )}
-                            {uploadError && (
-                                <p className="mt-3 text-xs text-destructive text-center max-w-36">{uploadError}</p>
                             )}
                         </div>
 
