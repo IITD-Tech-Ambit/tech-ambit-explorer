@@ -2,7 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ErrorState";
-import instituteSeal from "@/assets/logo2-transparent.png";
+import instituteSeal from "@/assets/brand/institute-seal.png";
 
 interface ErrorBoundaryProps {
   children: ReactNode;

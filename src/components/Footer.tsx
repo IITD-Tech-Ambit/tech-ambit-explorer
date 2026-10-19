@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, MapPin, Twitter, Linkedin, ExternalLink, Facebook } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
-import siteLogo from "@/assets/IITD-LOGO-preview.png";
+import siteLogo from "@/assets/brand/iitd-logo.png";
 import {
   BROAD_THEME_CLUSTERS,
   broadThemeClusterColor,

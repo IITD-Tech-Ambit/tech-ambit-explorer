@@ -15,7 +15,7 @@ import { cropToSquareJpeg, loadImage } from "@/lib/cropImage";
 import { uploadFacultyImage } from "@/lib/api/services/directoryService";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 8 * 1024 * 1024;
 const MIN_DIMENSION = 200;
 const RECOMMENDED_DIMENSION = 400;
 const OUTPUT_SIZE = 800;
@@ -31,7 +31,7 @@ const STEPS: { id: Step; label: string }[] = [
 
 const GUIDELINES = [
     { icon: FileImage, title: "Format", detail: "JPG, PNG or WebP" },
-    { icon: HardDrive, title: "File size", detail: "Up to 5 MB" },
+    { icon: HardDrive, title: "File size", detail: "Up to 8 MB" },
     { icon: Maximize2, title: "Resolution", detail: `At least ${RECOMMENDED_DIMENSION} × ${RECOMMENDED_DIMENSION} px` },
     { icon: UserSquare2, title: "Framing", detail: "Head and shoulders, face centred, plain background" },
 ];
@@ -105,7 +105,7 @@ const ProfilePhotoDialog = ({
             return;
         }
         if (file.size > MAX_BYTES) {
-            setError(`This file is ${formatBytes(file.size)}. Please choose an image under 5 MB.`);
+            setError(`This file is ${formatBytes(file.size)}. Please choose an image under 8 MB.`);
             return;
         }
         setError(null);
@@ -234,6 +234,8 @@ const ProfilePhotoDialog = ({
 
                 <input
                     ref={fileInputRef}
+                    id="profile-photo"
+                    name="photo"
                     type="file"
                     accept={ACCEPTED_TYPES.join(",")}
                     className="hidden"
@@ -273,7 +275,7 @@ const ProfilePhotoDialog = ({
                                             <>Drag a photo here, or <span className="text-primary underline underline-offset-2">browse</span></>
                                         )}
                                     </span>
-                                    <span className="block text-xs text-muted-foreground">JPG, PNG or WebP · max 5 MB</span>
+                                    <span className="block text-xs text-muted-foreground">JPG, PNG or WebP · max 8 MB</span>
                                 </span>
                             )}
                         </button>

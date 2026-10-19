@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import instituteSeal from "@/assets/logo2-transparent.png";
+import instituteSeal from "@/assets/brand/institute-seal.png";
 
 type SitePreloaderProps = {
   minDurationMs?: number;

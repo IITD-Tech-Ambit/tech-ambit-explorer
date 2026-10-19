@@ -117,10 +117,13 @@ const Directory = () => {
                             <Search className="w-5 h-5 text-foreground/60" />
                         </div>
                         <Input
+                            id="directory-search"
+                            name="q"
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search by faculty name or department..."
+                            aria-label="Search by faculty name or department"
                             className="pl-12 pr-12 h-14 text-base rounded-xl border-2 focus:border-primary bg-background backdrop-blur-sm"
                         />
                         {isSearchLoading && debouncedSearch.length >= 2 && (

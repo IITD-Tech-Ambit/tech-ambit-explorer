@@ -195,6 +195,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <Field label="Name" optional>
                                         <input
+                                            id="suggestion-name"
+                                            name="name"
                                             type="text"
                                             value={form.name}
                                             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
@@ -205,6 +207,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                     </Field>
                                     <Field label="Email" optional error={errors.email}>
                                         <input
+                                            id="suggestion-email"
+                                            name="email"
                                             type="email"
                                             value={form.email}
                                             onChange={(e) => {
@@ -221,6 +225,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                 <Field label="Category" error={errors.category}>
                                     <div className="relative">
                                         <select
+                                            id="suggestion-category"
+                                            name="category"
                                             value={form.category}
                                             onChange={(e) => {
                                                 setForm((p) => ({ ...p, category: e.target.value as SuggestionCategory }));
@@ -239,6 +245,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
 
                                 <Field label="Your Suggestion / Feedback" error={errors.message}>
                                     <textarea
+                                        id="suggestion-message"
+                                        name="message"
                                         value={form.message}
                                         onChange={(e) => {
                                             setForm((p) => ({ ...p, message: e.target.value }));
@@ -307,6 +315,8 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                                     )}
                                     <input
                                         ref={fileInputRef}
+                                        id="suggestion-screenshot"
+                                        name="screenshot"
                                         type="file"
                                         accept="image/jpeg,image/png,image/gif,image/webp"
                                         className="hidden"

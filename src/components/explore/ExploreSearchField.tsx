@@ -58,9 +58,12 @@ export const ExploreSearchField = forwardRef<HTMLInputElement, ExploreSearchFiel
       <div className="relative flex-1 min-w-0 h-full">
         <input
           ref={ref}
+          id="search-query"
+          name="q"
           type="text"
           value={value}
           placeholder={placeholder}
+          aria-label={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onFocus={onFocus}
           onKeyDown={handleKeyDown}

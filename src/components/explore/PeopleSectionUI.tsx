@@ -13,6 +13,22 @@ export function PeopleSectionHeader({
   isOpen: boolean;
   onToggle: () => void;
 }) {
+  const chevron = (
+    <>
+      <ChevronDown
+        className={cn(
+          "h-5 w-5 text-muted-foreground transition-transform duration-200 xl:hidden",
+          isOpen && "rotate-180",
+        )}
+      />
+      {isOpen ? (
+        <ChevronLeft className="hidden xl:block h-5 w-5 text-muted-foreground" />
+      ) : (
+        <ChevronRight className="hidden xl:block h-5 w-5 text-muted-foreground" />
+      )}
+    </>
+  );
+
   const toggleBtn = (
     <button
       type="button"
@@ -25,17 +41,7 @@ export function PeopleSectionHeader({
         !isOpen && "xl:bg-transparent bg-muted/50",
       )}
     >
-      <ChevronDown
-        className={cn(
-          "h-5 w-5 text-muted-foreground transition-transform duration-200 xl:hidden",
-          isOpen && "rotate-180",
-        )}
-      />
-      {isOpen ? (
-        <ChevronLeft className="hidden xl:block h-5 w-5 text-muted-foreground" />
-      ) : (
-        <ChevronRight className="hidden xl:block h-5 w-5 text-muted-foreground" />
-      )}
+      {chevron}
     </button>
   );
 
@@ -84,7 +90,12 @@ export function PeopleSectionHeader({
           aria-expanded={false}
         >
           {titleBlock}
-          {toggleBtn}
+          <span
+            aria-hidden
+            className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-muted/50"
+          >
+            {chevron}
+          </span>
         </button>
         <div className="hidden xl:flex justify-center pb-2">{toggleBtn}</div>
       </div>
