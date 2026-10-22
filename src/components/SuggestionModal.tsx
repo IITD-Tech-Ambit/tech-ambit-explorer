@@ -113,10 +113,6 @@ const SuggestionModal = ({ open, onClose }: SuggestionModalProps) => {
                 screenshot
             );
             setSubmitted(true);
-            toast({
-                title: "Suggestion sent!",
-                description: "Thank you for helping improve Research Ambit. Your suggestion has been sent to the team.",
-            });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
             toast({ title: "Submission failed", description: msg, variant: "destructive" });
