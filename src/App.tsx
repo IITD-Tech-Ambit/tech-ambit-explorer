@@ -24,6 +24,7 @@ import ChatbotComingSoon from "./components/chat/ChatbotComingSoon";
 import SitePreloader from "./components/SitePreloader";
 import { ThemeProvider } from "./components/theme-provider";
 import { AuthProvider } from "./contexts/AuthContext";
+import { AuthErrorNotice } from "./components/AuthErrorNotice";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { shouldRetryQuery } from "./lib/errors";
@@ -96,6 +97,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AuthErrorNotice />
           <ScrollToTop />
           <RouteErrorBoundary>
           <Routes>
