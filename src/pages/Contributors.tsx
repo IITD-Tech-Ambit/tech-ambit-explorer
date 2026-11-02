@@ -17,6 +17,14 @@ import manuTrAvatar from "@/assets/contributors/manu-tr.png";
 import mohitGargAvatar from "@/assets/contributors/mohit-garg.png";
 import satbirChauhanAvatar from "@/assets/contributors/satbir-chauhan.png";
 import sunilJhaAvatar from "@/assets/contributors/sunil-jha.png";
+import nikhilGuptaAvatar from "@/assets/contributors/nikhil-gupta.jpg";
+import anuradhaBarnwalAvatar from "@/assets/contributors/anuradha-barnwal.jpg";
+import rahulMasandAvatar from "@/assets/contributors/rahul-masand.jpg";
+import dhruvUpadhyayAvatar from "@/assets/contributors/dhruv1.png";
+import sudarshanKumarAvatar from "@/assets/contributors/sudarshan-kumar.png";
+import premBhugraAvatar from "@/assets/contributors/prem-bhugra.jpg";
+import vivekKumarAvatar from "@/assets/contributors/vivek-kumar.png";
+import shubhamChawlaAvatar from "@/assets/contributors/shubham1.png";
 
 /* ───────── Data ───────── */
 
@@ -67,7 +75,7 @@ const associateDean: TeamMember = {
   name: "Prof. Sunil Jha",
   role: "Associate Dean, Research and Development",
   avatar: sunilJhaAvatar,
-  linkedin: "/faculty/suniljha",
+  linkedin: "https://mech.iitd.ac.in/faculty-profile/169",
   email: "mailto:assocdeanrnd@admin.iitd.ac.in",
 };
 
@@ -134,6 +142,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Nikhil Gupta",
     role: "Journalist",
+    avatar: nikhilGuptaAvatar,
     entryNumber: "ch1221016@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/nikhil-gupta-b67786252/",
     email: "ch1221016@iitd.ac.in",
@@ -141,6 +150,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Anuradha Barnwal",
     role: "Operations",
+    avatar: anuradhaBarnwalAvatar,
     entryNumber: "bb1230659@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/anuradha-barnwal-701674229?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "bb1230659@iitd.ac.in",
@@ -148,6 +158,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Rahul Arvind Masand",
     role: "Operations",
+    avatar: rahulMasandAvatar,
     entryNumber: "ch7221476@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/rahul-masand-787010250?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221476@iitd.ac.in",
@@ -155,6 +166,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Dhruv Upadhyay",
     role: "Operations",
+    avatar: dhruvUpadhyayAvatar,
     entryNumber: "ch7221484@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/dhruv-upadhyay-8a35a3252?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221484@iitd.ac.in",
@@ -162,6 +174,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Sudarshan Kumar",
     role: "Tech",
+    avatar: sudarshanKumarAvatar,
     entryNumber: "ch7221511@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/sudarshan-iiitd?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221511@iitd.ac.in",
@@ -169,6 +182,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Prem Bhugra",
     role: "Tech",
+    avatar: premBhugraAvatar,
     entryNumber: "ch7221038@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/prembhugra-iitd?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221038@iitd.ac.in",
@@ -176,6 +190,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Vivek Kumar",
     role: "Tech",
+    avatar: vivekKumarAvatar,
     entryNumber: "ce1221555@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/vivek-kumar-0b344124b?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ce1221555@iitd.ac.in",
@@ -183,6 +198,7 @@ const phaseContributors: TeamMember[] = [
   {
     name: "Shubham Chawla",
     role: "Tech",
+    avatar: shubhamChawlaAvatar,
     entryNumber: "ch7221507@iitd.ac.in",
     linkedin: "https://www.linkedin.com/in/shubham-chawla-8b4ab3257?utm_source=share_via&utm_content=profile&utm_medium=member_android",
     email: "ch7221507@iitd.ac.in",
@@ -275,7 +291,7 @@ const MemberCard = ({
   </div>
 );
 
-/* ───────── Contributor Card (no photo, clickable entry, LinkedIn only) ───────── */
+/* ───────── Contributor Card (photo + entry + LinkedIn) ───────── */
 
 const ContributorCard = ({
   member,
@@ -311,15 +327,24 @@ const ContributorCard = ({
       <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary/8 to-transparent rounded-bl-[3rem] opacity-80" />
       <div className="absolute bottom-0 left-0 w-16 h-16 bg-gradient-to-tr from-accent/5 to-transparent rounded-tr-[2rem] opacity-60" />
 
-      
-      <div className={cn(
-        "relative z-10 w-16 h-16 rounded-2xl mb-5 flex items-center justify-center",
-        "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800",
-        "border border-border/30 shadow-md",
-        "group-hover:scale-110 group-hover:rotate-3 transition-all duration-500"
-      )}>
-        <GraduationCap className={cn("w-7 h-7", a.icon)} />
-      </div>
+      {member.avatar ? (
+        <div className="relative z-10 mb-5 w-24 h-24 rounded-full p-[3px] bg-gradient-to-br from-blue-500 via-primary to-teal-400 shadow-lg shadow-primary/20 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-primary/30 transition-all duration-500">
+          <img
+            src={member.avatar}
+            alt={member.name}
+            className="w-full h-full rounded-full object-cover bg-background"
+          />
+        </div>
+      ) : (
+        <div className={cn(
+          "relative z-10 w-16 h-16 rounded-2xl mb-5 flex items-center justify-center",
+          "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800",
+          "border border-border/30 shadow-md",
+          "group-hover:scale-110 group-hover:rotate-3 transition-all duration-500"
+        )}>
+          <GraduationCap className={cn("w-7 h-7", a.icon)} />
+        </div>
+      )}
 
       
       <h3 className="relative z-10 font-bold text-lg text-center text-foreground mb-1.5 group-hover:text-primary transition-colors duration-300">
