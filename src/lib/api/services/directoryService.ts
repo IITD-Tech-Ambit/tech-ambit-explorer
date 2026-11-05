@@ -61,6 +61,9 @@ export const updateFacultyVisibility = async (
 
 export type ExternalLink = { label: string; url: string };
 
+/** An auto-assigned (computed) research area with the owner's hide flag. */
+export type AutoResearchArea = { name: string; slug: string; hidden: boolean };
+
 export type FacultyProfileExtras = {
     background: string;
     qualifications: string[];
@@ -69,6 +72,8 @@ export type FacultyProfileExtras = {
     awards: string[];
     awardsVisible: boolean;
     customResearchAreas: string[];
+    /** Computed areas incl. hidden ones (the public profile omits hidden ones). */
+    autoResearchAreas: AutoResearchArea[];
     additionalEmails: string[];
     phone: string;
     phoneVisible: boolean;
@@ -89,6 +94,8 @@ export type FacultyProfileExtrasUpdate = {
     awards: string[];
     awards_visible: boolean;
     custom_research_areas: string[];
+    /** Slugs of auto-assigned areas to hide. Omit to leave them unchanged. */
+    hidden_research_area_slugs?: string[];
     additional_emails: string[];
     phone: string;
     phone_visible: boolean;

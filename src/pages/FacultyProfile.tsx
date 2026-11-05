@@ -28,6 +28,22 @@ import { queryKeys } from "@/lib/api/hooks/queryKeys";
 
 const ALL_VISIBLE: MetricVisibility = { h_index: true, citations: true, papers: true, patents: true };
 const BACKGROUND_MIN = 100;
+const PROFILE_LIMITS = {
+    background: 5000,
+    qualificationItems: 20,
+    qualificationLength: 300,
+    awardItems: 20,
+    awardLength: 300,
+    researchAreaItems: 20,
+    researchAreaLength: 120,
+    additionalEmailItems: 10,
+    emailLength: 254,
+    phoneLength: 40,
+    officeAddressLength: 300,
+    externalLinkItems: 10,
+    linkLabelLength: 60,
+    linkUrlLength: 500,
+} as const;
 
 const kerberosFromEmail = (email?: string) =>
     email ? email.split("@")[0]?.toLowerCase() : "";
@@ -156,6 +172,11 @@ const FacultyProfile = () => {
                 awards,
                 awards_visible: extras.awardsVisible,
                 custom_research_areas: customResearchAreas,
+                // Only sent when the server provided the list, so an older backend
+                // is never asked to change it.
+                ...(Array.isArray(extras.autoResearchAreas) && {
+                    hidden_research_area_slugs: extras.autoResearchAreas.filter((a) => a.hidden).map((a) => a.slug),
+                }),
                 additional_emails: additionalEmails,
                 phone,
                 phone_visible: extras.phoneVisible,
@@ -703,13 +724,14 @@ const FacultyProfile = () => {
                                                     id="profile-background"
                                                     name="background"
                                                     value={extras.background}
+                                                    maxLength={PROFILE_LIMITS.background}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, background: e.target.value } : x))}
                                                     rows={5}
                                                     placeholder="A short background / bio (at least 100 characters to show it)…"
                                                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
                                                 />
                                                 <p className={`mt-1 text-xs ${extras.backgroundVisible && extras.background.trim().length < BACKGROUND_MIN ? "text-destructive" : "text-muted-foreground"}`}>
-                                                    {extras.background.trim().length} characters · {BACKGROUND_MIN} minimum to show
+                                                    {extras.background.length}/{PROFILE_LIMITS.background} characters · {BACKGROUND_MIN} minimum to show
                                                 </p>
                                             </div>
 
@@ -731,6 +753,7 @@ const FacultyProfile = () => {
                                                             <input
                                                                 name={`qualification-${i}`}
                                                                 value={q}
+                                                                maxLength={PROFILE_LIMITS.qualificationLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.qualifications];
@@ -755,6 +778,7 @@ const FacultyProfile = () => {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
+                                                        disabled={extras.qualifications.length >= PROFILE_LIMITS.qualificationItems}
                                                         onClick={() => setExtras((x) => (x ? { ...x, qualifications: [...x.qualifications, ""] } : x))}
                                                     >
                                                         <Plus className="w-4 h-4 mr-1.5" />
@@ -784,6 +808,7 @@ const FacultyProfile = () => {
                                                             <input
                                                                 name={`award-${i}`}
                                                                 value={a}
+                                                                maxLength={PROFILE_LIMITS.awardLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.awards];
@@ -808,6 +833,7 @@ const FacultyProfile = () => {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
+                                                        disabled={extras.awards.length >= PROFILE_LIMITS.awardItems}
                                                         onClick={() => setExtras((x) => (x ? { ...x, awards: [...x.awards, ""] } : x))}
                                                     >
                                                         <Plus className="w-4 h-4 mr-1.5" />
@@ -819,22 +845,40 @@ const FacultyProfile = () => {
                                                 )}
                                             </div>
 
-                                            {/* Research areas — computed ones are read-only; faculty may add extras */}
+                                            {/* Research areas — computed ones can be hidden/shown (not edited or
+                                                removed); faculty may add extras of their own */}
                                             <div>
                                                 <label className="text-sm font-semibold text-foreground">Research areas</label>
                                                 <p className="text-xs text-muted-foreground mt-1 mb-2">
-                                                    Your auto-generated areas can&apos;t be changed. Add your own below — these show as plain text (not clickable).
+                                                    Your auto-generated areas can&apos;t be edited or removed, but you can hide any of them from your public profile. Add your own below — these show as plain text (not clickable).
                                                 </p>
-                                                {faculty.dominant_domains && faculty.dominant_domains.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 mb-3">
-                                                        {faculty.dominant_domains.map((area) => (
-                                                            <span
-                                                                key={area.slug}
-                                                                className="text-[11px] px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border"
-                                                                title="Auto-generated — can't be edited"
-                                                            >
-                                                                {area.name}
-                                                            </span>
+                                                {(extras.autoResearchAreas ?? []).length > 0 && (
+                                                    <div className="space-y-2 mb-3">
+                                                        {(extras.autoResearchAreas ?? []).map((area) => (
+                                                            <div key={area.slug} className="flex items-center justify-between gap-3">
+                                                                <span
+                                                                    className={`text-[11px] px-2.5 py-1 rounded-lg border min-w-0 truncate ${
+                                                                        area.hidden
+                                                                            ? "bg-muted text-muted-foreground border-border line-through"
+                                                                            : "bg-primary/8 text-primary border-primary/15"
+                                                                    }`}
+                                                                    title="Auto-generated — can't be edited or removed"
+                                                                >
+                                                                    {area.name}
+                                                                </span>
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <span className="text-xs text-muted-foreground">Show publicly</span>
+                                                                    <Switch
+                                                                        checked={!area.hidden}
+                                                                        aria-label={`Show ${area.name} on your public profile`}
+                                                                        onCheckedChange={(v) => setExtras((x) => (x ? {
+                                                                            ...x,
+                                                                            autoResearchAreas: (x.autoResearchAreas ?? []).map((a) =>
+                                                                                a.slug === area.slug ? { ...a, hidden: !v } : a),
+                                                                        } : x))}
+                                                                    />
+                                                                </div>
+                                                            </div>
                                                         ))}
                                                     </div>
                                                 )}
@@ -844,6 +888,7 @@ const FacultyProfile = () => {
                                                             <input
                                                                 name={`research-area-${i}`}
                                                                 value={a}
+                                                                maxLength={PROFILE_LIMITS.researchAreaLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.customResearchAreas];
@@ -868,6 +913,7 @@ const FacultyProfile = () => {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
+                                                        disabled={extras.customResearchAreas.length >= PROFILE_LIMITS.researchAreaItems}
                                                         onClick={() => setExtras((x) => (x ? { ...x, customResearchAreas: [...x.customResearchAreas, ""] } : x))}
                                                     >
                                                         <Plus className="w-4 h-4 mr-1.5" />
@@ -899,6 +945,7 @@ const FacultyProfile = () => {
                                                                 type="email"
                                                                 name={`email-${i}`}
                                                                 value={em}
+                                                                maxLength={PROFILE_LIMITS.emailLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.additionalEmails];
@@ -923,6 +970,7 @@ const FacultyProfile = () => {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
+                                                        disabled={extras.additionalEmails.length >= PROFILE_LIMITS.additionalEmailItems}
                                                         onClick={() => setExtras((x) => (x ? { ...x, additionalEmails: [...x.additionalEmails, ""] } : x))}
                                                     >
                                                         <Plus className="w-4 h-4 mr-1.5" />
@@ -947,6 +995,7 @@ const FacultyProfile = () => {
                                                     id="profile-phone"
                                                     name="phone"
                                                     value={extras.phone}
+                                                    maxLength={PROFILE_LIMITS.phoneLength}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, phone: e.target.value } : x))}
                                                     placeholder="e.g. +91 11 2659 1234"
                                                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -972,6 +1021,7 @@ const FacultyProfile = () => {
                                                     id="profile-office"
                                                     name="officeAddress"
                                                     value={extras.officeAddress}
+                                                    maxLength={PROFILE_LIMITS.officeAddressLength}
                                                     onChange={(e) => setExtras((x) => (x ? { ...x, officeAddress: e.target.value } : x))}
                                                     rows={2}
                                                     placeholder="e.g. Block II, Room 123, Dept. of ..., IIT Delhi, Hauz Khas"
@@ -1003,7 +1053,7 @@ const FacultyProfile = () => {
                                                             <input
                                                                 name={`link-label-${i}`}
                                                                 value={link.label}
-                                                                maxLength={60}
+                                                                maxLength={PROFILE_LIMITS.linkLabelLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.externalLinks];
@@ -1016,6 +1066,7 @@ const FacultyProfile = () => {
                                                             <input
                                                                 name={`link-url-${i}`}
                                                                 value={link.url}
+                                                                maxLength={PROFILE_LIMITS.linkUrlLength}
                                                                 onChange={(e) => setExtras((x) => {
                                                                     if (!x) return x;
                                                                     const arr = [...x.externalLinks];
@@ -1040,6 +1091,7 @@ const FacultyProfile = () => {
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
+                                                        disabled={extras.externalLinks.length >= PROFILE_LIMITS.externalLinkItems}
                                                         onClick={() => setExtras((x) => (x ? { ...x, externalLinks: [...x.externalLinks, { label: "", url: "" }] } : x))}
                                                     >
                                                         <Plus className="w-4 h-4 mr-1.5" />
